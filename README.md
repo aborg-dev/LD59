@@ -17,20 +17,6 @@ npm install
 
 The Nix dev shell provides Node.js, Playwright browsers, and Claude Code.
 
-### Playwright version pinning
-
-The npm `playwright` package version must match the `playwright-driver` version in nixpkgs. Check with:
-
-```sh
-nix eval nixpkgs#playwright-driver.version
-```
-
-If it differs from what's in `package.json`, pin it:
-
-```sh
-npm install playwright@<version>
-```
-
 ## Development
 
 ```sh
