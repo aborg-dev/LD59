@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "test": "vitest run",
-    "test:e2e": "vitest run tests/"
+    "test": "vitest run tests/game.headless.test.ts",
+    "test:e2e": "vitest run tests/game.e2e.test.ts",
+    "test:all": "vitest run"
   },
   "keywords": [],
   "author": "",
@@ -23,6 +24,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.11",
+    "jsdom": "^29.0.2",
     "vitest": "^4.1.4"
   }
 }
