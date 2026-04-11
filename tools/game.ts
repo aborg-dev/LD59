@@ -9,7 +9,7 @@ let page: Page | null = null;
 let currentUrl = "";
 let pageErrors: string[] = [];
 
-import type { CircleState } from "../src/GameScene.js";
+import type { CircleState } from "../src/scenes/GameScene.js";
 
 export type { CircleState };
 
@@ -46,6 +46,22 @@ async function ensurePage(
 }
 
 async function waitForGame(pg: Page): Promise<void> {
+  // Wait for Phaser to initialize, then skip directly to the GameScene
+  await pg.waitForFunction(
+    () => {
+      try {
+        if (window.game?.scene?.scenes?.length > 0) {
+          window.skipToScene("GameScene");
+          return true;
+        }
+        return false;
+      } catch {
+        return false;
+      }
+    },
+    { timeout: 10000 },
+  );
+  // Wait for GameScene to be fully created
   await pg.waitForFunction(
     () => {
       try {
