@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
     "test": "vitest run",
     "test:e2e": "vitest run tests/"
   },
