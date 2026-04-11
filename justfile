@@ -6,6 +6,12 @@ dev:
 build:
     npm run build
 
+lint:
+    npx biome check .
+
+lint-fix:
+    npx biome check --write .
+
 test:
     #!/usr/bin/env bash
     set -euo pipefail

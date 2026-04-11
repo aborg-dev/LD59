@@ -1,4 +1,4 @@
-import * as Phaser from 'phaser';
+import * as Phaser from "phaser";
 
 class GameScene extends Phaser.Scene {
   private circle!: Phaser.GameObjects.Arc;
@@ -13,7 +13,7 @@ class GameScene extends Phaser.Scene {
   private readonly radius = 50;
 
   constructor() {
-    super('GameScene');
+    super("GameScene");
   }
 
   create(): void {
@@ -23,7 +23,7 @@ class GameScene extends Phaser.Scene {
     this.circle.setStrokeStyle(3, 0xffffff);
     this.circle.setInteractive({ draggable: true });
 
-    this.circle.on('dragstart', (_pointer: Phaser.Input.Pointer) => {
+    this.circle.on("dragstart", (_pointer: Phaser.Input.Pointer) => {
       this.dragging = true;
       this.velocityX = 0;
       this.velocityY = 0;
@@ -32,24 +32,35 @@ class GameScene extends Phaser.Scene {
       this.prevDragTime = performance.now();
     });
 
-    this.circle.on('drag', (_pointer: Phaser.Input.Pointer, dragX: number, dragY: number) => {
-      const now = performance.now();
-      const dt = (now - this.prevDragTime) / 1000;
-      if (dt > 0) {
-        this.velocityX = (dragX - this.prevDragX) / dt;
-        this.velocityY = (dragY - this.prevDragY) / dt;
-      }
-      const { width, height } = this.scale;
-      const clampedX = Phaser.Math.Clamp(dragX, this.radius, width - this.radius);
-      const clampedY = Phaser.Math.Clamp(dragY, this.radius, height - this.radius);
-      this.prevDragX = clampedX;
-      this.prevDragY = clampedY;
-      this.prevDragTime = now;
-      this.circle.x = clampedX;
-      this.circle.y = clampedY;
-    });
+    this.circle.on(
+      "drag",
+      (_pointer: Phaser.Input.Pointer, dragX: number, dragY: number) => {
+        const now = performance.now();
+        const dt = (now - this.prevDragTime) / 1000;
+        if (dt > 0) {
+          this.velocityX = (dragX - this.prevDragX) / dt;
+          this.velocityY = (dragY - this.prevDragY) / dt;
+        }
+        const { width, height } = this.scale;
+        const clampedX = Phaser.Math.Clamp(
+          dragX,
+          this.radius,
+          width - this.radius,
+        );
+        const clampedY = Phaser.Math.Clamp(
+          dragY,
+          this.radius,
+          height - this.radius,
+        );
+        this.prevDragX = clampedX;
+        this.prevDragY = clampedY;
+        this.prevDragTime = now;
+        this.circle.x = clampedX;
+        this.circle.y = clampedY;
+      },
+    );
 
-    this.circle.on('dragend', () => {
+    this.circle.on("dragend", () => {
       this.dragging = false;
     });
   }
@@ -92,12 +103,12 @@ class GameScene extends Phaser.Scene {
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
-  backgroundColor: '#1a1a2e',
+  backgroundColor: "#1a1a2e",
   scale: {
     mode: Phaser.Scale.RESIZE,
-    parent: 'game',
+    parent: "game",
   },
   scene: GameScene,
 };
 
-(window as any).game = new Phaser.Game(config);
+(window as unknown as { game: Phaser.Game }).game = new Phaser.Game(config);
