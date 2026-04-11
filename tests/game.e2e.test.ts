@@ -74,7 +74,7 @@ describe("ball stays within bounds", () => {
   it("stays in bounds after fast fling into wall", async () => {
     const c = await game.getCircle();
     await game.drag(c.x, c.y, c.x + 150, c.y + 150, 50);
-    await game.stepFrames(10);
+    await game.advanceTime(167);
 
     const after = await game.getCircle();
     expect(after.x - after.radius).toBeGreaterThanOrEqual(0);
@@ -85,7 +85,7 @@ describe("ball stays within bounds", () => {
 
   it("stays in bounds after high-velocity fling", async () => {
     await game.setVelocity(5000, 5000);
-    await game.stepFrames(60);
+    await game.advanceTime(1000);
 
     const c = await game.getCircle();
     expect(c.x - c.radius).toBeGreaterThanOrEqual(0);
@@ -96,7 +96,7 @@ describe("ball stays within bounds", () => {
 
   it("velocity decays with friction", async () => {
     await game.setVelocity(1000, 1000);
-    await game.stepFrames(300);
+    await game.advanceTime(5000);
 
     const v = await game.getVelocity();
     expect(Math.abs(v.vx)).toBeLessThan(5);

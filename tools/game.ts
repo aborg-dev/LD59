@@ -9,13 +9,9 @@ let page: Page | null = null;
 let currentUrl = "";
 let pageErrors: string[] = [];
 
-export interface CircleState {
-  x: number;
-  y: number;
-  radius: number;
-  gameWidth: number;
-  gameHeight: number;
-}
+import type { CircleState } from "../src/GameScene.js";
+
+export type { CircleState };
 
 async function ensurePage(
   url: string,
@@ -52,8 +48,11 @@ async function ensurePage(
 async function waitForGame(pg: Page): Promise<void> {
   await pg.waitForFunction(
     () => {
-      const g = (window as any).game;
-      return g?.scene?.scenes?.length > 0 && g.scene.scenes[0].children;
+      try {
+        return !!window.gameScene().children;
+      } catch {
+        return false;
+      }
     },
     { timeout: 10000 },
   );
@@ -84,29 +83,11 @@ export async function reload(): Promise<void> {
 }
 
 export async function getCircle(): Promise<CircleState> {
-  return page?.evaluate(() => {
-    const s = (window as any).game.scene.scenes[0];
-    const c = s.children.list.find((o: { type: string }) => o.type === "Arc");
-    return {
-      x: c.x,
-      y: c.y,
-      radius: c.radius,
-      gameWidth: s.scale.width,
-      gameHeight: s.scale.height,
-    };
-  });
+  return page!.evaluate(() => window.gameScene().getCircleState());
 }
 
 export async function resetCircle(): Promise<void> {
-  await page?.evaluate(() => {
-    const s = (window as any).game.scene.scenes[0];
-    const c = s.children.list.find((o: { type: string }) => o.type === "Arc");
-    c.x = s.scale.width / 2;
-    c.y = s.scale.height / 2;
-    s.velocityX = 0;
-    s.velocityY = 0;
-    s.dragging = false;
-  });
+  await page?.evaluate(() => window.gameScene().resetCircle());
 }
 
 export async function drag(
@@ -146,35 +127,22 @@ export async function drag(
 }
 
 export async function setVelocity(vx: number, vy: number): Promise<void> {
-  await page?.evaluate(
-    ({ vx, vy }) => {
-      const s = (window as any).game.scene.scenes[0];
-      s.velocityX = vx;
-      s.velocityY = vy;
-    },
-    { vx, vy },
-  );
-}
-
-export async function getVelocity(): Promise<{ vx: number; vy: number }> {
-  return page?.evaluate(() => {
-    const s = (window as any).game.scene.scenes[0];
-    return { vx: s.velocityX, vy: s.velocityY };
+  await page?.evaluate(({ vx, vy }) => window.gameScene().setVelocity(vx, vy), {
+    vx,
+    vy,
   });
 }
 
-export async function stepFrames(frames: number): Promise<void> {
-  await page?.evaluate((n) => {
-    const game = (window as any).game;
-    const scene = game.scene.scenes[0];
-    for (let i = 0; i < n; i++) {
-      scene.update(performance.now(), 16.666);
-    }
-  }, frames);
+export async function getVelocity(): Promise<{ vx: number; vy: number }> {
+  return page!.evaluate(() => window.gameScene().getVelocity());
+}
+
+export async function advanceTime(ms: number): Promise<void> {
+  await page?.evaluate((ms) => window.advanceTime(ms), ms);
 }
 
 export async function resumeLoop(): Promise<void> {
-  await page?.evaluate(() => (window as any).game.loop.wake());
+  await page?.evaluate(() => window.game.loop.wake());
 }
 
 export async function hasCanvas(): Promise<boolean> {
@@ -182,13 +150,11 @@ export async function hasCanvas(): Promise<boolean> {
 }
 
 export async function isGameRunning(): Promise<boolean> {
-  return page?.evaluate(
-    () => (window as any).game?.constructor?.name === "Game",
-  );
+  return page?.evaluate(() => window.game?.constructor?.name === "Game");
 }
 
 export async function sceneCount(): Promise<number> {
-  return page?.evaluate(() => (window as any).game?.scene?.scenes?.length ?? 0);
+  return page?.evaluate(() => window.game?.scene?.scenes?.length ?? 0);
 }
 
 export function errors(): string[] {
@@ -197,7 +163,7 @@ export function errors(): string[] {
 
 async function render(): Promise<void> {
   await page?.evaluate(() => {
-    const game = (window as any).game;
+    const game = window.game;
     const r = game.renderer;
     r.preRender();
     game.scene.render(r);

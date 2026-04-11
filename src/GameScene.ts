@@ -1,5 +1,13 @@
 import * as Phaser from "phaser";
 
+export interface CircleState {
+  x: number;
+  y: number;
+  radius: number;
+  gameWidth: number;
+  gameHeight: number;
+}
+
 export class GameScene extends Phaser.Scene {
   private circle!: Phaser.GameObjects.Arc;
   private velocityX = 0;
@@ -63,6 +71,33 @@ export class GameScene extends Phaser.Scene {
     this.circle.on("dragend", () => {
       this.dragging = false;
     });
+  }
+
+  getCircleState(): CircleState {
+    return {
+      x: this.circle.x,
+      y: this.circle.y,
+      radius: this.radius,
+      gameWidth: this.scale.width,
+      gameHeight: this.scale.height,
+    };
+  }
+
+  resetCircle(): void {
+    this.circle.x = this.scale.width / 2;
+    this.circle.y = this.scale.height / 2;
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.dragging = false;
+  }
+
+  setVelocity(vx: number, vy: number): void {
+    this.velocityX = vx;
+    this.velocityY = vy;
+  }
+
+  getVelocity(): { vx: number; vy: number } {
+    return { vx: this.velocityX, vy: this.velocityY };
   }
 
   update(_time: number, delta: number): void {
