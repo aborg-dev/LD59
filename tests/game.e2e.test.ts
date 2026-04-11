@@ -82,4 +82,24 @@ describe("ball stays within bounds", () => {
     expect(after.x + after.radius).toBeLessThanOrEqual(after.gameWidth);
     expect(after.y + after.radius).toBeLessThanOrEqual(after.gameHeight);
   });
+
+  it("stays in bounds after high-velocity fling", async () => {
+    await game.setVelocity(5000, 5000);
+    await game.stepFrames(60);
+
+    const c = await game.getCircle();
+    expect(c.x - c.radius).toBeGreaterThanOrEqual(0);
+    expect(c.y - c.radius).toBeGreaterThanOrEqual(0);
+    expect(c.x + c.radius).toBeLessThanOrEqual(c.gameWidth);
+    expect(c.y + c.radius).toBeLessThanOrEqual(c.gameHeight);
+  });
+
+  it("velocity decays with friction", async () => {
+    await game.setVelocity(1000, 1000);
+    await game.stepFrames(300);
+
+    const v = await game.getVelocity();
+    expect(Math.abs(v.vx)).toBeLessThan(5);
+    expect(Math.abs(v.vy)).toBeLessThan(5);
+  });
 });

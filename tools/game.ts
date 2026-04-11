@@ -145,6 +145,24 @@ export async function drag(
   );
 }
 
+export async function setVelocity(vx: number, vy: number): Promise<void> {
+  await page?.evaluate(
+    ({ vx, vy }) => {
+      const s = (window as any).game.scene.scenes[0];
+      s.velocityX = vx;
+      s.velocityY = vy;
+    },
+    { vx, vy },
+  );
+}
+
+export async function getVelocity(): Promise<{ vx: number; vy: number }> {
+  return page?.evaluate(() => {
+    const s = (window as any).game.scene.scenes[0];
+    return { vx: s.velocityX, vy: s.velocityY };
+  });
+}
+
 export async function stepFrames(frames: number): Promise<void> {
   await page?.evaluate((n) => {
     const game = (window as any).game;
