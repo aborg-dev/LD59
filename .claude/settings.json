@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "gamedev": {
+      "command": "npx",
+      "args": ["tsx", "tools/gamedev-server.ts"],
+      "cwd": "/home/aborg/repos/gamedev"
+    }
+  }
+}
