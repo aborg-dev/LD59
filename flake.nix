@@ -18,6 +18,7 @@
             pkgs.nodejs
             pkgs.just
             pkgs.playwright-driver.browsers
+            pkgs.libseccomp
             claude-code.packages.${system}.claude-code
           ];
 
