@@ -16,6 +16,7 @@
         devShells.default = pkgs.mkShell {
           buildInputs = [
             pkgs.nodejs
+            pkgs.just
             pkgs.playwright-driver.browsers
             claude-code.packages.${system}.claude-code
           ];

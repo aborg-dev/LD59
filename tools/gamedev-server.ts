@@ -1,8 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import fs from 'fs';
-import * as browser from './browser.js';
+import * as game from './game.js';
+
+const DEFAULT_URL = 'http://localhost:5173';
 
 const server = new McpServer({ name: 'gamedev', version: '1.0.0' });
 
@@ -10,25 +11,22 @@ server.tool(
   'screenshot',
   'Take a screenshot of the game',
   {
-    url: z.string().default('http://localhost:5173').describe('URL to screenshot'),
+    url: z.string().default(DEFAULT_URL).describe('URL to screenshot'),
     name: z.string().default('screenshot').describe('Output filename (without extension)'),
     width: z.number().default(480).describe('Viewport width'),
     height: z.number().default(720).describe('Viewport height'),
-    delay: z.number().default(2000).describe('Delay in ms before capturing'),
   },
-  async (opts) => {
-    const result = await browser.screenshot(opts);
-    const text = [
-      `Screenshot saved to ${result.path}`,
-      browser.formatLogs(result.errors, result.logs),
-    ].filter(Boolean).join('\n\n');
+  async ({ url, name, width, height }) => {
+    await game.launch(url, width, height);
+    const outputPath = await game.screenshot(name);
+    const { readFileSync } = await import('fs');
 
     return {
       content: [
-        { type: 'text' as const, text },
+        { type: 'text' as const, text: `Screenshot saved to ${outputPath}` },
         {
           type: 'image' as const,
-          data: fs.readFileSync(result.path).toString('base64'),
+          data: readFileSync(outputPath).toString('base64'),
           mimeType: 'image/png' as const,
         },
       ],
@@ -41,12 +39,12 @@ server.tool(
   'Evaluate JavaScript in the game page. The Phaser game instance is at `window.game`. Use this to inspect game state, object positions, FPS, etc.',
   {
     expression: z.string().describe('JavaScript expression to evaluate in the browser'),
-    url: z.string().default('http://localhost:5173').describe('URL of the game'),
-    delay: z.number().default(1000).describe('Delay in ms before evaluating'),
+    url: z.string().default(DEFAULT_URL).describe('URL of the game'),
   },
-  async ({ expression, url, delay }) => {
+  async ({ expression, url }) => {
+    await game.launch(url);
     try {
-      const result = await browser.evaluate(expression, { url, delay });
+      const result = await game.eval_(expression);
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
       };
@@ -61,28 +59,27 @@ server.tool(
 
 server.tool(
   'game_interact',
-  'Simulate user interactions (click, drag, wait) on the game, then return a screenshot.',
+  'Drag the ball to a new position, then return a screenshot.',
   {
-    actions: z.array(z.object({
-      type: z.enum(['click', 'drag', 'wait']).describe('Action type'),
-      x: z.number().optional().describe('X coordinate'),
-      y: z.number().optional().describe('Y coordinate'),
-      toX: z.number().optional().describe('Drag destination X'),
-      toY: z.number().optional().describe('Drag destination Y'),
-      duration: z.number().optional().describe('Duration in ms'),
-    })).describe('Sequence of actions to perform'),
-    url: z.string().default('http://localhost:5173').describe('URL of the game'),
+    fromX: z.number().describe('Start X'),
+    fromY: z.number().describe('Start Y'),
+    toX: z.number().describe('End X'),
+    toY: z.number().describe('End Y'),
     name: z.string().default('interact').describe('Screenshot filename'),
-    delay: z.number().default(1000).describe('Delay in ms before starting actions'),
+    url: z.string().default(DEFAULT_URL).describe('URL of the game'),
   },
-  async ({ actions, url, name, delay }) => {
-    const result = await browser.interact(actions, { url, name, delay });
+  async ({ fromX, fromY, toX, toY, name, url }) => {
+    await game.launch(url);
+    await game.drag(fromX, fromY, toX, toY);
+    const outputPath = await game.screenshot(name);
+    const { readFileSync } = await import('fs');
+
     return {
       content: [
-        { type: 'text' as const, text: `Actions: ${result.actionLog.join(' → ')}\nScreenshot saved to ${result.path}` },
+        { type: 'text' as const, text: `Dragged (${fromX},${fromY}) → (${toX},${toY})\nScreenshot saved to ${outputPath}` },
         {
           type: 'image' as const,
-          data: fs.readFileSync(result.path).toString('base64'),
+          data: readFileSync(outputPath).toString('base64'),
           mimeType: 'image/png' as const,
         },
       ],
@@ -91,18 +88,16 @@ server.tool(
 );
 
 server.tool(
-  'game_console',
-  'Capture browser console output (logs, warnings, errors).',
+  'game_state',
+  'Get the current state of the ball (position, radius, game dimensions).',
   {
-    url: z.string().default('http://localhost:5173').describe('URL of the game'),
-    delay: z.number().default(2000).describe('How long to collect logs'),
-    reload: z.boolean().default(false).describe('Force reload the page'),
+    url: z.string().default(DEFAULT_URL).describe('URL of the game'),
   },
-  async (opts) => {
-    const { logs, errors } = await browser.consoleLogs(opts);
-    const output = browser.formatLogs(errors, logs) || 'No console output captured.';
+  async ({ url }) => {
+    await game.launch(url);
+    const circle = await game.getCircle();
     return {
-      content: [{ type: 'text' as const, text: output }],
+      content: [{ type: 'text' as const, text: JSON.stringify(circle, null, 2) }],
     };
   },
 );

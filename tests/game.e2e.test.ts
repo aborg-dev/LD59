@@ -1,58 +1,85 @@
-import { describe, it, expect, afterAll } from 'vitest';
-import * as browser from '../tools/browser.js';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
+import * as game from '../tools/game.js';
 
-const URL = 'http://localhost:5173';
+const URL = process.env.TEST_URL || 'http://localhost:5173';
+
+beforeAll(async () => {
+  await game.launch(URL);
+});
 
 afterAll(async () => {
-  await browser.closeBrowser();
+  await game.close();
 });
 
 describe('game e2e', () => {
-  it('loads without errors', async () => {
-    const { errors } = await browser.consoleLogs({ url: URL, delay: 2000, reload: true });
-    expect(errors).toEqual([]);
+  it('loads without errors', () => {
+    expect(game.errors()).toEqual([]);
   });
 
   it('renders the game canvas', async () => {
-    const hasCanvas = await browser.evaluate(
-      'document.querySelector("canvas") !== null',
-      { url: URL },
-    );
-    expect(hasCanvas).toBe(true);
+    expect(await game.hasCanvas()).toBe(true);
   });
 
   it('creates a Phaser game instance', async () => {
-    const isPhaser = await browser.evaluate(
-      'window.game?.constructor?.name === "Game"',
-      { url: URL },
-    );
-    expect(isPhaser).toBe(true);
+    expect(await game.isGameRunning()).toBe(true);
   });
 
   it('has an active scene', async () => {
-    const sceneCount = await browser.evaluate(
-      'window.game?.scene?.scenes?.length',
-      { url: URL },
-    );
-    expect(sceneCount).toBeGreaterThan(0);
+    expect(await game.sceneCount()).toBeGreaterThan(0);
   });
 
   it('circle is draggable', async () => {
-    const before = await browser.evaluate(
-      '(() => { const s = window.game.scene.scenes[0]; const c = s.children.list.find(o => o.type === "Arc"); return { x: c.x, y: c.y }; })()',
-      { url: URL },
-    );
-
-    await browser.interact([
-      { type: 'drag', x: before.x, y: before.y, toX: before.x + 100, toY: before.y + 100, duration: 300 },
-    ], { url: URL });
-
-    const after = await browser.evaluate(
-      '(() => { const s = window.game.scene.scenes[0]; const c = s.children.list.find(o => o.type === "Arc"); return { x: c.x, y: c.y }; })()',
-      { url: URL, delay: 500 },
-    );
+    const before = await game.getCircle();
+    await game.drag(before.x, before.y, before.x + 100, before.y + 100);
+    const after = await game.getCircle();
 
     expect(after.x).toBeGreaterThan(before.x);
     expect(after.y).toBeGreaterThan(before.y);
+  });
+});
+
+describe('ball stays within bounds', () => {
+  beforeEach(async () => {
+    await game.resetCircle();
+  });
+
+  it('does not go past the bottom edge when dragged down', async () => {
+    const before = await game.getCircle();
+    await game.drag(before.x, before.y, before.x, before.gameHeight + 100);
+    const after = await game.getCircle();
+    expect(after.y + after.radius).toBeLessThanOrEqual(after.gameHeight);
+  });
+
+  it('does not go past the right edge when dragged right', async () => {
+    const before = await game.getCircle();
+    await game.drag(before.x, before.y, before.gameWidth + 100, before.y);
+    const after = await game.getCircle();
+    expect(after.x + after.radius).toBeLessThanOrEqual(after.gameWidth);
+  });
+
+  it('does not go past the top edge when dragged up', async () => {
+    const before = await game.getCircle();
+    await game.drag(before.x, before.y, before.x, -100);
+    const after = await game.getCircle();
+    expect(after.y - after.radius).toBeGreaterThanOrEqual(0);
+  });
+
+  it('does not go past the left edge when dragged left', async () => {
+    const before = await game.getCircle();
+    await game.drag(before.x, before.y, -100, before.y);
+    const after = await game.getCircle();
+    expect(after.x - after.radius).toBeGreaterThanOrEqual(0);
+  });
+
+  it('stays in bounds after fast fling into wall', async () => {
+    const c = await game.getCircle();
+    await game.drag(c.x, c.y, c.x + 150, c.y + 150, 50);
+    await game.stepFrames(10);
+
+    const after = await game.getCircle();
+    expect(after.x - after.radius).toBeGreaterThanOrEqual(0);
+    expect(after.y - after.radius).toBeGreaterThanOrEqual(0);
+    expect(after.x + after.radius).toBeLessThanOrEqual(after.gameWidth);
+    expect(after.y + after.radius).toBeLessThanOrEqual(after.gameHeight);
   });
 });

@@ -15,15 +15,25 @@ nix develop
 npm install
 ```
 
-The Nix dev shell provides Node.js, Playwright browsers, and Claude Code.
+The Nix dev shell provides Node.js, just, Playwright browsers, and Claude Code.
 
 ## Development
 
 ```sh
-npm run dev
+just dev
 ```
 
 Starts the Vite dev server on `0.0.0.0:5173`.
+
+## Testing
+
+```sh
+just test
+```
+
+Starts a dev server, runs all e2e tests, and cleans up. No manual server needed.
+
+A pre-push git hook runs `just test` automatically before every push.
 
 ## Project structure
 
@@ -31,25 +41,13 @@ Starts the Vite dev server on `0.0.0.0:5173`.
 src/
   main.ts              # Game entry point (Phaser 4)
 tools/
-  browser.ts           # Shared browser automation library (Playwright)
-  gamedev-server.ts    # MCP server wrapping browser.ts
+  game.ts              # Game test helper (Playwright)
+  gamedev-server.ts    # MCP server for Claude Code
 tests/
-  game.e2e.test.ts     # E2E tests using browser.ts
-  bounds.e2e.test.ts   # Ball bounds e2e tests
+  game.e2e.test.ts     # E2E tests
 .github/
   workflows/deploy.yml # GitHub Pages deployment
-```
-
-## Testing
-
-E2E tests require the dev server to be running.
-
-```sh
-# Terminal 1
-npm run dev
-
-# Terminal 2
-npm test
+justfile               # Task runner
 ```
 
 ## MCP server
@@ -60,26 +58,15 @@ The `gamedev` MCP server provides browser-based tools for Claude Code:
 |------|-------------|
 | `screenshot` | Take a screenshot of the game |
 | `game_eval` | Evaluate JavaScript in the browser (access game state via `window.game`) |
-| `game_interact` | Simulate click/drag/wait sequences, then screenshot |
-| `game_console` | Capture browser console logs and errors |
+| `game_interact` | Drag the ball and screenshot the result |
+| `game_state` | Get the ball's position, radius, and game dimensions |
 
 Configured in `.claude/settings.json`. Restart Claude Code after changes.
 
-## Browser automation library
-
-`tools/browser.ts` is shared between the MCP server and e2e tests. It provides:
-
-- `getPage(url, width, height)` - get or reuse a Playwright browser page
-- `screenshot(opts)` - take a screenshot
-- `evaluate(expression, opts)` - run JS in the browser
-- `interact(actions, opts)` - simulate user interactions
-- `consoleLogs(opts)` - capture console output
-- `closeBrowser()` - clean up
-
 ## Deployment
 
-Pushes to `main` automatically build and deploy to GitHub Pages via the workflow in `.github/workflows/deploy.yml`.
+Pushes to `main` automatically build and deploy to GitHub Pages via GitHub Actions.
 
 ```sh
-npm run build   # Local build to dist/
+just build   # Local build to dist/
 ```
