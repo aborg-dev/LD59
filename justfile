@@ -16,6 +16,9 @@ test:
     #!/usr/bin/env bash
     set -euo pipefail
 
+    # Playwright needs a writable temp dir (Claude Code sandbox may restrict /tmp)
+    export TMPDIR="${TMPDIR:-/tmp}"
+
     # Start dev server on a dedicated port
     npx vite --port {{test_port}} &
     DEV_PID=$!
