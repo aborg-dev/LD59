@@ -1,6 +1,8 @@
-# Gamedev
+# LD59
 
 Phaser 4 game project with browser-based tooling for screenshots, game state inspection, and e2e testing.
+
+**Play it:** https://aborg-dev.github.io/LD59/
 
 ## Prerequisites
 
@@ -41,12 +43,16 @@ Starts the Vite dev server on `0.0.0.0:5173`.
 
 ```
 src/
-  main.ts             # Game entry point (Phaser 4)
+  main.ts              # Game entry point (Phaser 4)
 tools/
-  browser.ts          # Shared browser automation library (Playwright)
-  gamedev-server.ts   # MCP server wrapping browser.ts
+  browser.ts           # Shared browser automation library (Playwright)
+  gamedev-server.ts    # MCP server wrapping browser.ts
+  screenshot.ts        # Standalone screenshot CLI
 tests/
-  game.e2e.test.ts    # E2E tests using browser.ts
+  game.e2e.test.ts     # E2E tests using browser.ts
+  bounds.e2e.test.ts   # Ball bounds e2e tests
+.github/
+  workflows/deploy.yml # GitHub Pages deployment
 ```
 
 ## Testing
@@ -84,3 +90,11 @@ Configured in `.claude/settings.json`. Restart Claude Code after changes.
 - `interact(actions, opts)` - simulate user interactions
 - `consoleLogs(opts)` - capture console output
 - `closeBrowser()` - clean up
+
+## Deployment
+
+Pushes to `main` automatically build and deploy to GitHub Pages via the workflow in `.github/workflows/deploy.yml`.
+
+```sh
+npm run build   # Local build to dist/
+```
