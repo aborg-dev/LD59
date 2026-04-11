@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { type Browser, chromium, type Page } from "playwright";
 
-const SCREENSHOTS_DIR = path.resolve("screenshots");
+const SCREENSHOTS_DIR = path.resolve("debug/screenshots");
 
 let browser: Browser | null = null;
 let page: Page | null = null;
@@ -113,10 +113,9 @@ export async function drag(
   toY: number,
   steps = 5,
 ): Promise<void> {
-  await page?.evaluate(
-    ({ fromX, fromY, toX, toY, steps }) => {
-      const canvas = document.querySelector("canvas")!;
-      const dispatch = (type: string, x: number, y: number) => {
+  await page?.evaluate(`((args) => {
+      const canvas = document.querySelector("canvas");
+      function dispatch(type, x, y) {
         canvas.dispatchEvent(
           new MouseEvent(type, {
             clientX: x,
@@ -126,20 +125,18 @@ export async function drag(
             buttons: type === "mouseup" ? 0 : 1,
           }),
         );
-      };
-      dispatch("mousedown", fromX, fromY);
-      for (let i = 1; i <= steps; i++) {
-        const t = i / steps;
+      }
+      dispatch("mousedown", args.fromX, args.fromY);
+      for (let i = 1; i <= args.steps; i++) {
+        const t = i / args.steps;
         dispatch(
           "mousemove",
-          fromX + (toX - fromX) * t,
-          fromY + (toY - fromY) * t,
+          args.fromX + (args.toX - args.fromX) * t,
+          args.fromY + (args.toY - args.fromY) * t,
         );
       }
-      dispatch("mouseup", toX, toY);
-    },
-    { fromX, fromY, toX, toY, steps },
-  );
+      dispatch("mouseup", args.toX, args.toY);
+    })(${JSON.stringify({ fromX, fromY, toX, toY, steps })})`);
 }
 
 export async function setVelocity(vx: number, vy: number): Promise<void> {

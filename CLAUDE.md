@@ -6,17 +6,25 @@
 - `just lint` / `just lint-fix` - biome linter
 - `just test` - start dev server, run e2e tests, cleanup
 
-## Inspecting the game
+## Debugging the game
 
-`tools/game.ts` is a Playwright-based helper for interacting with the running game
-in headless Chromium. The test suite (`tests/game.e2e.test.ts`) demonstrates usage.
-
-Example usage (from `tests/game.e2e.test.ts`):
+Write throwaway scripts to `debug/` (gitignored) and run with `npx tsx`.
+The dev server is assumed to be running.
 
 ```ts
-await game.drag(200, 300, 400, 500);
-const state = await game.getCircle(); // { x, y, radius, gameWidth, gameHeight }
-await game.screenshot("after-drag");  // saves to screenshots/after-drag.png
+// debug/check-drag.ts — run with: npx tsx debug/check-drag.ts
+import path from "node:path";
+import * as game from "../tools/game.js";
+
+const prefix = path.basename(process.argv[1], ".ts");
+
+(async () => {
+  await game.launch(process.env.TEST_URL || "http://localhost:5173");
+  await game.drag(200, 300, 400, 500);
+  console.log(await game.getCircle());
+  await game.screenshot(`${prefix}-result`);
+  await game.close();
+})();
 ```
 
-Run tests with `just test`.
+`tools/game.ts` is the Playwright-based API — read it for the full list of helpers.
