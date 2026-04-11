@@ -33,7 +33,6 @@ src/
 tools/
   browser.ts           # Shared browser automation library (Playwright)
   gamedev-server.ts    # MCP server wrapping browser.ts
-  screenshot.ts        # Standalone screenshot CLI
 tests/
   game.e2e.test.ts     # E2E tests using browser.ts
   bounds.e2e.test.ts   # Ball bounds e2e tests
