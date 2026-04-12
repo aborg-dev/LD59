@@ -30,7 +30,7 @@ declare global {
   interface Window {
     game: Phaser.Game;
     gameScene: () => GameScene;
-    skipToScene: (key: string) => void;
+    startScene: (key: string) => void;
     advanceTime: (ms: number) => void;
     dumpState: () => StateDump;
   }
@@ -50,10 +50,7 @@ const game = new Phaser.Game(config);
 
 window.game = game;
 window.gameScene = () => getActiveScene<GameScene>(game, "GameScene");
-window.skipToScene = (key: string) => {
-  for (const scene of game.scene.getScenes(true)) {
-    game.scene.stop(scene.scene.key);
-  }
+window.startScene = (key: string) => {
   game.scene.start(key);
 };
 window.advanceTime = (ms: number) => {

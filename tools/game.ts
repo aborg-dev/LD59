@@ -52,7 +52,7 @@ async function waitForGame(pg: Page): Promise<void> {
     () => {
       try {
         if (window.game?.scene?.scenes?.length > 0) {
-          window.skipToScene("GameScene");
+          window.startScene("GameScene");
           return true;
         }
         return false;
@@ -116,7 +116,7 @@ export async function dumpStateToFile(name?: string): Promise<string> {
 }
 
 export async function resetGame(): Promise<void> {
-  await page?.evaluate(() => window.skipToScene("GameScene"));
+  await page?.evaluate(() => window.startScene("GameScene"));
   await page?.waitForFunction(
     () => {
       try {
