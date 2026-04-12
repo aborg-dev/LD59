@@ -1,4 +1,5 @@
 import { Scene } from "phaser";
+import { FONT_BODY, FONT_UI } from "../fonts.js";
 
 export interface MainMenuState {
   active: boolean;
@@ -14,7 +15,7 @@ export class MainMenu extends Scene {
 
     this.add
       .text(width / 2, height / 2 - 40, "Soccer Fling", {
-        fontFamily: "Arial Black",
+        fontFamily: FONT_UI,
         fontSize: 48,
         color: "#4ecdc4",
         stroke: "#000000",
@@ -25,7 +26,7 @@ export class MainMenu extends Scene {
 
     this.add
       .text(width / 2, height / 2 + 40, "Click to Play", {
-        fontFamily: "Arial",
+        fontFamily: FONT_BODY,
         fontSize: 24,
         color: "#ffffff",
         align: "center",

@@ -1,4 +1,5 @@
 import { Scene } from "phaser";
+import { FONT_BODY, FONT_UI } from "../fonts.js";
 
 export interface GameOverState {
   active: boolean;
@@ -20,7 +21,7 @@ export class GameOver extends Scene {
 
     this.add
       .text(width / 2, height / 2 - 100, "Time's Up!", {
-        fontFamily: "Arial Black",
+        fontFamily: FONT_UI,
         fontSize: 48,
         color: "#ffffff",
         stroke: "#000000",
@@ -31,7 +32,7 @@ export class GameOver extends Scene {
 
     this.add
       .text(width / 2, height / 2, String(this.finalScore), {
-        fontFamily: "Arial Black",
+        fontFamily: FONT_UI,
         fontSize: 96,
         color: "#f48c28",
         stroke: "#000000",
@@ -46,7 +47,7 @@ export class GameOver extends Scene {
         height / 2 + 60,
         this.finalScore === 1 ? "goal" : "goals",
         {
-          fontFamily: "Arial",
+          fontFamily: FONT_BODY,
           fontSize: 28,
           color: "#cccccc",
           align: "center",
@@ -56,7 +57,7 @@ export class GameOver extends Scene {
 
     this.add
       .text(width / 2, height / 2 + 140, "Tap to Play Again", {
-        fontFamily: "Arial",
+        fontFamily: FONT_BODY,
         fontSize: 24,
         color: "#ffffff",
         align: "center",

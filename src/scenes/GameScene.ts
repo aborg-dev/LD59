@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { FONT_UI } from "../fonts.js";
 
 const ROUND_DURATION_SEC = 30;
 
@@ -78,7 +79,7 @@ export class GameScene extends Phaser.Scene {
 
     // Timer display (top-left)
     this.timerText = this.add.text(20, 20, String(ROUND_DURATION_SEC), {
-      fontFamily: "Arial Black",
+      fontFamily: FONT_UI,
       fontSize: 36,
       color: "#ffffff",
       stroke: "#000000",
@@ -87,7 +88,7 @@ export class GameScene extends Phaser.Scene {
 
     // Score display (top-right)
     this.scoreText = this.add.text(width - 20, 20, "0", {
-      fontFamily: "Arial Black",
+      fontFamily: FONT_UI,
       fontSize: 36,
       color: "#ffffff",
       stroke: "#000000",
