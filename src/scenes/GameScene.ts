@@ -50,7 +50,6 @@ export class GameScene extends Phaser.Scene {
     this.score = 0;
     this.elapsed = 0;
     this.accumulator = 0;
-    this.lastDisplayedTime = -1;
     this.resetDelay = 0;
     this.gameOver = false;
     this.canScore = true;
@@ -192,22 +191,17 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private lastDisplayedTime = -1;
-
   private step(): void {
     // Countdown timer
     this.elapsed += GameScene.stepMs;
     const tl = this.timeLeft;
-    if (tl !== this.lastDisplayedTime) {
-      this.lastDisplayedTime = tl;
-      this.timerText.setText(String(tl));
-      if (tl <= 5) {
-        this.timerText.setColor("#ff4444");
-      }
-      if (tl <= 0) {
-        this.endGame();
-        return;
-      }
+    this.timerText.setText(String(tl));
+    if (tl <= 5) {
+      this.timerText.setColor("#ff4444");
+    }
+    if (tl <= 0) {
+      this.endGame();
+      return;
     }
 
     // Ball reset after scoring
