@@ -131,3 +131,36 @@ describe("ball stays within bounds", () => {
     expect(Math.abs(s.velocity.y)).toBeLessThan(5);
   });
 });
+
+describe("scoring and game end", () => {
+  beforeAll(async () => {
+    await game.reload();
+  });
+
+  it("scores when ball passes through hoop", async () => {
+    // Place ball just below the hoop and fling upward
+    await game.eval_(`(() => {
+      const gs = window.gameScene();
+      gs.ball.x = gs.hoop.x;
+      gs.ball.y = gs.hoop.y + 80;
+      gs.ball.setVisible(true);
+    })()`);
+    await game.setVelocity(0, -500);
+    await game.advanceTime(300);
+
+    const s = await gameState();
+    expect(s.score).toBeGreaterThanOrEqual(1);
+  });
+
+  it("shows correct score on game end screen", async () => {
+    const before = await gameState();
+    const expectedScore = before.score;
+
+    // Advance past the remaining game time
+    await game.advanceTime(before.timeLeft * 1000 + 100);
+
+    const dump = await game.dumpState();
+    expect(dump.GameOver.active).toBe(true);
+    expect(dump.GameOver.finalScore).toBe(expectedScore);
+  });
+});

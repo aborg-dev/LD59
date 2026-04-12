@@ -25,6 +25,8 @@ export class GameScene extends Phaser.Scene {
   private prevDragTime = 0;
   private score = 0;
   private timeLeft = 30;
+  private elapsed = 0;
+  private resetDelay = 0;
   private canScore = true;
   private gameOver = false;
   private readonly friction = 0.98;
@@ -42,6 +44,7 @@ export class GameScene extends Phaser.Scene {
 
     this.score = 0;
     this.timeLeft = this.gameDuration;
+    this.elapsed = 0;
     this.gameOver = false;
     this.canScore = true;
 
@@ -69,22 +72,6 @@ export class GameScene extends Phaser.Scene {
       strokeThickness: 4,
     });
     this.scoreText.setOrigin(1, 0);
-
-    // Countdown timer
-    this.time.addEvent({
-      delay: 1000,
-      repeat: this.gameDuration - 1,
-      callback: () => {
-        this.timeLeft--;
-        this.timerText.setText(String(this.timeLeft));
-        if (this.timeLeft <= 5) {
-          this.timerText.setColor("#ff4444");
-        }
-        if (this.timeLeft <= 0) {
-          this.endGame();
-        }
-      },
-    });
 
     // Ball starts at the bottom
     this.ball = this.add.sprite(width / 2, height * 0.7, "ball");
@@ -147,20 +134,12 @@ export class GameScene extends Phaser.Scene {
         this.sound.play("score");
         this.canScore = false;
 
-        // Ball disappears and resets
+        // Ball disappears and resets after a short delay
         this.ball.setVisible(false);
         this.velocityX = 0;
         this.velocityY = 0;
         this.dragging = false;
-
-        this.time.delayedCall(500, () => {
-          if (this.gameOver) return;
-          const { width, height } = this.scale;
-          this.ball.x = width / 2;
-          this.ball.y = height * 0.7;
-          this.ball.rotation = 0;
-          this.ball.setVisible(true);
-        });
+        this.resetDelay = 500;
       }
     } else {
       this.canScore = true;
@@ -204,7 +183,38 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    if (this.dragging || this.gameOver || !this.ball.visible) return;
+    if (this.gameOver) return;
+
+    // Countdown timer
+    this.elapsed += delta;
+    if (this.elapsed >= 1000) {
+      this.elapsed -= 1000;
+      this.timeLeft--;
+      this.timerText.setText(String(Math.max(0, this.timeLeft)));
+      if (this.timeLeft <= 5) {
+        this.timerText.setColor("#ff4444");
+      }
+      if (this.timeLeft <= 0) {
+        this.endGame();
+        return;
+      }
+    }
+
+    // Ball reset after scoring
+    if (this.resetDelay > 0) {
+      this.resetDelay -= delta;
+      if (this.resetDelay <= 0) {
+        this.resetDelay = 0;
+        const { width, height } = this.scale;
+        this.ball.x = width / 2;
+        this.ball.y = height * 0.7;
+        this.ball.rotation = 0;
+        this.ball.setVisible(true);
+      }
+      return;
+    }
+
+    if (this.dragging || !this.ball.visible) return;
 
     const dt = delta / 1000;
     const { width, height } = this.scale;
