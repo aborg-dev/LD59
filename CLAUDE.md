@@ -1,4 +1,4 @@
-# LD59 - Phaser 4 Game
+# Tennis Fling - Phaser 4 Game
 
 ## Quick commands
 

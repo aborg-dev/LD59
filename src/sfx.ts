@@ -11,27 +11,50 @@ export function resume(): void {
   if (c.state === "suspended") c.resume();
 }
 
-/** Short percussive bounce — pitched by how hard the hit was. */
+/** Tennis ball "thock" — short noise impact + low thump. */
 export function bounce(intensity = 0.5): void {
   const c = getCtx();
   const t = c.currentTime;
+  const vol = 0.1 + intensity * 0.15;
+  const dur = 0.08;
 
+  // Impact noise — filtered burst for the "thock" character
+  const noiseBuf = c.createBuffer(1, c.sampleRate * dur, c.sampleRate);
+  const noise = noiseBuf.getChannelData(0);
+  for (let i = 0; i < noise.length; i++) {
+    noise[i] = Math.random() * 2 - 1;
+  }
+  const noiseSrc = c.createBufferSource();
+  noiseSrc.buffer = noiseBuf;
+
+  const bandpass = c.createBiquadFilter();
+  bandpass.type = "bandpass";
+  bandpass.frequency.setValueAtTime(3000 + intensity * 1500, t);
+  bandpass.Q.value = 1.2;
+
+  const noiseGain = c.createGain();
+  noiseGain.gain.setValueAtTime(vol, t);
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+  noiseSrc.connect(bandpass);
+  bandpass.connect(noiseGain);
+  noiseGain.connect(c.destination);
+  noiseSrc.start(t);
+  noiseSrc.stop(t + dur);
+
+  // Low thump — very short sine for body
   const osc = c.createOscillator();
-  const gain = c.createGain();
-  osc.connect(gain);
-  gain.connect(c.destination);
-
-  const freq = 200 + intensity * 400;
+  const oscGain = c.createGain();
   osc.type = "sine";
-  osc.frequency.setValueAtTime(freq, t);
-  osc.frequency.exponentialRampToValueAtTime(60, t + 0.15);
+  osc.frequency.setValueAtTime(120 + intensity * 60, t);
+  osc.frequency.exponentialRampToValueAtTime(50, t + dur);
+  oscGain.gain.setValueAtTime(vol * 0.6, t);
+  oscGain.gain.exponentialRampToValueAtTime(0.001, t + dur);
 
-  const vol = 0.15 + intensity * 0.15;
-  gain.gain.setValueAtTime(vol, t);
-  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-
+  osc.connect(oscGain);
+  oscGain.connect(c.destination);
   osc.start(t);
-  osc.stop(t + 0.15);
+  osc.stop(t + dur);
 }
 
 /** Soft whoosh for fling release. */
