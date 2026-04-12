@@ -13,7 +13,7 @@ export class MainMenu extends Scene {
     const { width, height } = this.scale;
 
     this.add
-      .text(width / 2, height / 2 - 40, "Basketball Fling", {
+      .text(width / 2, height / 2 - 40, "Soccer Fling", {
         fontFamily: "Arial Black",
         fontSize: 48,
         color: "#4ecdc4",

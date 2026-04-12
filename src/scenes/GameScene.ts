@@ -9,14 +9,13 @@ export interface GameSceneState {
   dragging: boolean;
   score: number;
   timeLeft: number;
-  hoop: { x: number; y: number };
+  goal: { x: number; y: number; width: number; height: number };
   physics: { friction: number; bounce: number };
   viewport: { width: number; height: number };
 }
 
 export class GameScene extends Phaser.Scene {
   private ball!: Phaser.GameObjects.Sprite;
-  private hoop!: Phaser.GameObjects.Image;
   private scoreText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
   private velocityX = 0;
@@ -34,7 +33,12 @@ export class GameScene extends Phaser.Scene {
   private readonly friction = 0.98;
   private readonly bounce = 0.8;
   private readonly radius = 50;
-  private readonly hoopRadius = 42;
+
+  // Goal zone at top of pitch (matches the goal area in the court background)
+  private goalX = 0;
+  private goalY = 0;
+  private goalW = 0;
+  private goalH = 0;
 
   private get timeLeft(): number {
     return Math.max(0, ROUND_DURATION_SEC - Math.floor(this.elapsed / 1000));
@@ -60,8 +64,14 @@ export class GameScene extends Phaser.Scene {
     const bg = this.add.image(width / 2, height / 2, "court");
     bg.setDisplaySize(width, height);
 
-    // Hoop at the top of the court
-    this.hoop = this.add.image(width / 2, 90, "hoop");
+    // Goal zone — matches the goal area lines in the pitch background
+    const margin = 25;
+    const pitchW = width - margin * 2;
+    const pitchH = height - margin * 2;
+    this.goalW = pitchW * 0.3;
+    this.goalH = pitchH * 0.12;
+    this.goalX = width / 2 - this.goalW / 2;
+    this.goalY = margin;
 
     // Timer display (top-left)
     this.timerText = this.add.text(20, 20, String(ROUND_DURATION_SEC), {
@@ -131,12 +141,18 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private checkScore(): void {
-    const dx = this.ball.x - this.hoop.x;
-    const dy = this.ball.y - this.hoop.y;
-    const dist = Math.hypot(dx, dy);
+  private prevBallY = 0;
 
-    if (dist < this.hoopRadius && this.velocityY < 0) {
+  private checkScore(): void {
+    // Check if ball crossed through the goal zone this step
+    const minY = Math.min(this.prevBallY, this.ball.y);
+    const maxY = Math.max(this.prevBallY, this.ball.y);
+    const crossedGoalY = minY <= this.goalY + this.goalH && maxY >= this.goalY;
+    const inGoalX =
+      this.ball.x >= this.goalX && this.ball.x <= this.goalX + this.goalW;
+    const inGoal = crossedGoalY && inGoalX;
+
+    if (inGoal) {
       if (this.canScore) {
         this.score++;
         this.scoreText.setText(String(this.score));
@@ -171,7 +187,12 @@ export class GameScene extends Phaser.Scene {
       dragging: this.dragging,
       score: this.score,
       timeLeft: this.timeLeft,
-      hoop: { x: this.hoop.x, y: this.hoop.y },
+      goal: {
+        x: this.goalX,
+        y: this.goalY,
+        width: this.goalW,
+        height: this.goalH,
+      },
       physics: { friction: this.friction, bounce: this.bounce },
       viewport: { width: this.scale.width, height: this.scale.height },
     };
@@ -222,6 +243,8 @@ export class GameScene extends Phaser.Scene {
 
     const dt = GameScene.stepSec;
     const { width, height } = this.scale;
+
+    this.prevBallY = this.ball.y;
 
     this.ball.x += this.velocityX * dt;
     this.ball.y += this.velocityY * dt;

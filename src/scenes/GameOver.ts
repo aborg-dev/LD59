@@ -44,7 +44,7 @@ export class GameOver extends Scene {
       .text(
         width / 2,
         height / 2 + 60,
-        this.finalScore === 1 ? "basket" : "baskets",
+        this.finalScore === 1 ? "goal" : "goals",
         {
           fontFamily: "Arial",
           fontSize: 28,

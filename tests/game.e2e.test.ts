@@ -30,9 +30,9 @@ describe("scoring and game end", () => {
   it("scores and shows correct score on game end", async () => {
     await game.startScene("GameScene");
 
-    // Fling ball upward toward the hoop
+    // Fling ball upward toward the goal
     const s0 = await gameState();
-    await game.drag(s0.ball.x, s0.ball.y, s0.ball.x, 100);
+    await game.drag(s0.ball.x, s0.ball.y, s0.ball.x, s0.goal.y);
     await game.advanceTime(500);
 
     const s = await gameState();
@@ -44,5 +44,20 @@ describe("scoring and game end", () => {
     const dump = await game.dumpState();
     expect(dump.GameOver?.active).toBe(true);
     expect(dump.GameOver?.finalScore).toBe(s.score);
+  });
+
+  it("scores on a high-speed fling into the goal", async () => {
+    await game.startScene("GameScene");
+
+    // Set high upward velocity directly to test that fast-moving ball
+    // still registers a goal (swept collision detection)
+    await game.eval_(`(() => {
+      const gs = window.gameScene();
+      gs.velocityY = -5000;
+    })()`);
+    await game.advanceTime(2000);
+
+    const s = await gameState();
+    expect(s.score).toBeGreaterThanOrEqual(1);
   });
 });

@@ -1,4 +1,4 @@
-# Basketball Fling - Phaser 4 Game
+# Soccer Fling - Phaser 4 Game
 
 ## Quick commands
 
