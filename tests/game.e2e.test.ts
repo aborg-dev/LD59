@@ -16,6 +16,10 @@ afterAll(async () => {
   await game.close();
 });
 
+beforeEach(async () => {
+  await game.resetGame();
+});
+
 describe("game e2e", () => {
   it("loads without errors", () => {
     expect(game.errors()).toEqual([]);
@@ -49,10 +53,6 @@ describe("game e2e", () => {
 });
 
 describe("ball stays within bounds", () => {
-  beforeEach(async () => {
-    await game.resetBall();
-  });
-
   it("does not go past the bottom edge when dragged down", async () => {
     const before = await gameState();
     await game.drag(
@@ -133,10 +133,6 @@ describe("ball stays within bounds", () => {
 });
 
 describe("scoring and game end", () => {
-  beforeAll(async () => {
-    await game.reload();
-  });
-
   it("scores when ball passes through hoop", async () => {
     // Place ball just below the hoop and fling upward
     await game.eval_(`(() => {
@@ -153,14 +149,13 @@ describe("scoring and game end", () => {
   });
 
   it("shows correct score on game end screen", async () => {
-    const before = await gameState();
-    const expectedScore = before.score;
-
-    // Advance past the remaining game time
-    await game.advanceTime(before.timeLeft * 1000 + 100);
+    // Set a known score and expire the timer
+    await game.eval_("window.gameScene().score = 5");
+    await game.eval_("window.gameScene().timeLeft = 1");
+    await game.advanceTime(1100);
 
     const dump = await game.dumpState();
     expect(dump.GameOver.active).toBe(true);
-    expect(dump.GameOver.finalScore).toBe(expectedScore);
+    expect(dump.GameOver.finalScore).toBe(5);
   });
 });

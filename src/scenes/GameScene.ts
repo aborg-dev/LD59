@@ -168,15 +168,6 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
-  resetBall(): void {
-    this.ball.x = this.scale.width / 2;
-    this.ball.y = this.scale.height * 0.7;
-    this.ball.setVisible(true);
-    this.velocityX = 0;
-    this.velocityY = 0;
-    this.dragging = false;
-  }
-
   setVelocity(vx: number, vy: number): void {
     this.velocityX = vx;
     this.velocityY = vy;

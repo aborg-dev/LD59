@@ -115,8 +115,18 @@ export async function dumpStateToFile(name?: string): Promise<string> {
   return filepath;
 }
 
-export async function resetBall(): Promise<void> {
-  await page?.evaluate(() => window.gameScene().resetBall());
+export async function resetGame(): Promise<void> {
+  await page?.evaluate(() => window.skipToScene("GameScene"));
+  await page?.waitForFunction(
+    () => {
+      try {
+        return !!window.gameScene().children;
+      } catch {
+        return false;
+      }
+    },
+    { timeout: 5000 },
+  );
 }
 
 export async function drag(
