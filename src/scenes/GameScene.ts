@@ -1,11 +1,12 @@
 import * as Phaser from "phaser";
 
-export interface CircleState {
-  x: number;
-  y: number;
-  radius: number;
-  gameWidth: number;
-  gameHeight: number;
+export interface GameSceneState {
+  active: boolean;
+  circle: { x: number; y: number; radius: number };
+  velocity: { x: number; y: number };
+  dragging: boolean;
+  physics: { friction: number; bounce: number };
+  viewport: { width: number; height: number };
 }
 
 export class GameScene extends Phaser.Scene {
@@ -73,13 +74,14 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  getCircleState(): CircleState {
+  dumpState(): GameSceneState {
     return {
-      x: this.circle.x,
-      y: this.circle.y,
-      radius: this.radius,
-      gameWidth: this.scale.width,
-      gameHeight: this.scale.height,
+      active: this.scene.isActive(),
+      circle: { x: this.circle.x, y: this.circle.y, radius: this.radius },
+      velocity: { x: this.velocityX, y: this.velocityY },
+      dragging: this.dragging,
+      physics: { friction: this.friction, bounce: this.bounce },
+      viewport: { width: this.scale.width, height: this.scale.height },
     };
   }
 
@@ -94,10 +96,6 @@ export class GameScene extends Phaser.Scene {
   setVelocity(vx: number, vy: number): void {
     this.velocityX = vx;
     this.velocityY = vy;
-  }
-
-  getVelocity(): { vx: number; vy: number } {
-    return { vx: this.velocityX, vy: this.velocityY };
   }
 
   update(_time: number, delta: number): void {

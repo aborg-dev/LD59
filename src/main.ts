@@ -1,9 +1,9 @@
 import * as Phaser from "phaser";
-import { Boot } from "./scenes/Boot.js";
-import { GameOver } from "./scenes/GameOver.js";
-import { GameScene } from "./scenes/GameScene.js";
-import { MainMenu } from "./scenes/MainMenu.js";
-import { Preloader } from "./scenes/Preloader.js";
+import { Boot, type BootState } from "./scenes/Boot.js";
+import { GameOver, type GameOverState } from "./scenes/GameOver.js";
+import { GameScene, type GameSceneState } from "./scenes/GameScene.js";
+import { MainMenu, type MainMenuState } from "./scenes/MainMenu.js";
+import { Preloader, type PreloaderState } from "./scenes/Preloader.js";
 
 function getActiveScene<T extends Phaser.Scene>(
   game: Phaser.Game,
@@ -18,12 +18,21 @@ function getActiveScene<T extends Phaser.Scene>(
   return found as T;
 }
 
+export interface StateDump {
+  Boot: BootState;
+  Preloader: PreloaderState;
+  MainMenu: MainMenuState;
+  GameScene: GameSceneState;
+  GameOver: GameOverState;
+}
+
 declare global {
   interface Window {
     game: Phaser.Game;
     gameScene: () => GameScene;
     skipToScene: (key: string) => void;
     advanceTime: (ms: number) => void;
+    dumpState: () => StateDump;
   }
 }
 
@@ -58,3 +67,10 @@ window.advanceTime = (ms: number) => {
     remaining -= dt;
   }
 };
+window.dumpState = () => ({
+  Boot: (game.scene.getScene("Boot") as Boot).dumpState(),
+  Preloader: (game.scene.getScene("Preloader") as Preloader).dumpState(),
+  MainMenu: (game.scene.getScene("MainMenu") as MainMenu).dumpState(),
+  GameScene: (game.scene.getScene("GameScene") as GameScene).dumpState(),
+  GameOver: (game.scene.getScene("GameOver") as GameOver).dumpState(),
+});

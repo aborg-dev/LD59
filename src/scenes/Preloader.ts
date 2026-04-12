@@ -1,5 +1,9 @@
 import { Scene } from "phaser";
 
+export interface PreloaderState {
+  active: boolean;
+}
+
 export class Preloader extends Scene {
   constructor() {
     super("Preloader");
@@ -26,5 +30,9 @@ export class Preloader extends Scene {
 
   create() {
     this.scene.start("MainMenu");
+  }
+
+  dumpState(): PreloaderState {
+    return { active: this.scene.isActive() };
   }
 }

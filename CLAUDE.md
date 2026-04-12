@@ -11,20 +11,41 @@
 Write throwaway scripts to `debug/` (gitignored) and run with `npx tsx`.
 The dev server is assumed to be running.
 
+### State dumps
+
+`game.dumpState()` returns all per-scene state as a keyed JSON object.
+`game.dumpStateToFile(name?)` writes the dump to `debug/dumps/<name>-<timestamp>.json`
+for offline analysis with `jq`.
+
+### Incremental exploration
+
+Keep the browser alive between steps — no need for one-shot launch/close sessions.
+
 ```ts
-// debug/check-drag.ts — run with: npx tsx debug/check-drag.ts
-import path from "node:path";
+// debug/explore.ts — run with: npx tsx debug/explore.ts
 import * as game from "../tools/game.js";
 
-const prefix = path.basename(process.argv[1], ".ts");
+const url = process.env.TEST_URL || "http://localhost:5173";
 
 (async () => {
-  await game.launch(process.env.TEST_URL || "http://localhost:5173");
+  await game.launch(url);
+
+  // dump initial state
+  await game.dumpStateToFile("initial");
+
+  // interact and dump again
   await game.drag(200, 300, 400, 500);
-  console.log(await game.getCircle());
-  await game.screenshot(`${prefix}-result`);
+  await game.dumpStateToFile("after-drag");
+
+  // let physics run, dump a third time
+  await game.advanceTime(500);
+  await game.dumpStateToFile("after-physics");
+
+  await game.screenshot("explore-result");
   await game.close();
 })();
+// Then: jq '.GameScene.circle' debug/dumps/after-drag-*.json
+// Or:   jq 'to_entries[] | select(.value.active) | .key' debug/dumps/initial-*.json
 ```
 
 `tools/game.ts` is the Playwright-based API — read it for the full list of helpers.

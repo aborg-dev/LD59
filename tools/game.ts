@@ -9,9 +9,10 @@ let page: Page | null = null;
 let currentUrl = "";
 let pageErrors: string[] = [];
 
-import type { CircleState } from "../src/scenes/GameScene.js";
+import type { StateDump } from "../src/main.js";
+import type { GameSceneState } from "../src/scenes/GameScene.js";
 
-export type { CircleState };
+export type { GameSceneState, StateDump };
 
 async function ensurePage(
   url: string,
@@ -98,8 +99,20 @@ export async function reload(): Promise<void> {
   }
 }
 
-export async function getCircle(): Promise<CircleState> {
-  return page!.evaluate(() => window.gameScene().getCircleState());
+export async function dumpState(): Promise<StateDump> {
+  return page!.evaluate(() => window.dumpState());
+}
+
+const DUMPS_DIR = path.resolve("debug/dumps");
+
+export async function dumpStateToFile(name?: string): Promise<string> {
+  const state = await dumpState();
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  const filename = name ? `${name}-${ts}.json` : `state-${ts}.json`;
+  fs.mkdirSync(DUMPS_DIR, { recursive: true });
+  const filepath = path.join(DUMPS_DIR, filename);
+  fs.writeFileSync(filepath, JSON.stringify(state, null, 2));
+  return filepath;
 }
 
 export async function resetCircle(): Promise<void> {
@@ -144,10 +157,6 @@ export async function setVelocity(vx: number, vy: number): Promise<void> {
     vx,
     vy,
   });
-}
-
-export async function getVelocity(): Promise<{ vx: number; vy: number }> {
-  return page!.evaluate(() => window.gameScene().getVelocity());
 }
 
 export async function advanceTime(ms: number): Promise<void> {

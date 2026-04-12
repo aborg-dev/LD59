@@ -1,5 +1,9 @@
 import { Scene } from "phaser";
 
+export interface MainMenuState {
+  active: boolean;
+}
+
 export class MainMenu extends Scene {
   constructor() {
     super("MainMenu");
@@ -31,5 +35,9 @@ export class MainMenu extends Scene {
     this.input.once("pointerdown", () => {
       this.scene.start("GameScene");
     });
+  }
+
+  dumpState(): MainMenuState {
+    return { active: this.scene.isActive() };
   }
 }
