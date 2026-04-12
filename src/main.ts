@@ -70,3 +70,44 @@ window.dumpState = () => ({
   GameScene: tryDump(game.scene.getScene("GameScene") as GameScene),
   GameOver: tryDump(game.scene.getScene("GameOver") as GameOver),
 });
+
+// Debug overlay
+const debugBtn = document.createElement("button");
+debugBtn.textContent = "DBG";
+debugBtn.style.cssText =
+  "position:fixed;bottom:10px;right:10px;z-index:9999;padding:6px 12px;" +
+  "background:rgba(0,0,0,0.6);color:#0f0;border:1px solid #0f0;" +
+  "font:bold 14px monospace;cursor:pointer;border-radius:4px;";
+document.body.appendChild(debugBtn);
+
+const debugPanel = document.createElement("pre");
+debugPanel.style.cssText =
+  "position:fixed;bottom:50px;right:10px;z-index:9998;padding:12px;" +
+  "background:rgba(0,0,0,0.75);color:#0f0;font:12px monospace;" +
+  "width:300px;max-height:60vh;overflow:auto;border:1px solid #0f0;" +
+  "border-radius:4px;display:none;white-space:pre-wrap;word-break:break-all;";
+document.body.appendChild(debugPanel);
+
+let debugVisible = false;
+let debugInterval: number | undefined;
+
+debugBtn.addEventListener("click", () => {
+  debugVisible = !debugVisible;
+  debugPanel.style.display = debugVisible ? "block" : "none";
+  if (debugVisible) {
+    const refresh = () => {
+      const dump = window.dumpState();
+      const active: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(dump)) {
+        if (val && typeof val === "object" && "active" in val && val.active) {
+          active[key] = val;
+        }
+      }
+      debugPanel.textContent = JSON.stringify(active, null, 2);
+    };
+    refresh();
+    debugInterval = window.setInterval(refresh, 200);
+  } else {
+    clearInterval(debugInterval);
+  }
+});
