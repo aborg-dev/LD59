@@ -116,17 +116,13 @@ export async function dumpStateToFile(name?: string): Promise<string> {
 }
 
 export async function resetGame(): Promise<void> {
-  await page?.evaluate(() => window.startScene("GameScene"));
-  await page?.waitForFunction(
-    () => {
-      try {
-        return !!window.gameScene().children;
-      } catch {
-        return false;
-      }
-    },
-    { timeout: 5000 },
-  );
+  await page?.evaluate(() => {
+    window.startScene("GameScene");
+    // Verify scene is ready synchronously — scene.start triggers create() inline
+    if (!window.gameScene().children) {
+      throw new Error("GameScene not ready after startScene");
+    }
+  });
 }
 
 export async function drag(

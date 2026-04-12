@@ -21,19 +21,10 @@ beforeEach(async () => {
 });
 
 describe("game e2e", () => {
-  it("loads without errors", () => {
+  it("loads and renders correctly", async () => {
     expect(game.errors()).toEqual([]);
-  });
-
-  it("renders the game canvas", async () => {
     expect(await game.hasCanvas()).toBe(true);
-  });
-
-  it("creates a Phaser game instance", async () => {
     expect(await game.isGameRunning()).toBe(true);
-  });
-
-  it("has an active scene", async () => {
     expect(await game.sceneCount()).toBeGreaterThan(0);
   });
 
