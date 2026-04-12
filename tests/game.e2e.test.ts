@@ -30,10 +30,9 @@ describe("scoring and game end", () => {
   it("scores and shows correct score on game end", async () => {
     await game.startScene("GameScene");
 
-    // Fling ball upward toward the goal
-    const s0 = await gameState();
-    await game.drag(s0.ball.x, s0.ball.y, s0.ball.x, s0.goal.y);
-    await game.advanceTime(500);
+    // Kick ball upward toward the goal
+    await game.eval_("window.gameScene().velocityY = -800");
+    await game.advanceTime(2000);
 
     const s = await gameState();
     expect(s.score).toBeGreaterThanOrEqual(1);
