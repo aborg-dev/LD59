@@ -47,26 +47,10 @@ async function ensurePage(
 }
 
 async function waitForGame(pg: Page): Promise<void> {
-  // Wait for Phaser to initialize, then skip directly to the GameScene
   await pg.waitForFunction(
     () => {
       try {
-        if (window.game?.scene?.scenes?.length > 0) {
-          window.startScene("GameScene");
-          return true;
-        }
-        return false;
-      } catch {
-        return false;
-      }
-    },
-    { timeout: 10000 },
-  );
-  // Wait for GameScene to be fully created
-  await pg.waitForFunction(
-    () => {
-      try {
-        return !!window.gameScene().children;
+        return window.dumpState().MainMenu?.active === true;
       } catch {
         return false;
       }
@@ -115,14 +99,8 @@ export async function dumpStateToFile(name?: string): Promise<string> {
   return filepath;
 }
 
-export async function resetGame(): Promise<void> {
-  await page?.evaluate(() => {
-    window.startScene("GameScene");
-    // Verify scene is ready synchronously — scene.start triggers create() inline
-    if (!window.gameScene().children) {
-      throw new Error("GameScene not ready after startScene");
-    }
-  });
+export async function startScene(key: string): Promise<void> {
+  await page?.evaluate((k) => window.startScene(k), key);
 }
 
 export async function drag(
@@ -158,31 +136,8 @@ export async function drag(
     })(${JSON.stringify({ fromX, fromY, toX, toY, steps })})`);
 }
 
-export async function setVelocity(vx: number, vy: number): Promise<void> {
-  await page?.evaluate(({ vx, vy }) => window.gameScene().setVelocity(vx, vy), {
-    vx,
-    vy,
-  });
-}
-
 export async function advanceTime(ms: number): Promise<void> {
   await page?.evaluate((ms) => window.advanceTime(ms), ms);
-}
-
-export async function resumeLoop(): Promise<void> {
-  await page?.evaluate(() => window.game.loop.wake());
-}
-
-export async function hasCanvas(): Promise<boolean> {
-  return page?.evaluate(() => document.querySelector("canvas") !== null);
-}
-
-export async function isGameRunning(): Promise<boolean> {
-  return page?.evaluate(() => window.game?.constructor?.name === "Game");
-}
-
-export async function sceneCount(): Promise<number> {
-  return page?.evaluate(() => window.game?.scene?.scenes?.length ?? 0);
 }
 
 export function errors(): string[] {

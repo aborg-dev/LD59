@@ -1,5 +1,7 @@
 import * as Phaser from "phaser";
 
+const ROUND_DURATION_SEC = 30;
+
 export interface GameSceneState {
   active: boolean;
   ball: { x: number; y: number; radius: number };
@@ -23,8 +25,8 @@ export class GameScene extends Phaser.Scene {
   private prevDragX = 0;
   private prevDragY = 0;
   private prevDragTime = 0;
+  private accumulator = 0;
   private score = 0;
-  private timeLeft = 30;
   private elapsed = 0;
   private resetDelay = 0;
   private canScore = true;
@@ -33,7 +35,10 @@ export class GameScene extends Phaser.Scene {
   private readonly bounce = 0.8;
   private readonly radius = 50;
   private readonly hoopRadius = 42;
-  private readonly gameDuration = 30;
+
+  private get timeLeft(): number {
+    return Math.max(0, ROUND_DURATION_SEC - Math.floor(this.elapsed / 1000));
+  }
 
   constructor() {
     super("GameScene");
@@ -43,10 +48,15 @@ export class GameScene extends Phaser.Scene {
     const { width, height } = this.scale;
 
     this.score = 0;
-    this.timeLeft = this.gameDuration;
     this.elapsed = 0;
+    this.accumulator = 0;
+    this.lastDisplayedTime = -1;
+    this.resetDelay = 0;
     this.gameOver = false;
     this.canScore = true;
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.dragging = false;
 
     const bg = this.add.image(width / 2, height / 2, "court");
     bg.setDisplaySize(width, height);
@@ -55,7 +65,7 @@ export class GameScene extends Phaser.Scene {
     this.hoop = this.add.image(width / 2, 90, "hoop");
 
     // Timer display (top-left)
-    this.timerText = this.add.text(20, 20, "30", {
+    this.timerText = this.add.text(20, 20, String(ROUND_DURATION_SEC), {
       fontFamily: "Arial Black",
       fontSize: 36,
       color: "#ffffff",
@@ -168,24 +178,33 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
-  setVelocity(vx: number, vy: number): void {
-    this.velocityX = vx;
-    this.velocityY = vy;
-  }
+  private static readonly stepMs = 16.666;
+  private static readonly stepSec = GameScene.stepMs / 1000;
 
   update(_time: number, delta: number): void {
     if (this.gameOver) return;
 
+    this.accumulator += delta;
+    while (this.accumulator >= GameScene.stepMs) {
+      this.step();
+      if (this.gameOver) return;
+      this.accumulator -= GameScene.stepMs;
+    }
+  }
+
+  private lastDisplayedTime = -1;
+
+  private step(): void {
     // Countdown timer
-    this.elapsed += delta;
-    if (this.elapsed >= 1000) {
-      this.elapsed -= 1000;
-      this.timeLeft--;
-      this.timerText.setText(String(Math.max(0, this.timeLeft)));
-      if (this.timeLeft <= 5) {
+    this.elapsed += GameScene.stepMs;
+    const tl = this.timeLeft;
+    if (tl !== this.lastDisplayedTime) {
+      this.lastDisplayedTime = tl;
+      this.timerText.setText(String(tl));
+      if (tl <= 5) {
         this.timerText.setColor("#ff4444");
       }
-      if (this.timeLeft <= 0) {
+      if (tl <= 0) {
         this.endGame();
         return;
       }
@@ -193,7 +212,7 @@ export class GameScene extends Phaser.Scene {
 
     // Ball reset after scoring
     if (this.resetDelay > 0) {
-      this.resetDelay -= delta;
+      this.resetDelay -= GameScene.stepMs;
       if (this.resetDelay <= 0) {
         this.resetDelay = 0;
         const { width, height } = this.scale;
@@ -207,7 +226,7 @@ export class GameScene extends Phaser.Scene {
 
     if (this.dragging || !this.ball.visible) return;
 
-    const dt = delta / 1000;
+    const dt = GameScene.stepSec;
     const { width, height } = this.scale;
 
     this.ball.x += this.velocityX * dt;

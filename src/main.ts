@@ -19,11 +19,11 @@ function getActiveScene<T extends Phaser.Scene>(
 }
 
 export interface StateDump {
-  Boot: BootState;
-  Preloader: PreloaderState;
-  MainMenu: MainMenuState;
-  GameScene: GameSceneState;
-  GameOver: GameOverState;
+  Boot: BootState | null;
+  Preloader: PreloaderState | null;
+  MainMenu: MainMenuState | null;
+  GameScene: GameSceneState | null;
+  GameOver: GameOverState | null;
 }
 
 declare global {
@@ -54,20 +54,19 @@ window.startScene = (key: string) => {
   game.scene.start(key);
 };
 window.advanceTime = (ms: number) => {
-  const stepMs = 16.666;
-  let remaining = ms;
-  while (remaining > 0) {
-    const dt = Math.min(remaining, stepMs);
-    for (const scene of game.scene.getScenes(true)) {
-      scene.update(performance.now(), dt);
-    }
-    remaining -= dt;
-  }
+  game.scene.update(performance.now(), ms);
 };
+function tryDump<T>(scene: { dumpState(): T } | null): T | null {
+  try {
+    return scene?.dumpState() ?? null;
+  } catch {
+    return null;
+  }
+}
 window.dumpState = () => ({
-  Boot: (game.scene.getScene("Boot") as Boot).dumpState(),
-  Preloader: (game.scene.getScene("Preloader") as Preloader).dumpState(),
-  MainMenu: (game.scene.getScene("MainMenu") as MainMenu).dumpState(),
-  GameScene: (game.scene.getScene("GameScene") as GameScene).dumpState(),
-  GameOver: (game.scene.getScene("GameOver") as GameOver).dumpState(),
+  Boot: tryDump(game.scene.getScene("Boot") as Boot),
+  Preloader: tryDump(game.scene.getScene("Preloader") as Preloader),
+  MainMenu: tryDump(game.scene.getScene("MainMenu") as MainMenu),
+  GameScene: tryDump(game.scene.getScene("GameScene") as GameScene),
+  GameOver: tryDump(game.scene.getScene("GameOver") as GameOver),
 });
