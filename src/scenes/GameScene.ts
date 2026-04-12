@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import * as sfx from "../sfx.js";
 
 export interface GameSceneState {
   active: boolean;
@@ -33,6 +34,7 @@ export class GameScene extends Phaser.Scene {
     this.circle.setInteractive({ draggable: true });
 
     this.circle.on("dragstart", (_pointer: Phaser.Input.Pointer) => {
+      sfx.resume();
       this.dragging = true;
       this.velocityX = 0;
       this.velocityY = 0;
@@ -71,6 +73,7 @@ export class GameScene extends Phaser.Scene {
 
     this.circle.on("dragend", () => {
       this.dragging = false;
+      sfx.whoosh();
     });
   }
 
@@ -108,19 +111,24 @@ export class GameScene extends Phaser.Scene {
     this.circle.y += this.velocityY * dt;
 
     // Bounce off edges
+    const maxBounceSpeed = 2000;
     if (this.circle.x - this.radius < 0) {
       this.circle.x = this.radius;
+      sfx.bounce(Math.min(Math.abs(this.velocityX) / maxBounceSpeed, 1));
       this.velocityX = Math.abs(this.velocityX) * this.bounce;
     } else if (this.circle.x + this.radius > width) {
       this.circle.x = width - this.radius;
+      sfx.bounce(Math.min(Math.abs(this.velocityX) / maxBounceSpeed, 1));
       this.velocityX = -Math.abs(this.velocityX) * this.bounce;
     }
 
     if (this.circle.y - this.radius < 0) {
       this.circle.y = this.radius;
+      sfx.bounce(Math.min(Math.abs(this.velocityY) / maxBounceSpeed, 1));
       this.velocityY = Math.abs(this.velocityY) * this.bounce;
     } else if (this.circle.y + this.radius > height) {
       this.circle.y = height - this.radius;
+      sfx.bounce(Math.min(Math.abs(this.velocityY) / maxBounceSpeed, 1));
       this.velocityY = -Math.abs(this.velocityY) * this.bounce;
     }
 

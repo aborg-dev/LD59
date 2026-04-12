@@ -1,4 +1,5 @@
 import { Scene } from "phaser";
+import * as sfx from "../sfx.js";
 
 export interface GameOverState {
   active: boolean;
@@ -35,6 +36,8 @@ export class GameOver extends Scene {
       .setOrigin(0.5);
 
     this.input.once("pointerdown", () => {
+      sfx.resume();
+      sfx.pop();
       this.scene.start("MainMenu");
     });
   }
