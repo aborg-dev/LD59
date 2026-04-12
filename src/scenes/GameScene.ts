@@ -1,5 +1,4 @@
 import * as Phaser from "phaser";
-import * as sfx from "../sfx.js";
 
 export interface GameSceneState {
   active: boolean;
@@ -37,7 +36,6 @@ export class GameScene extends Phaser.Scene {
     this.ball.setInteractive({ draggable: true });
 
     this.ball.on("dragstart", (_pointer: Phaser.Input.Pointer) => {
-      sfx.resume();
       this.dragging = true;
       this.velocityX = 0;
       this.velocityY = 0;
@@ -76,7 +74,6 @@ export class GameScene extends Phaser.Scene {
 
     this.ball.on("dragend", () => {
       this.dragging = false;
-      sfx.whoosh();
     });
   }
 
@@ -114,24 +111,23 @@ export class GameScene extends Phaser.Scene {
     this.ball.y += this.velocityY * dt;
 
     // Bounce off edges
-    const maxBounceSpeed = 2000;
     if (this.ball.x - this.radius < 0) {
       this.ball.x = this.radius;
-      sfx.bounce(Math.min(Math.abs(this.velocityX) / maxBounceSpeed, 1));
+      this.sound.play("bounce");
       this.velocityX = Math.abs(this.velocityX) * this.bounce;
     } else if (this.ball.x + this.radius > width) {
       this.ball.x = width - this.radius;
-      sfx.bounce(Math.min(Math.abs(this.velocityX) / maxBounceSpeed, 1));
+      this.sound.play("bounce");
       this.velocityX = -Math.abs(this.velocityX) * this.bounce;
     }
 
     if (this.ball.y - this.radius < 0) {
       this.ball.y = this.radius;
-      sfx.bounce(Math.min(Math.abs(this.velocityY) / maxBounceSpeed, 1));
+      this.sound.play("bounce");
       this.velocityY = Math.abs(this.velocityY) * this.bounce;
     } else if (this.ball.y + this.radius > height) {
       this.ball.y = height - this.radius;
-      sfx.bounce(Math.min(Math.abs(this.velocityY) / maxBounceSpeed, 1));
+      this.sound.play("bounce");
       this.velocityY = -Math.abs(this.velocityY) * this.bounce;
     }
 

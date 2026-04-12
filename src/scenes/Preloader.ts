@@ -27,6 +27,8 @@ export class Preloader extends Scene {
     this.load.setPath("assets");
     this.load.image("ball", "ball.png");
     this.load.image("court", "court.png");
+    this.load.audio("bounce", "bounce.wav");
+    this.load.audio("pop", "pop.wav");
   }
 
   create() {

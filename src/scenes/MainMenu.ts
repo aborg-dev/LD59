@@ -1,5 +1,4 @@
 import { Scene } from "phaser";
-import * as sfx from "../sfx.js";
 
 export interface MainMenuState {
   active: boolean;
@@ -34,8 +33,7 @@ export class MainMenu extends Scene {
       .setOrigin(0.5);
 
     this.input.once("pointerdown", () => {
-      sfx.resume();
-      sfx.pop();
+      this.sound.play("pop");
       this.scene.start("GameScene");
     });
   }
