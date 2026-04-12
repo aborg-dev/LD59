@@ -115,8 +115,8 @@ export async function dumpStateToFile(name?: string): Promise<string> {
   return filepath;
 }
 
-export async function resetCircle(): Promise<void> {
-  await page?.evaluate(() => window.gameScene().resetCircle());
+export async function resetBall(): Promise<void> {
+  await page?.evaluate(() => window.gameScene().resetBall());
 }
 
 export async function drag(

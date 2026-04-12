@@ -3,7 +3,7 @@ import * as sfx from "../sfx.js";
 
 export interface GameSceneState {
   active: boolean;
-  circle: { x: number; y: number; radius: number };
+  ball: { x: number; y: number; radius: number };
   velocity: { x: number; y: number };
   dragging: boolean;
   physics: { friction: number; bounce: number };
@@ -11,7 +11,7 @@ export interface GameSceneState {
 }
 
 export class GameScene extends Phaser.Scene {
-  private circle!: Phaser.GameObjects.Arc;
+  private ball!: Phaser.GameObjects.Sprite;
   private velocityX = 0;
   private velocityY = 0;
   private dragging = false;
@@ -29,21 +29,24 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     const { width, height } = this.scale;
 
-    this.circle = this.add.circle(width / 2, height / 2, this.radius, 0x4ecdc4);
-    this.circle.setStrokeStyle(3, 0xffffff);
-    this.circle.setInteractive({ draggable: true });
+    const bg = this.add.image(width / 2, height / 2, "court");
+    bg.setDisplaySize(width, height);
 
-    this.circle.on("dragstart", (_pointer: Phaser.Input.Pointer) => {
+    this.ball = this.add.sprite(width / 2, height / 2, "ball");
+    this.ball.setDisplaySize(this.radius * 2, this.radius * 2);
+    this.ball.setInteractive({ draggable: true });
+
+    this.ball.on("dragstart", (_pointer: Phaser.Input.Pointer) => {
       sfx.resume();
       this.dragging = true;
       this.velocityX = 0;
       this.velocityY = 0;
-      this.prevDragX = this.circle.x;
-      this.prevDragY = this.circle.y;
+      this.prevDragX = this.ball.x;
+      this.prevDragY = this.ball.y;
       this.prevDragTime = performance.now();
     });
 
-    this.circle.on(
+    this.ball.on(
       "drag",
       (_pointer: Phaser.Input.Pointer, dragX: number, dragY: number) => {
         const now = performance.now();
@@ -66,12 +69,12 @@ export class GameScene extends Phaser.Scene {
         this.prevDragX = clampedX;
         this.prevDragY = clampedY;
         this.prevDragTime = now;
-        this.circle.x = clampedX;
-        this.circle.y = clampedY;
+        this.ball.x = clampedX;
+        this.ball.y = clampedY;
       },
     );
 
-    this.circle.on("dragend", () => {
+    this.ball.on("dragend", () => {
       this.dragging = false;
       sfx.whoosh();
     });
@@ -80,7 +83,7 @@ export class GameScene extends Phaser.Scene {
   dumpState(): GameSceneState {
     return {
       active: this.scene.isActive(),
-      circle: { x: this.circle.x, y: this.circle.y, radius: this.radius },
+      ball: { x: this.ball.x, y: this.ball.y, radius: this.radius },
       velocity: { x: this.velocityX, y: this.velocityY },
       dragging: this.dragging,
       physics: { friction: this.friction, bounce: this.bounce },
@@ -88,9 +91,9 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
-  resetCircle(): void {
-    this.circle.x = this.scale.width / 2;
-    this.circle.y = this.scale.height / 2;
+  resetBall(): void {
+    this.ball.x = this.scale.width / 2;
+    this.ball.y = this.scale.height / 2;
     this.velocityX = 0;
     this.velocityY = 0;
     this.dragging = false;
@@ -107,27 +110,27 @@ export class GameScene extends Phaser.Scene {
     const dt = delta / 1000;
     const { width, height } = this.scale;
 
-    this.circle.x += this.velocityX * dt;
-    this.circle.y += this.velocityY * dt;
+    this.ball.x += this.velocityX * dt;
+    this.ball.y += this.velocityY * dt;
 
     // Bounce off edges
     const maxBounceSpeed = 2000;
-    if (this.circle.x - this.radius < 0) {
-      this.circle.x = this.radius;
+    if (this.ball.x - this.radius < 0) {
+      this.ball.x = this.radius;
       sfx.bounce(Math.min(Math.abs(this.velocityX) / maxBounceSpeed, 1));
       this.velocityX = Math.abs(this.velocityX) * this.bounce;
-    } else if (this.circle.x + this.radius > width) {
-      this.circle.x = width - this.radius;
+    } else if (this.ball.x + this.radius > width) {
+      this.ball.x = width - this.radius;
       sfx.bounce(Math.min(Math.abs(this.velocityX) / maxBounceSpeed, 1));
       this.velocityX = -Math.abs(this.velocityX) * this.bounce;
     }
 
-    if (this.circle.y - this.radius < 0) {
-      this.circle.y = this.radius;
+    if (this.ball.y - this.radius < 0) {
+      this.ball.y = this.radius;
       sfx.bounce(Math.min(Math.abs(this.velocityY) / maxBounceSpeed, 1));
       this.velocityY = Math.abs(this.velocityY) * this.bounce;
-    } else if (this.circle.y + this.radius > height) {
-      this.circle.y = height - this.radius;
+    } else if (this.ball.y + this.radius > height) {
+      this.ball.y = height - this.radius;
       sfx.bounce(Math.min(Math.abs(this.velocityY) / maxBounceSpeed, 1));
       this.velocityY = -Math.abs(this.velocityY) * this.bounce;
     }

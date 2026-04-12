@@ -33,36 +33,36 @@ describe("game e2e", () => {
     expect(await game.sceneCount()).toBeGreaterThan(0);
   });
 
-  it("circle is draggable", async () => {
+  it("ball is draggable", async () => {
     const before = await gameState();
     await game.drag(
-      before.circle.x,
-      before.circle.y,
-      before.circle.x + 100,
-      before.circle.y + 100,
+      before.ball.x,
+      before.ball.y,
+      before.ball.x + 100,
+      before.ball.y + 100,
     );
     const after = await gameState();
 
-    expect(after.circle.x).toBeGreaterThan(before.circle.x);
-    expect(after.circle.y).toBeGreaterThan(before.circle.y);
+    expect(after.ball.x).toBeGreaterThan(before.ball.x);
+    expect(after.ball.y).toBeGreaterThan(before.ball.y);
   });
 });
 
 describe("ball stays within bounds", () => {
   beforeEach(async () => {
-    await game.resetCircle();
+    await game.resetBall();
   });
 
   it("does not go past the bottom edge when dragged down", async () => {
     const before = await gameState();
     await game.drag(
-      before.circle.x,
-      before.circle.y,
-      before.circle.x,
+      before.ball.x,
+      before.ball.y,
+      before.ball.x,
       before.viewport.height + 100,
     );
     const after = await gameState();
-    expect(after.circle.y + after.circle.radius).toBeLessThanOrEqual(
+    expect(after.ball.y + after.ball.radius).toBeLessThanOrEqual(
       after.viewport.height,
     );
   });
@@ -70,49 +70,43 @@ describe("ball stays within bounds", () => {
   it("does not go past the right edge when dragged right", async () => {
     const before = await gameState();
     await game.drag(
-      before.circle.x,
-      before.circle.y,
+      before.ball.x,
+      before.ball.y,
       before.viewport.width + 100,
-      before.circle.y,
+      before.ball.y,
     );
     const after = await gameState();
-    expect(after.circle.x + after.circle.radius).toBeLessThanOrEqual(
+    expect(after.ball.x + after.ball.radius).toBeLessThanOrEqual(
       after.viewport.width,
     );
   });
 
   it("does not go past the top edge when dragged up", async () => {
     const before = await gameState();
-    await game.drag(before.circle.x, before.circle.y, before.circle.x, -100);
+    await game.drag(before.ball.x, before.ball.y, before.ball.x, -100);
     const after = await gameState();
-    expect(after.circle.y - after.circle.radius).toBeGreaterThanOrEqual(0);
+    expect(after.ball.y - after.ball.radius).toBeGreaterThanOrEqual(0);
   });
 
   it("does not go past the left edge when dragged left", async () => {
     const before = await gameState();
-    await game.drag(before.circle.x, before.circle.y, -100, before.circle.y);
+    await game.drag(before.ball.x, before.ball.y, -100, before.ball.y);
     const after = await gameState();
-    expect(after.circle.x - after.circle.radius).toBeGreaterThanOrEqual(0);
+    expect(after.ball.x - after.ball.radius).toBeGreaterThanOrEqual(0);
   });
 
   it("stays in bounds after fast fling into wall", async () => {
     const c = await gameState();
-    await game.drag(
-      c.circle.x,
-      c.circle.y,
-      c.circle.x + 150,
-      c.circle.y + 150,
-      50,
-    );
+    await game.drag(c.ball.x, c.ball.y, c.ball.x + 150, c.ball.y + 150, 50);
     await game.advanceTime(167);
 
     const after = await gameState();
-    expect(after.circle.x - after.circle.radius).toBeGreaterThanOrEqual(0);
-    expect(after.circle.y - after.circle.radius).toBeGreaterThanOrEqual(0);
-    expect(after.circle.x + after.circle.radius).toBeLessThanOrEqual(
+    expect(after.ball.x - after.ball.radius).toBeGreaterThanOrEqual(0);
+    expect(after.ball.y - after.ball.radius).toBeGreaterThanOrEqual(0);
+    expect(after.ball.x + after.ball.radius).toBeLessThanOrEqual(
       after.viewport.width,
     );
-    expect(after.circle.y + after.circle.radius).toBeLessThanOrEqual(
+    expect(after.ball.y + after.ball.radius).toBeLessThanOrEqual(
       after.viewport.height,
     );
   });
@@ -122,10 +116,10 @@ describe("ball stays within bounds", () => {
     await game.advanceTime(1000);
 
     const s = await gameState();
-    expect(s.circle.x - s.circle.radius).toBeGreaterThanOrEqual(0);
-    expect(s.circle.y - s.circle.radius).toBeGreaterThanOrEqual(0);
-    expect(s.circle.x + s.circle.radius).toBeLessThanOrEqual(s.viewport.width);
-    expect(s.circle.y + s.circle.radius).toBeLessThanOrEqual(s.viewport.height);
+    expect(s.ball.x - s.ball.radius).toBeGreaterThanOrEqual(0);
+    expect(s.ball.y - s.ball.radius).toBeGreaterThanOrEqual(0);
+    expect(s.ball.x + s.ball.radius).toBeLessThanOrEqual(s.viewport.width);
+    expect(s.ball.y + s.ball.radius).toBeLessThanOrEqual(s.viewport.height);
   });
 
   it("velocity decays with friction", async () => {
