@@ -164,7 +164,7 @@ export async function screenshot(name = "screenshot"): Promise<string> {
 
 export async function screenshotBuffer(): Promise<Buffer> {
   await render();
-  return page?.screenshot();
+  return page!.screenshot();
 }
 
 export async function eval_(expression: string): Promise<unknown> {

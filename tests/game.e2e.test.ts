@@ -31,7 +31,7 @@ describe("scoring and game end", () => {
     await game.startScene("GameScene");
 
     // Kick ball upward toward the goal
-    await game.eval_("window.gameScene().velocityY = -800");
+    await game.eval_("window.gameScene().velocityY = -1500");
     await game.advanceTime(2000);
 
     const s = await gameState();
