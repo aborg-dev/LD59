@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import { FONT_UI } from "../fonts.js";
+import { FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
 
 const ROUND_DURATION_SEC = 30;
 
@@ -84,6 +84,7 @@ export class GameScene extends Phaser.Scene {
       color: "#ffffff",
       stroke: "#000000",
       strokeThickness: 4,
+      resolution: TEXT_RESOLUTION,
     });
 
     // Score display (top-right)
@@ -93,6 +94,7 @@ export class GameScene extends Phaser.Scene {
       color: "#ffffff",
       stroke: "#000000",
       strokeThickness: 4,
+      resolution: TEXT_RESOLUTION,
     });
     this.scoreText.setOrigin(1, 0);
 

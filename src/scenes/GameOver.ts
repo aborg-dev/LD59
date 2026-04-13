@@ -1,5 +1,5 @@
 import { Scene } from "phaser";
-import { FONT_BODY, FONT_UI } from "../fonts.js";
+import { FONT_BODY, FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
 
 export interface GameOverState {
   active: boolean;
@@ -27,6 +27,7 @@ export class GameOver extends Scene {
         stroke: "#000000",
         strokeThickness: 6,
         align: "center",
+        resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5);
 
@@ -38,6 +39,7 @@ export class GameOver extends Scene {
         stroke: "#000000",
         strokeThickness: 8,
         align: "center",
+        resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5);
 
@@ -51,6 +53,7 @@ export class GameOver extends Scene {
           fontSize: 28,
           color: "#cccccc",
           align: "center",
+          resolution: TEXT_RESOLUTION,
         },
       )
       .setOrigin(0.5);
@@ -61,6 +64,7 @@ export class GameOver extends Scene {
         fontSize: 24,
         color: "#ffffff",
         align: "center",
+        resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5);
 

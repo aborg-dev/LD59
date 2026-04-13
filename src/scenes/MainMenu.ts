@@ -1,5 +1,5 @@
 import { Scene } from "phaser";
-import { FONT_BODY, FONT_UI } from "../fonts.js";
+import { FONT_BODY, FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
 
 export interface MainMenuState {
   active: boolean;
@@ -21,6 +21,7 @@ export class MainMenu extends Scene {
         stroke: "#000000",
         strokeThickness: 6,
         align: "center",
+        resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5);
 
@@ -30,6 +31,7 @@ export class MainMenu extends Scene {
         fontSize: 24,
         color: "#ffffff",
         align: "center",
+        resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5);
 
