@@ -38,6 +38,12 @@ export class GameScene extends Phaser.Scene {
 
   private muteText!: Phaser.GameObjects.Text;
 
+  // Keeper
+  private keeper!: Phaser.GameObjects.Rectangle;
+  private readonly keeperW = 90;
+  private readonly keeperH = 18;
+  private readonly keeperSpeed = 280;
+
   // Swipe tracking
   private swipeStartX = 0;
   private swipeStartY = 0;
@@ -86,6 +92,15 @@ export class GameScene extends Phaser.Scene {
     this.goalH = pitchH * 0.12;
     this.goalX = width / 2 - this.goalW / 2;
     this.goalY = fieldTop + margin;
+
+    // Goalkeeper — patrols the bottom edge of the goal zone
+    this.keeper = this.add.rectangle(
+      this.goalX + this.keeperW / 2,
+      this.goalY + this.goalH,
+      this.keeperW,
+      this.keeperH,
+      0xffcc00,
+    );
 
     // --- Top bar (timer + score) ---
     this.add
@@ -332,6 +347,40 @@ export class GameScene extends Phaser.Scene {
     // Spin based on movement speed
     const speed = Math.hypot(this.velocityX, this.velocityY);
     this.ball.rotation += (speed / this.radius) * dt;
+
+    // Keeper AI — track ball x with limited speed
+    const keeperMinX = this.goalX + this.keeperW / 2;
+    const keeperMaxX = this.goalX + this.goalW - this.keeperW / 2;
+    const targetX = Math.max(keeperMinX, Math.min(this.ball.x, keeperMaxX));
+    const diff = targetX - this.keeper.x;
+    const maxMove = this.keeperSpeed * dt;
+    this.keeper.x += Math.sign(diff) * Math.min(Math.abs(diff), maxMove);
+
+    // Ball-keeper collision (circle vs AABB)
+    const kLeft = this.keeper.x - this.keeperW / 2;
+    const kRight = this.keeper.x + this.keeperW / 2;
+    const kTop = this.keeper.y - this.keeperH / 2;
+    const kBottom = this.keeper.y + this.keeperH / 2;
+    const closestX = Math.max(kLeft, Math.min(this.ball.x, kRight));
+    const closestY = Math.max(kTop, Math.min(this.ball.y, kBottom));
+    const distX = this.ball.x - closestX;
+    const distY = this.ball.y - closestY;
+    if (distX * distX + distY * distY < this.radius * this.radius) {
+      // Push ball out and deflect
+      if (Math.abs(distY) >= Math.abs(distX)) {
+        // Vertical hit — bounce downward
+        this.ball.y = kBottom + this.radius;
+        this.velocityY = Math.abs(this.velocityY) * this.bounce;
+      } else {
+        // Side hit — bounce sideways
+        this.ball.x += Math.sign(distX) * (this.radius - Math.abs(distX) + 1);
+        this.velocityX =
+          Math.sign(distX) * Math.abs(this.velocityX) * this.bounce;
+      }
+      // Add some keeper deflection to make saves feel dynamic
+      this.velocityX += (this.ball.x - this.keeper.x) * 2;
+      this.sound.play("bounce");
+    }
 
     // Check for score
     this.checkScore();

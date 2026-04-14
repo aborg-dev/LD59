@@ -30,8 +30,12 @@ describe("scoring and game end", () => {
   it("scores and shows correct score on game end", async () => {
     await game.startScene("GameScene");
 
-    // Kick ball upward toward the goal
-    await game.eval_("window.gameScene().velocityY = -1500");
+    // Place ball above the keeper and push it through the goal zone
+    await game.eval_(`(() => {
+      const gs = window.gameScene();
+      gs.ball.y = gs.goalY + gs.goalH * 0.5;
+      gs.velocityY = -300;
+    })()`);
     await game.advanceTime(2000);
 
     const s = await gameState();
@@ -48,10 +52,11 @@ describe("scoring and game end", () => {
   it("scores on a high-speed fling into the goal", async () => {
     await game.startScene("GameScene");
 
-    // Set high upward velocity directly to test that fast-moving ball
-    // still registers a goal (swept collision detection)
+    // Set high upward velocity with angle to beat keeper and test that
+    // fast-moving ball still registers a goal (swept collision detection)
     await game.eval_(`(() => {
       const gs = window.gameScene();
+      gs.velocityX = 600;
       gs.velocityY = -5000;
     })()`);
     await game.advanceTime(2000);
