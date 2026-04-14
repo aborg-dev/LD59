@@ -1,7 +1,11 @@
 import * as Phaser from "phaser";
-import { FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
+import { FONT_BODY, FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
 
 const ROUND_DURATION_SEC = 30;
+export const HUD_TOP_H = 70;
+export const HUD_BOTTOM_H = 80;
+export const FIELD_W = 720;
+export const FIELD_H = 1280;
 
 export interface GameSceneState {
   active: boolean;
@@ -32,6 +36,8 @@ export class GameScene extends Phaser.Scene {
   private readonly radius = 50;
   private readonly kickReach = 80;
 
+  private muteText!: Phaser.GameObjects.Text;
+
   // Swipe tracking
   private swipeStartX = 0;
   private swipeStartY = 0;
@@ -54,6 +60,9 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     const { width, height } = this.scale;
+    const fieldTop = HUD_TOP_H;
+    const fieldBottom = height - HUD_BOTTOM_H;
+    const fieldH = fieldBottom - fieldTop;
 
     this.score = 0;
     this.elapsed = 0;
@@ -65,20 +74,41 @@ export class GameScene extends Phaser.Scene {
     this.velocityY = 0;
     this.swiping = false;
 
-    const bg = this.add.image(width / 2, height / 2, "court");
-    bg.setDisplaySize(width, height);
+    // Court background — fits inside the field area only
+    const bg = this.add.image(width / 2, fieldTop + fieldH / 2, "court");
+    bg.setDisplaySize(width, fieldH);
 
-    // Goal zone
+    // Goal zone (relative to the field area)
     const margin = 25;
     const pitchW = width - margin * 2;
-    const pitchH = height - margin * 2;
+    const pitchH = fieldH - margin * 2;
     this.goalW = pitchW * 0.3;
     this.goalH = pitchH * 0.12;
     this.goalX = width / 2 - this.goalW / 2;
-    this.goalY = margin;
+    this.goalY = fieldTop + margin;
 
-    // Timer display (top-left)
-    this.timerText = this.add.text(20, 20, String(ROUND_DURATION_SEC), {
+    // --- Top bar (timer + score) ---
+    this.add
+      .rectangle(width / 2, 0, width, HUD_TOP_H, 0x111122)
+      .setOrigin(0.5, 0)
+      .setDepth(100);
+
+    this.timerText = this.add.text(
+      24,
+      HUD_TOP_H / 2,
+      String(ROUND_DURATION_SEC),
+      {
+        fontFamily: FONT_UI,
+        fontSize: 36,
+        color: "#ffffff",
+        stroke: "#000000",
+        strokeThickness: 4,
+        resolution: TEXT_RESOLUTION,
+      },
+    );
+    this.timerText.setOrigin(0, 0.5).setDepth(101);
+
+    this.scoreText = this.add.text(width - 24, HUD_TOP_H / 2, "0 goals", {
       fontFamily: FONT_UI,
       fontSize: 36,
       color: "#ffffff",
@@ -86,27 +116,63 @@ export class GameScene extends Phaser.Scene {
       strokeThickness: 4,
       resolution: TEXT_RESOLUTION,
     });
+    this.scoreText.setOrigin(1, 0.5).setDepth(101);
 
-    // Score display (top-right)
-    this.scoreText = this.add.text(width - 20, 20, "0", {
-      fontFamily: FONT_UI,
-      fontSize: 36,
-      color: "#ffffff",
-      stroke: "#000000",
-      strokeThickness: 4,
-      resolution: TEXT_RESOLUTION,
+    // --- Bottom bar (restart + mute) ---
+    this.add
+      .rectangle(width / 2, height, width, HUD_BOTTOM_H, 0x111122)
+      .setOrigin(0.5, 1)
+      .setDepth(100);
+
+    const btnY = fieldBottom + HUD_BOTTOM_H / 2;
+
+    const restartText = this.add
+      .text(width / 2 - 130, btnY, "RESTART", {
+        fontFamily: FONT_BODY,
+        fontSize: 22,
+        color: "#ffffff",
+        backgroundColor: "#333344",
+        padding: { left: 18, right: 18, top: 10, bottom: 10 },
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+
+    restartText.on("pointerdown", () => {
+      this.sound.play("pop");
+      this.scene.restart();
     });
-    this.scoreText.setOrigin(1, 0);
 
-    // Ball
-    this.ball = this.add.sprite(width / 2, height * 0.7, "ball");
+    const muted = this.game.sound.mute;
+    this.muteText = this.add
+      .text(width / 2 + 130, btnY, muted ? "UNMUTE" : "MUTE", {
+        fontFamily: FONT_BODY,
+        fontSize: 22,
+        color: "#ffffff",
+        backgroundColor: "#333344",
+        padding: { left: 18, right: 18, top: 10, bottom: 10 },
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+
+    this.muteText.on("pointerdown", () => {
+      this.game.sound.mute = !this.game.sound.mute;
+      this.muteText.setText(this.game.sound.mute ? "UNMUTE" : "MUTE");
+    });
+
+    // Ball — spawns in the lower portion of the field
+    this.ball = this.add.sprite(width / 2, fieldTop + fieldH * 0.7, "ball");
     this.ball.setDisplaySize(this.radius * 2, this.radius * 2);
 
     // Kick controls — swipe near the ball to kick it
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (this.gameOver || !this.ball.visible) return;
+      if (pointer.y < fieldTop || pointer.y > fieldBottom) return;
 
-      // Tap on a moving ball → stop it
+      // Tap on a moving ball -> stop it
       const dist = Math.hypot(pointer.x - this.ball.x, pointer.y - this.ball.y);
       const speed = Math.hypot(this.velocityX, this.velocityY);
       if (dist < this.radius + 20 && speed > 10) {
@@ -167,7 +233,9 @@ export class GameScene extends Phaser.Scene {
     if (inGoal) {
       if (this.canScore) {
         this.score++;
-        this.scoreText.setText(String(this.score));
+        this.scoreText.setText(
+          `${this.score} ${this.score === 1 ? "goal" : "goals"}`,
+        );
         this.sound.play("score");
         this.canScore = false;
 
@@ -240,8 +308,9 @@ export class GameScene extends Phaser.Scene {
       if (this.resetDelay <= 0) {
         this.resetDelay = 0;
         const { width, height } = this.scale;
+        const fieldH = height - HUD_TOP_H - HUD_BOTTOM_H;
         this.ball.x = width / 2;
-        this.ball.y = height * 0.7;
+        this.ball.y = HUD_TOP_H + fieldH * 0.7;
         this.ball.rotation = 0;
         this.ball.setVisible(true);
       }
@@ -252,6 +321,8 @@ export class GameScene extends Phaser.Scene {
 
     const dt = GameScene.stepSec;
     const { width, height } = this.scale;
+    const fieldTop = HUD_TOP_H;
+    const fieldBottom = height - HUD_BOTTOM_H;
 
     this.prevBallY = this.ball.y;
 
@@ -265,7 +336,7 @@ export class GameScene extends Phaser.Scene {
     // Check for score
     this.checkScore();
 
-    // Bounce off edges
+    // Bounce off field edges
     if (this.ball.x - this.radius < 0) {
       this.ball.x = this.radius;
       this.sound.play("bounce");
@@ -276,12 +347,12 @@ export class GameScene extends Phaser.Scene {
       this.velocityX = -Math.abs(this.velocityX) * this.bounce;
     }
 
-    if (this.ball.y - this.radius < 0) {
-      this.ball.y = this.radius;
+    if (this.ball.y - this.radius < fieldTop) {
+      this.ball.y = fieldTop + this.radius;
       this.sound.play("bounce");
       this.velocityY = Math.abs(this.velocityY) * this.bounce;
-    } else if (this.ball.y + this.radius > height) {
-      this.ball.y = height - this.radius;
+    } else if (this.ball.y + this.radius > fieldBottom) {
+      this.ball.y = fieldBottom - this.radius;
       this.sound.play("bounce");
       this.velocityY = -Math.abs(this.velocityY) * this.bounce;
     }

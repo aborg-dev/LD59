@@ -1,7 +1,14 @@
 import * as Phaser from "phaser";
 import { Boot, type BootState } from "./scenes/Boot.js";
 import { GameOver, type GameOverState } from "./scenes/GameOver.js";
-import { GameScene, type GameSceneState } from "./scenes/GameScene.js";
+import {
+  FIELD_H,
+  FIELD_W,
+  GameScene,
+  type GameSceneState,
+  HUD_BOTTOM_H,
+  HUD_TOP_H,
+} from "./scenes/GameScene.js";
 import { MainMenu, type MainMenuState } from "./scenes/MainMenu.js";
 import { Preloader, type PreloaderState } from "./scenes/Preloader.js";
 
@@ -43,8 +50,8 @@ const config: Phaser.Types.Core.GameConfig = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
     parent: "game",
-    width: 720,
-    height: 1280,
+    width: FIELD_W,
+    height: HUD_TOP_H + FIELD_H + HUD_BOTTOM_H,
   },
   scene: [Boot, Preloader, MainMenu, GameScene, GameOver],
 };
