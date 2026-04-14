@@ -199,14 +199,14 @@ export class GameScene extends Phaser.Scene {
       this.swiping = true;
       this.swipeStartX = pointer.x;
       this.swipeStartY = pointer.y;
-      this.swipeStartTime = performance.now();
+      this.swipeStartTime = this.time.now;
     });
 
     this.input.on("pointerup", (pointer: Phaser.Input.Pointer) => {
       if (!this.swiping || this.gameOver || !this.ball.visible) return;
       this.swiping = false;
 
-      const dt = (performance.now() - this.swipeStartTime) / 1000;
+      const dt = (this.time.now - this.swipeStartTime) / 1000;
       if (dt <= 0) return;
 
       const dx = pointer.x - this.swipeStartX;
