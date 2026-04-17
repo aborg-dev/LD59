@@ -204,6 +204,8 @@ export class GameScene extends Phaser.Scene {
       const dx = pointer.x - this.lastPointerX;
       const dy = pointer.y - this.lastPointerY;
       const { width, height } = this.scale;
+      const prevX = this.ball.x;
+      const prevY = this.ball.y;
       this.ball.x = Math.max(
         this.radius,
         Math.min(this.ball.x + dx, width - this.radius),
@@ -213,8 +215,8 @@ export class GameScene extends Phaser.Scene {
         Math.min(this.ball.y + dy, height - HUD_BOTTOM_H - this.radius),
       );
       if (dt > 0) {
-        this.dragVelX = dx / dt;
-        this.dragVelY = dy / dt;
+        this.dragVelX = (this.ball.x - prevX) / dt;
+        this.dragVelY = (this.ball.y - prevY) / dt;
       }
       this.lastPointerX = pointer.x;
       this.lastPointerY = pointer.y;
