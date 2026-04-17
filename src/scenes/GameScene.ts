@@ -34,7 +34,6 @@ export class GameScene extends Phaser.Scene {
   private readonly friction = 0.98;
   private readonly bounce = 0.8;
   private readonly radius = 50;
-  private readonly kickReach = 80;
 
   private muteText!: Phaser.GameObjects.Text;
 
@@ -44,11 +43,13 @@ export class GameScene extends Phaser.Scene {
   private readonly keeperH = 18;
   private readonly keeperSpeed = 280;
 
-  // Swipe tracking
-  private swipeStartX = 0;
-  private swipeStartY = 0;
-  private swipeStartTime = 0;
-  private swiping = false;
+  // Drag tracking
+  private dragging = false;
+  private lastPointerX = 0;
+  private lastPointerY = 0;
+  private lastPointerTime = 0;
+  private dragVelX = 0;
+  private dragVelY = 0;
 
   // Goal zone
   private goalX = 0;
@@ -78,7 +79,7 @@ export class GameScene extends Phaser.Scene {
     this.canScore = true;
     this.velocityX = 0;
     this.velocityY = 0;
-    this.swiping = false;
+    this.dragging = false;
 
     // Court background — fits inside the field area only
     const bg = this.add.image(width / 2, fieldTop + fieldH / 2, "court");
@@ -181,55 +182,56 @@ export class GameScene extends Phaser.Scene {
     // Ball — spawns in the lower portion of the field
     this.ball = this.add.sprite(width / 2, fieldTop + fieldH * 0.7, "ball");
     this.ball.setDisplaySize(this.radius * 2, this.radius * 2);
+    this.ball.setInteractive({ useHandCursor: true });
 
-    // Kick controls — swipe near the ball to kick it
-    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+    // Drag-and-release controls
+    this.ball.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (this.gameOver || !this.ball.visible) return;
-      if (pointer.y < fieldTop || pointer.y > fieldBottom) return;
-
-      // Tap on a moving ball -> stop it
-      const dist = Math.hypot(pointer.x - this.ball.x, pointer.y - this.ball.y);
-      const speed = Math.hypot(this.velocityX, this.velocityY);
-      if (dist < this.radius + 20 && speed > 10) {
-        this.velocityX = 0;
-        this.velocityY = 0;
-        return;
-      }
-
-      this.swiping = true;
-      this.swipeStartX = pointer.x;
-      this.swipeStartY = pointer.y;
-      this.swipeStartTime = this.time.now;
+      this.dragging = true;
+      this.velocityX = 0;
+      this.velocityY = 0;
+      this.dragVelX = 0;
+      this.dragVelY = 0;
+      this.lastPointerX = pointer.x;
+      this.lastPointerY = pointer.y;
+      this.lastPointerTime = this.time.now;
     });
 
-    this.input.on("pointerup", (pointer: Phaser.Input.Pointer) => {
-      if (!this.swiping || this.gameOver || !this.ball.visible) return;
-      this.swiping = false;
-
-      const dt = (this.time.now - this.swipeStartTime) / 1000;
-      if (dt <= 0) return;
-
-      const dx = pointer.x - this.swipeStartX;
-      const dy = pointer.y - this.swipeStartY;
-      const swipeLen = Math.hypot(dx, dy);
-      if (swipeLen < 20) return; // too short, not a swipe
-
-      // Check if the swipe path passed near the ball
-      const toBallX = this.ball.x - this.swipeStartX;
-      const toBallY = this.ball.y - this.swipeStartY;
-      // Project ball position onto swipe direction
-      const dot = (toBallX * dx + toBallY * dy) / swipeLen;
-      const closestX = this.swipeStartX + (dx / swipeLen) * dot;
-      const closestY = this.swipeStartY + (dy / swipeLen) * dot;
-      const distToBall = Math.hypot(
-        closestX - this.ball.x,
-        closestY - this.ball.y,
+    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (!this.dragging) return;
+      const now = this.time.now;
+      const dt = (now - this.lastPointerTime) / 1000;
+      const dx = pointer.x - this.lastPointerX;
+      const dy = pointer.y - this.lastPointerY;
+      const { width, height } = this.scale;
+      this.ball.x = Math.max(
+        this.radius,
+        Math.min(this.ball.x + dx, width - this.radius),
       );
+      this.ball.y = Math.max(
+        HUD_TOP_H + this.radius,
+        Math.min(this.ball.y + dy, height - HUD_BOTTOM_H - this.radius),
+      );
+      if (dt > 0) {
+        this.dragVelX = dx / dt;
+        this.dragVelY = dy / dt;
+      }
+      this.lastPointerX = pointer.x;
+      this.lastPointerY = pointer.y;
+      this.lastPointerTime = now;
+    });
 
-      if (distToBall < this.kickReach && dot >= 0 && dot <= swipeLen) {
-        // Kick! Apply swipe velocity to the ball
-        this.velocityX = dx / dt;
-        this.velocityY = dy / dt;
+    this.input.on("pointerup", () => {
+      if (!this.dragging) return;
+      this.dragging = false;
+      // If the drag just ended with stale movement, drop old velocity
+      if (this.time.now - this.lastPointerTime > 100) {
+        this.dragVelX = 0;
+        this.dragVelY = 0;
+      }
+      this.velocityX = this.dragVelX;
+      this.velocityY = this.dragVelY;
+      if (Math.hypot(this.velocityX, this.velocityY) > 50) {
         this.sound.play("bounce");
       }
     });
@@ -276,7 +278,7 @@ export class GameScene extends Phaser.Scene {
       active: this.scene.isActive(),
       ball: { x: this.ball.x, y: this.ball.y, radius: this.radius },
       velocity: { x: this.velocityX, y: this.velocityY },
-      dragging: this.swiping,
+      dragging: this.dragging,
       score: this.score,
       timeLeft: this.timeLeft,
       goal: {
@@ -333,6 +335,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (!this.ball.visible) return;
+    if (this.dragging) return;
 
     const dt = GameScene.stepSec;
     const { width, height } = this.scale;
