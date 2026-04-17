@@ -66,9 +66,11 @@ window.startScene = (key: string) => {
 window.advanceTime = (ms: number) => {
   const step = 16.666;
   let remaining = ms;
+  let time = performance.now();
   while (remaining > 0) {
     const dt = Math.min(remaining, step);
-    game.scene.update(performance.now(), dt);
+    time += dt;
+    game.scene.update(time, dt);
     remaining -= dt;
   }
 };
