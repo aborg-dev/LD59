@@ -52,17 +52,8 @@ const url = process.env.TEST_URL || "http://localhost:5173";
 
 ## Phaser 4 reference
 
-Official Phaser 4 skill files live in `skills/phaser/`. Read them when working with
-unfamiliar Phaser APIs — they cover v4-specific usage, not v3.
-
-| File | Covers |
-|------|--------|
-| `v3-to-v4-migration.md` | Breaking changes, migration checklist |
-| `game-setup-and-config.md` | Game config, boot, scale manager |
-| `scenes.md` | Scene lifecycle, data passing, parallel scenes |
-| `input.md` | Pointer, keyboard, gamepad input |
-| `sprites.md` | Sprites, images, display properties |
-| `audio.md` | Sound manager, spatial audio |
-| `text.md` | Text, BitmapText, web fonts |
-| `scale.md` | Scaling, responsive layout, fullscreen |
-| `time.md` | Timers, clocks, delays |
+Official Phaser 4 skill files live in `skills/phaser/` (sourced from phaserjs/phaser repo).
+Read them when working with unfamiliar Phaser APIs — they cover v4-specific usage, not v3.
+28 files covering all subsystems: scenes, input, sprites, audio, text, physics, tweens,
+cameras, particles, tilemaps, filters, animations, and more. Start with
+`v3-to-v4-migration.md` for breaking changes from v3.
