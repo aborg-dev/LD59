@@ -42,13 +42,7 @@ export class GameScene extends Phaser.Scene {
   private readonly keeperH = 18;
   private readonly keeperSpeed = 280;
 
-  // Drag tracking
   private dragging = false;
-  private lastPointerX = 0;
-  private lastPointerY = 0;
-  private lastPointerTime = 0;
-  private dragVelX = 0;
-  private dragVelY = 0;
 
   // Goal zone
   private goalX = 0;
@@ -196,57 +190,36 @@ export class GameScene extends Phaser.Scene {
     // Ball — spawns in the lower portion of the field
     this.ball = this.add.sprite(width / 2, fieldTop + fieldH * 0.7, "ball");
     this.ball.setDisplaySize(this.radius * 2, this.radius * 2);
-    this.ball.setInteractive({ useHandCursor: true });
+    this.ball.setInteractive({ draggable: true, useHandCursor: true });
 
-    // Drag-and-release controls
-    this.ball.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (this.gameOver || !this.ball.visible) return;
+    // Drag-and-release controls (built-in Phaser drag)
+    this.ball.on("dragstart", () => {
+      if (this.gameOver) return;
       this.dragging = true;
       this.velocityX = 0;
       this.velocityY = 0;
-      this.dragVelX = 0;
-      this.dragVelY = 0;
-      this.lastPointerX = pointer.x;
-      this.lastPointerY = pointer.y;
-      this.lastPointerTime = this.time.now;
     });
 
-    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
-      if (!this.dragging) return;
-      const now = this.time.now;
-      const dt = (now - this.lastPointerTime) / 1000;
-      const dx = pointer.x - this.lastPointerX;
-      const dy = pointer.y - this.lastPointerY;
-      const { width, height } = this.scale;
-      const prevX = this.ball.x;
-      const prevY = this.ball.y;
-      this.ball.x = Math.max(
-        this.radius,
-        Math.min(this.ball.x + dx, width - this.radius),
-      );
-      this.ball.y = Math.max(
-        HUD_TOP_H + this.radius,
-        Math.min(this.ball.y + dy, height - HUD_BOTTOM_H - this.radius),
-      );
-      if (dt > 0) {
-        this.dragVelX = (this.ball.x - prevX) / dt;
-        this.dragVelY = (this.ball.y - prevY) / dt;
-      }
-      this.lastPointerX = pointer.x;
-      this.lastPointerY = pointer.y;
-      this.lastPointerTime = now;
-    });
+    this.ball.on(
+      "drag",
+      (_pointer: Phaser.Input.Pointer, dragX: number, dragY: number) => {
+        const { width, height } = this.scale;
+        this.ball.x = Math.max(
+          this.radius,
+          Math.min(dragX, width - this.radius),
+        );
+        this.ball.y = Math.max(
+          HUD_TOP_H + this.radius,
+          Math.min(dragY, height - HUD_BOTTOM_H - this.radius),
+        );
+      },
+    );
 
-    this.input.on("pointerup", () => {
-      if (!this.dragging) return;
+    this.ball.on("dragend", (pointer: Phaser.Input.Pointer) => {
       this.dragging = false;
-      // If the drag just ended with stale movement, drop old velocity
-      if (this.time.now - this.lastPointerTime > 100) {
-        this.dragVelX = 0;
-        this.dragVelY = 0;
-      }
-      this.velocityX = this.dragVelX;
-      this.velocityY = this.dragVelY;
+      // Use Phaser's smoothed pointer velocity
+      this.velocityX = pointer.velocity.x;
+      this.velocityY = pointer.velocity.y;
       if (Math.hypot(this.velocityX, this.velocityY) > 50) {
         this.sound.play("bounce");
       }
