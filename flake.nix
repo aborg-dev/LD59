@@ -25,6 +25,11 @@
           shellHook = ''
             export PLAYWRIGHT_BROWSERS_PATH=${pkgs.playwright-driver.browsers}
             export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+            if [ -z "$LD59_DEVSHELL" ] && [ -n "$SHELL" ] && [ -t 0 ] && [ -t 1 ]; then
+              export LD59_DEVSHELL=1
+              exec "$SHELL" -l
+            fi
           '';
         };
       });
