@@ -64,7 +64,13 @@ window.startScene = (key: string) => {
   game.scene.start(key);
 };
 window.advanceTime = (ms: number) => {
-  game.scene.update(performance.now(), ms);
+  const step = 16.666;
+  let remaining = ms;
+  while (remaining > 0) {
+    const dt = Math.min(remaining, step);
+    game.scene.update(performance.now(), dt);
+    remaining -= dt;
+  }
 };
 function tryDump<T>(scene: { dumpState(): T } | null): T | null {
   try {

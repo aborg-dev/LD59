@@ -27,8 +27,7 @@ export class GameScene extends Phaser.Scene {
   private velocityY = 0;
   private accumulator = 0;
   private score = 0;
-  private elapsed = 0;
-  private resetDelay = 0;
+  private timeRemaining = ROUND_DURATION_SEC;
   private canScore = true;
   private gameOver = false;
   private readonly friction = 0.98;
@@ -58,7 +57,7 @@ export class GameScene extends Phaser.Scene {
   private goalH = 0;
 
   private get timeLeft(): number {
-    return Math.max(0, ROUND_DURATION_SEC - Math.floor(this.elapsed / 1000));
+    return this.timeRemaining;
   }
 
   constructor() {
@@ -72,9 +71,8 @@ export class GameScene extends Phaser.Scene {
     const fieldH = fieldBottom - fieldTop;
 
     this.score = 0;
-    this.elapsed = 0;
+    this.timeRemaining = ROUND_DURATION_SEC;
     this.accumulator = 0;
-    this.resetDelay = 0;
     this.gameOver = false;
     this.canScore = true;
     this.velocityX = 0;
@@ -123,6 +121,22 @@ export class GameScene extends Phaser.Scene {
       },
     );
     this.timerText.setOrigin(0, 0.5).setDepth(101);
+
+    // Countdown timer — ticks once per second
+    this.time.addEvent({
+      delay: 1000,
+      repeat: ROUND_DURATION_SEC - 1,
+      callback: () => {
+        this.timeRemaining--;
+        this.timerText.setText(String(this.timeRemaining));
+        if (this.timeRemaining <= 5) {
+          this.timerText.setColor("#ff4444");
+        }
+        if (this.timeRemaining <= 0) {
+          this.endGame();
+        }
+      },
+    });
 
     this.scoreText = this.add.text(width - 24, HUD_TOP_H / 2, "0 goals", {
       fontFamily: FONT_UI,
@@ -261,7 +275,14 @@ export class GameScene extends Phaser.Scene {
         this.ball.setVisible(false);
         this.velocityX = 0;
         this.velocityY = 0;
-        this.resetDelay = 500;
+        this.time.delayedCall(500, () => {
+          const { width, height } = this.scale;
+          const fieldH = height - HUD_TOP_H - HUD_BOTTOM_H;
+          this.ball.x = width / 2;
+          this.ball.y = HUD_TOP_H + fieldH * 0.7;
+          this.ball.rotation = 0;
+          this.ball.setVisible(true);
+        });
       }
     } else {
       this.canScore = true;
@@ -309,33 +330,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   private step(): void {
-    // Countdown timer
-    this.elapsed += GameScene.stepMs;
-    const tl = this.timeLeft;
-    this.timerText.setText(String(tl));
-    if (tl <= 5) {
-      this.timerText.setColor("#ff4444");
-    }
-    if (tl <= 0) {
-      this.endGame();
-      return;
-    }
-
-    // Ball reset after scoring
-    if (this.resetDelay > 0) {
-      this.resetDelay -= GameScene.stepMs;
-      if (this.resetDelay <= 0) {
-        this.resetDelay = 0;
-        const { width, height } = this.scale;
-        const fieldH = height - HUD_TOP_H - HUD_BOTTOM_H;
-        this.ball.x = width / 2;
-        this.ball.y = HUD_TOP_H + fieldH * 0.7;
-        this.ball.rotation = 0;
-        this.ball.setVisible(true);
-      }
-      return;
-    }
-
     if (!this.ball.visible) return;
     if (this.dragging) return;
 
