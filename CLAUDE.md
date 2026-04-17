@@ -49,3 +49,20 @@ const url = process.env.TEST_URL || "http://localhost:5173";
 ```
 
 `tools/game.ts` is the Playwright-based API — read it for the full list of helpers.
+
+## Phaser 4 reference
+
+Official Phaser 4 skill files live in `skills/phaser/`. Read them when working with
+unfamiliar Phaser APIs — they cover v4-specific usage, not v3.
+
+| File | Covers |
+|------|--------|
+| `v3-to-v4-migration.md` | Breaking changes, migration checklist |
+| `game-setup-and-config.md` | Game config, boot, scale manager |
+| `scenes.md` | Scene lifecycle, data passing, parallel scenes |
+| `input.md` | Pointer, keyboard, gamepad input |
+| `sprites.md` | Sprites, images, display properties |
+| `audio.md` | Sound manager, spatial audio |
+| `text.md` | Text, BitmapText, web fonts |
+| `scale.md` | Scaling, responsive layout, fullscreen |
+| `time.md` | Timers, clocks, delays |
