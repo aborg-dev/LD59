@@ -57,6 +57,18 @@ export class ShepherdScene extends Phaser.Scene {
   private targetY = 0;
   private barkCooldownMs = 0;
   private barkRing!: Phaser.GameObjects.Arc;
+  private keys!: {
+    up: Phaser.Input.Keyboard.Key;
+    down: Phaser.Input.Keyboard.Key;
+    left: Phaser.Input.Keyboard.Key;
+    right: Phaser.Input.Keyboard.Key;
+  };
+  private arrowKeys!: {
+    up: Phaser.Input.Keyboard.Key;
+    down: Phaser.Input.Keyboard.Key;
+    left: Phaser.Input.Keyboard.Key;
+    right: Phaser.Input.Keyboard.Key;
+  };
 
   private penX = 0;
   private penY = 0;
@@ -155,10 +167,44 @@ export class ShepherdScene extends Phaser.Scene {
       .setDepth(9);
     this.barkRing.setStrokeStyle(3, 0xffff88, 0);
 
-    // Input — tap/drag in field to set dog target
+    // Spacebar triggers bark; WASD + arrows drive the dog
+    this.input.keyboard?.on("keydown-SPACE", () => this.bark());
+    const kb = this.input.keyboard;
+    if (kb) {
+      const K = Phaser.Input.Keyboard.KeyCodes;
+      this.keys = {
+        up: kb.addKey(K.W),
+        down: kb.addKey(K.S),
+        left: kb.addKey(K.A),
+        right: kb.addKey(K.D),
+      };
+      this.arrowKeys = {
+        up: kb.addKey(K.UP),
+        down: kb.addKey(K.DOWN),
+        left: kb.addKey(K.LEFT),
+        right: kb.addKey(K.RIGHT),
+      };
+    }
+
+    // Input — tap/drag in field to set dog target, double-tap to bark
+    let lastTapTime = 0;
+    let lastTapX = 0;
+    let lastTapY = 0;
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       if (this.gameOver) return;
       if (p.y < this.fieldTop || p.y > this.fieldBottom) return;
+      const now = this.time.now;
+      if (
+        now - lastTapTime < 300 &&
+        Math.hypot(p.x - lastTapX, p.y - lastTapY) < 80
+      ) {
+        this.bark();
+        lastTapTime = 0;
+        return;
+      }
+      lastTapTime = now;
+      lastTapX = p.x;
+      lastTapY = p.y;
       this.targetX = p.x;
       this.targetY = p.y;
     });
@@ -349,14 +395,33 @@ export class ShepherdScene extends Phaser.Scene {
       this.barkCooldownMs = Math.max(0, this.barkCooldownMs - dt * 1000);
     }
 
-    // Dog moves toward target
-    const ddx = this.targetX - this.dog.x;
-    const ddy = this.targetY - this.dog.y;
-    const dDist = Math.hypot(ddx, ddy);
-    if (dDist > 2) {
-      const move = Math.min(dDist, DOG_SPEED * dt);
-      this.dog.x += (ddx / dDist) * move;
-      this.dog.y += (ddy / dDist) * move;
+    // Dog movement — keyboard overrides the tap target when any key is held
+    let kx = 0;
+    let ky = 0;
+    if (this.keys && this.arrowKeys) {
+      if (this.keys.left.isDown || this.arrowKeys.left.isDown) kx -= 1;
+      if (this.keys.right.isDown || this.arrowKeys.right.isDown) kx += 1;
+      if (this.keys.up.isDown || this.arrowKeys.up.isDown) ky -= 1;
+      if (this.keys.down.isDown || this.arrowKeys.down.isDown) ky += 1;
+    }
+
+    if (kx !== 0 || ky !== 0) {
+      const klen = Math.hypot(kx, ky);
+      const step = DOG_SPEED * dt;
+      this.dog.x += (kx / klen) * step;
+      this.dog.y += (ky / klen) * step;
+      // Sync tap-target to current position so pointer control doesn't yank back
+      this.targetX = this.dog.x;
+      this.targetY = this.dog.y;
+    } else {
+      const ddx = this.targetX - this.dog.x;
+      const ddy = this.targetY - this.dog.y;
+      const dDist = Math.hypot(ddx, ddy);
+      if (dDist > 2) {
+        const move = Math.min(dDist, DOG_SPEED * dt);
+        this.dog.x += (ddx / dDist) * move;
+        this.dog.y += (ddy / dDist) * move;
+      }
     }
 
     // Sheep behavior
