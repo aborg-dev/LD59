@@ -18,19 +18,24 @@ afterAll(async () => {
   await game.close();
 });
 
-describe("shepherd herding and game end", () => {
-  it("spawns sheep from the edges over time", async () => {
+describe("shepherd wave-based herding", () => {
+  it("starts in prep and transitions to active, spawning wave sheep", async () => {
     await game.startScene("Shepherd");
-    const before = (await shepherdState()).sheep.length;
-    await game.advanceTime(6000);
-    const after = (await shepherdState()).sheep.length;
-    expect(after).toBeGreaterThan(before);
+    const initial = await shepherdState();
+    expect(initial.wave.phase).toBe("prep");
+    expect(initial.wave.number).toBe(1);
+    expect(initial.sheep.length).toBe(0);
+
+    // 5s prep + 2s active → some sheep should have spawned
+    await game.advanceTime(7000);
+    const active = await shepherdState();
+    expect(active.wave.phase).toBe("active");
+    expect(active.sheep.length).toBeGreaterThan(0);
   });
 
   it("penning a sheep increments score and coins", async () => {
     await game.startScene("Shepherd");
 
-    // Force a spawn, then place it at pen center and tick physics
     await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Shepherd');
       gs.spawnSheep();
@@ -51,7 +56,6 @@ describe("shepherd herding and game end", () => {
   it("bark pushes nearby sheep away from dog", async () => {
     await game.startScene("Shepherd");
 
-    // Clear any auto-spawned sheep, park dog/sheep far from the pen
     await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Shepherd');
       for (const s of gs.sheep) s.sprite.destroy();
@@ -81,16 +85,12 @@ describe("shepherd herding and game end", () => {
 
     const after = (await shepherdState()).sheep.at(-1);
     if (!after) throw new Error("no sheep");
-    // Sheep should be pushed to the right (away from dog at x=60)
     expect(after.x).toBeGreaterThan(before.x);
   });
 
   it("places a whistle tower and pushes sheep toward the pen", async () => {
     await game.startScene("Shepherd");
 
-    // Clear noise sheep, give coins, build a tower to the RIGHT of the pen.
-    // Spawn a single sheep further right so flee-from-dog is negligible
-    // and the only meaningful force is the tower pushing it pen-ward (left).
     await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Shepherd');
       for (const s of gs.sheep) s.sprite.destroy();
@@ -100,7 +100,6 @@ describe("shepherd herding and game end", () => {
       const tx = gs.penX + gs.penR + 60;
       const ty = gs.penY;
       gs.tryPlaceTower(tx, ty);
-      // Park the dog far away so flee-from-dog is out of range
       gs.dog.x = 60;
       gs.dog.y = 100;
       gs.targetX = gs.dog.x;
@@ -113,7 +112,6 @@ describe("shepherd herding and game end", () => {
       s.vy = 0;
       s.modeT = 999;
       s.grazing = true;
-      // Force the tower to pulse on the very next step
       gs.towers[0].pulseMs = 999999;
     })()`);
 
@@ -124,20 +122,56 @@ describe("shepherd herding and game end", () => {
     const sheepBefore = st0.sheep.at(-1);
     if (!sheepBefore) throw new Error("no sheep");
 
-    // One physics step is enough — the forced pulse fires immediately.
     await game.advanceTime(100);
 
     const sheepAfter = (await shepherdState()).sheep.at(-1);
     if (!sheepAfter) throw new Error("no sheep");
-    // Sheep should have been pushed left (toward pen at smaller x)
     expect(sheepAfter.x).toBeLessThan(sheepBefore.x);
   });
 
-  it("ends game on timer expiry with correct score", async () => {
+  it("clearing a wave advances wave number and awards coin bonus", async () => {
     await game.startScene("Shepherd");
 
+    // Jump into active phase with a single unpenned sheep inside the pen,
+    // so the wave clears on the next physics step.
+    await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      for (const s of gs.sheep) s.sprite.destroy();
+      gs.sheep = [];
+      gs.wavePhase = 'active';
+      gs.waveSize = 1;
+      gs.sheepToSpawn = 0;
+      gs.phaseTimeLeftMs = 30000;
+      gs.spawnSheep();
+      const s = gs.sheep[gs.sheep.length - 1];
+      s.sprite.x = gs.penX;
+      s.sprite.y = gs.penY;
+      s.vx = 0;
+      s.vy = 0;
+    })()`);
+    await game.advanceTime(50);
+
     const s = await shepherdState();
-    await game.advanceTime(s.timeLeft * 1000);
+    expect(s.wave.number).toBe(2);
+    expect(s.wave.phase).toBe("prep");
+    // 1 coin from penning + 3 wave-clear bonus
+    expect(s.coins).toBeGreaterThanOrEqual(4);
+  });
+
+  it("ends game when wave timer expires with unpenned sheep", async () => {
+    await game.startScene("Shepherd");
+
+    await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      for (const s of gs.sheep) s.sprite.destroy();
+      gs.sheep = [];
+      gs.wavePhase = 'active';
+      gs.waveSize = 1;
+      gs.sheepToSpawn = 0;
+      gs.spawnSheep();           // one sheep, unpenned, at a random edge
+      gs.phaseTimeLeftMs = 40;   // about to expire
+    })()`);
+    await game.advanceTime(200);
 
     const dump = await game.dumpState();
     expect(dump.GameOver?.active).toBe(true);

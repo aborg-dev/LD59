@@ -544,7 +544,10 @@ export class TowerScene extends Phaser.Scene {
 
   private nodes(): { x: number; y: number }[] {
     const level = this.levels[this.levelIndex];
-    return [...level.terminals, ...this.towers.map((t) => ({ x: t.x, y: t.y }))];
+    return [
+      ...level.terminals,
+      ...this.towers.map((t) => ({ x: t.x, y: t.y })),
+    ];
   }
 
   private terminalCount(): number {
@@ -638,11 +641,21 @@ export class TowerScene extends Phaser.Scene {
       const pulse = 0.55 + 0.45 * Math.sin(this.pulseT);
       this.linkGfx.lineStyle(6, COLOR_PATH, 0.9);
       for (const [i, j] of this.pathEdges) {
-        this.linkGfx.lineBetween(nodes[i].x, nodes[i].y, nodes[j].x, nodes[j].y);
+        this.linkGfx.lineBetween(
+          nodes[i].x,
+          nodes[i].y,
+          nodes[j].x,
+          nodes[j].y,
+        );
       }
       this.linkGfx.lineStyle(2 + 4 * pulse, 0xffffff, 0.3 * pulse);
       for (const [i, j] of this.pathEdges) {
-        this.linkGfx.lineBetween(nodes[i].x, nodes[i].y, nodes[j].x, nodes[j].y);
+        this.linkGfx.lineBetween(
+          nodes[i].x,
+          nodes[i].y,
+          nodes[j].x,
+          nodes[j].y,
+        );
       }
     }
   }

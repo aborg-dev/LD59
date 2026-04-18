@@ -1,15 +1,25 @@
 import * as Phaser from "phaser";
 import { FONT_BODY, FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
 
-const ROUND_DURATION_SEC = 90;
 const HUD_TOP_H = 70;
 const HUD_BOTTOM_H = 80;
+
+const WAVE_PREP_SEC = 5;
+const WAVE_SPAWN_SPREAD_MS = 3000;
+const WAVE_CLEAR_BONUS = 3;
+
+function waveConfig(n: number): { size: number; timeSec: number } {
+  return {
+    size: 2 + n,
+    timeSec: Math.max(15, 28 - n),
+  };
+}
 
 const PEN_RADIUS = 120;
 const SHEEP_RADIUS = 18;
 const DOG_RADIUS = 22;
 
-const DOG_SPEED = 360;
+const DOG_SPEED = 950;
 const SHEEP_MAX_SPEED = 220;
 const SHEEP_WANDER_FORCE = 140;
 const SHEEP_GRAZE_MIN_SEC = 1.5;
@@ -30,10 +40,6 @@ const BARK_COOLDOWN_MS = 700;
 const BARK_SCARED_MS = 700;
 const SHEEP_SCARED_MAX_SPEED = 560;
 const SHEEP_SCARED_DAMPING = 0.985;
-
-const SPAWN_INTERVAL_START_MS = 2500;
-const SPAWN_INTERVAL_END_MS = 700;
-const MAX_ACTIVE_SHEEP = 40;
 
 const TOWER_COST = 3;
 const TOWER_RADIUS = 240;
@@ -70,9 +76,16 @@ export interface ShepherdSceneState {
   score: number;
   coins: number;
   buildMode: boolean;
+  wave: {
+    number: number;
+    phase: "prep" | "active";
+    phaseTimeLeft: number;
+    size: number;
+    remainingToSpawn: number;
+  };
+  /** Seconds left in the current wave phase — preserved for test-helper use */
   timeLeft: number;
   barkCooldownMs: number;
-  nextSpawnMs: number;
   viewport: { width: number; height: number };
 }
 
@@ -82,16 +95,25 @@ export class ShepherdScene extends Phaser.Scene {
   private towers: Tower[] = [];
   private score = 0;
   private coins = 0;
-  private timeRemaining = ROUND_DURATION_SEC;
   private accumulator = 0;
   private gameOver = false;
   private targetX = 0;
   private targetY = 0;
   private barkCooldownMs = 0;
-  private nextSpawnMs = SPAWN_INTERVAL_START_MS;
   private barkRing!: Phaser.GameObjects.Arc;
   private buildMode = false;
   private buildPreview!: Phaser.GameObjects.Arc;
+
+  // Wave state
+  private waveNumber = 1;
+  private wavePhase: "prep" | "active" = "prep";
+  private phaseTimeLeftMs = 0;
+  private sheepToSpawn = 0;
+  private nextSpawnMs = 0;
+  private waveSize = 0;
+  private lastShownSec = -1;
+  private bannerText!: Phaser.GameObjects.Text;
+  private bannerTween?: Phaser.Tweens.Tween;
   private keys!: {
     up: Phaser.Input.Keyboard.Key;
     down: Phaser.Input.Keyboard.Key;
@@ -109,7 +131,7 @@ export class ShepherdScene extends Phaser.Scene {
   private penY = 0;
   private penR = PEN_RADIUS;
 
-  private scoreText!: Phaser.GameObjects.Text;
+  private waveText!: Phaser.GameObjects.Text;
   private coinText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
   private barkBtn!: Phaser.GameObjects.Text;
@@ -130,14 +152,18 @@ export class ShepherdScene extends Phaser.Scene {
 
     this.score = 0;
     this.coins = 0;
-    this.timeRemaining = ROUND_DURATION_SEC;
     this.accumulator = 0;
     this.gameOver = false;
     this.barkCooldownMs = 0;
-    this.nextSpawnMs = SPAWN_INTERVAL_START_MS;
     this.sheep = [];
     this.towers = [];
     this.buildMode = false;
+    this.waveNumber = 1;
+    this.wavePhase = "prep";
+    this.phaseTimeLeftMs = WAVE_PREP_SEC * 1000;
+    this.sheepToSpawn = 0;
+    this.waveSize = 0;
+    this.lastShownSec = -1;
 
     // Grass background
     this.add
@@ -250,14 +276,14 @@ export class ShepherdScene extends Phaser.Scene {
       this.targetY = p.y;
     });
 
-    // --- Top HUD: timer | coins | score ---
+    // --- Top HUD: timer | coins | wave ---
     this.add
       .rectangle(width / 2, 0, width, HUD_TOP_H, 0x111122)
       .setOrigin(0.5, 0)
       .setDepth(100);
 
     this.timerText = this.add
-      .text(24, HUD_TOP_H / 2, String(ROUND_DURATION_SEC), {
+      .text(24, HUD_TOP_H / 2, String(WAVE_PREP_SEC), {
         fontFamily: FONT_UI,
         fontSize: 36,
         color: "#ffffff",
@@ -280,10 +306,10 @@ export class ShepherdScene extends Phaser.Scene {
       .setOrigin(0.5, 0.5)
       .setDepth(101);
 
-    this.scoreText = this.add
-      .text(width - 24, HUD_TOP_H / 2, "0", {
+    this.waveText = this.add
+      .text(width - 24, HUD_TOP_H / 2, `Wave ${this.waveNumber}`, {
         fontFamily: FONT_UI,
-        fontSize: 36,
+        fontSize: 28,
         color: "#ffffff",
         stroke: "#000000",
         strokeThickness: 4,
@@ -292,16 +318,21 @@ export class ShepherdScene extends Phaser.Scene {
       .setOrigin(1, 0.5)
       .setDepth(101);
 
-    this.time.addEvent({
-      delay: 1000,
-      repeat: ROUND_DURATION_SEC - 1,
-      callback: () => {
-        this.timeRemaining--;
-        this.timerText.setText(String(this.timeRemaining));
-        if (this.timeRemaining <= 5) this.timerText.setColor("#ff4444");
-        if (this.timeRemaining <= 0) this.endGame();
-      },
-    });
+    // Mid-field banner for wave transitions
+    this.bannerText = this.add
+      .text(width / 2, this.fieldTop + 60, "", {
+        fontFamily: FONT_UI,
+        fontSize: 36,
+        color: "#fff1c1",
+        stroke: "#000000",
+        strokeThickness: 5,
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5)
+      .setDepth(50)
+      .setAlpha(0);
+
+    this.showBanner(`Wave ${this.waveNumber} — prep`);
 
     // --- Bottom HUD: BARK | BUILD | MENU ---
     this.add
@@ -534,6 +565,7 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   dumpState(): ShepherdSceneState {
+    const phaseTimeLeft = Math.max(0, this.phaseTimeLeftMs / 1000);
     return {
       active: this.scene.isActive(),
       dog: { x: this.dog.x, y: this.dog.y },
@@ -547,9 +579,15 @@ export class ShepherdScene extends Phaser.Scene {
       score: this.score,
       coins: this.coins,
       buildMode: this.buildMode,
-      timeLeft: this.timeRemaining,
+      wave: {
+        number: this.waveNumber,
+        phase: this.wavePhase,
+        phaseTimeLeft,
+        size: this.waveSize,
+        remainingToSpawn: this.sheepToSpawn,
+      },
+      timeLeft: phaseTimeLeft,
       barkCooldownMs: this.barkCooldownMs,
-      nextSpawnMs: this.nextSpawnMs,
       viewport: { width: this.scale.width, height: this.scale.height },
     };
   }
@@ -567,13 +605,55 @@ export class ShepherdScene extends Phaser.Scene {
     }
   }
 
-  private currentSpawnInterval(): number {
-    // Linearly interpolate from START to END over the round
-    const progress = 1 - this.timeRemaining / ROUND_DURATION_SEC;
-    return (
-      SPAWN_INTERVAL_START_MS +
-      (SPAWN_INTERVAL_END_MS - SPAWN_INTERVAL_START_MS) * progress
-    );
+  private startWave(): void {
+    const cfg = waveConfig(this.waveNumber);
+    this.waveSize = cfg.size;
+    this.sheepToSpawn = cfg.size;
+    this.nextSpawnMs = 0;
+    this.phaseTimeLeftMs = cfg.timeSec * 1000;
+    this.wavePhase = "active";
+    this.lastShownSec = -1;
+    this.waveText.setText(`Wave ${this.waveNumber}`);
+    this.showBanner(`Wave ${this.waveNumber}!`);
+  }
+
+  private completeWave(): void {
+    this.coins += WAVE_CLEAR_BONUS;
+    this.updateCoinText();
+    this.sound.play("score");
+    this.waveNumber++;
+    this.wavePhase = "prep";
+    this.phaseTimeLeftMs = WAVE_PREP_SEC * 1000;
+    this.lastShownSec = -1;
+    this.waveText.setText(`Wave ${this.waveNumber}`);
+    this.showBanner(`Cleared! +$${WAVE_CLEAR_BONUS}`);
+  }
+
+  private showBanner(msg: string): void {
+    if (this.bannerTween) this.bannerTween.stop();
+    this.bannerText.setText(msg);
+    this.bannerText.setAlpha(1);
+    this.bannerTween = this.tweens.add({
+      targets: this.bannerText,
+      alpha: 0,
+      delay: 900,
+      duration: 600,
+    });
+  }
+
+  private updateTimerHud(): void {
+    const sec = Math.max(0, Math.ceil(this.phaseTimeLeftMs / 1000));
+    if (sec !== this.lastShownSec) {
+      this.lastShownSec = sec;
+      this.timerText.setText(String(sec));
+      if (this.wavePhase === "active" && sec <= 5) {
+        this.timerText.setColor("#ff4444");
+      } else if (this.wavePhase === "prep") {
+        this.timerText.setColor("#88ddff");
+      } else {
+        this.timerText.setColor("#ffffff");
+      }
+    }
   }
 
   private step(): void {
@@ -585,14 +665,34 @@ export class ShepherdScene extends Phaser.Scene {
       this.barkCooldownMs = Math.max(0, this.barkCooldownMs - dtMs);
     }
 
-    // Spawn timer
-    this.nextSpawnMs -= dtMs;
-    if (this.nextSpawnMs <= 0) {
-      const aliveUnpenned = this.sheep.filter((s) => !s.penned).length;
-      if (aliveUnpenned < MAX_ACTIVE_SHEEP) {
-        this.spawnSheep();
+    // Wave state machine
+    this.phaseTimeLeftMs -= dtMs;
+    this.updateTimerHud();
+
+    if (this.wavePhase === "prep") {
+      if (this.phaseTimeLeftMs <= 0) this.startWave();
+    } else {
+      // Stagger spawns across the first WAVE_SPAWN_SPREAD_MS of the wave
+      if (this.sheepToSpawn > 0) {
+        this.nextSpawnMs -= dtMs;
+        if (this.nextSpawnMs <= 0) {
+          this.spawnSheep();
+          this.sheepToSpawn--;
+          this.nextSpawnMs =
+            this.waveSize > 1 ? WAVE_SPAWN_SPREAD_MS / this.waveSize : 0;
+        }
       }
-      this.nextSpawnMs = this.currentSpawnInterval();
+
+      // Wave clear? (all spawned, all penned)
+      if (this.sheepToSpawn === 0) {
+        const unpenned = this.sheep.filter((s) => !s.penned).length;
+        if (unpenned === 0) {
+          this.completeWave();
+        } else if (this.phaseTimeLeftMs <= 0) {
+          this.endGame();
+          return;
+        }
+      }
     }
 
     // Tower pulses
@@ -752,7 +852,6 @@ export class ShepherdScene extends Phaser.Scene {
         s.sprite.setFillStyle(0xffe099);
         this.score++;
         this.coins++;
-        this.scoreText.setText(String(this.score));
         this.updateCoinText();
         this.sound.play("score");
       }
