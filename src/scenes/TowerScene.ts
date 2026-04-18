@@ -825,7 +825,10 @@ export class TowerScene extends Phaser.Scene {
     this.resetBtn.setVisible(true);
     // nextBtn visibility is set by refresh() based on connection state.
     this.layoutBottomActions(this.scale.width);
-    this.loadLevel(this.levelIndex);
+    // Preserve already-placed towers — the user was looking at them while
+    // editing and expects gameplay to resume from the same state.
+    this.redrawDraft();
+    this.refresh();
   }
 
   private cloneLevel(level: TowerLevel): TowerLevel {
