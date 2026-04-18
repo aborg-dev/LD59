@@ -10,9 +10,10 @@ let currentUrl = "";
 let pageErrors: string[] = [];
 
 import type { StateDump } from "../src/main.js";
+import type { RoverSceneState } from "../src/scenes/RoverScene.js";
 import type { ShepherdSceneState } from "../src/scenes/ShepherdScene.js";
 
-export type { ShepherdSceneState, StateDump };
+export type { RoverSceneState, ShepherdSceneState, StateDump };
 
 async function ensurePage(
   url: string,

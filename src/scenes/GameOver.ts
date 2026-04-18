@@ -46,18 +46,13 @@ export class GameOver extends Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(
-        width / 2,
-        height / 2 + 60,
-        "sheep penned",
-        {
-          fontFamily: FONT_BODY,
-          fontSize: 28,
-          color: "#cccccc",
-          align: "center",
-          resolution: TEXT_RESOLUTION,
-        },
-      )
+      .text(width / 2, height / 2 + 60, "sheep penned", {
+        fontFamily: FONT_BODY,
+        fontSize: 28,
+        color: "#cccccc",
+        align: "center",
+        resolution: TEXT_RESOLUTION,
+      })
       .setOrigin(0.5);
 
     // Play again

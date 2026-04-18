@@ -699,7 +699,10 @@ export class ShepherdScene extends Phaser.Scene {
     );
     this.clearPennedSheep();
     this.time.delayedCall(1500, () => {
-      this.scene.start("GameOver", { score: this.score, returnScene: "Shepherd" });
+      this.scene.start("GameOver", {
+        score: this.score,
+        returnScene: "Shepherd",
+      });
     });
   }
 
@@ -783,7 +786,7 @@ export class ShepherdScene extends Phaser.Scene {
       const unpenned = this.sheep.filter((s) => !s.penned).length;
       if (unpenned === 0) {
         this.completeWave();
-        return;  
+        return;
       }
     }
 
@@ -909,9 +912,9 @@ export class ShepherdScene extends Phaser.Scene {
         s.grazing = alignN === 0 ? !s.grazing : false;
         s.modeT = s.grazing
           ? SHEEP_GRAZE_MIN_SEC +
-          Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
+            Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
           : SHEEP_WALK_MIN_SEC +
-          Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
+            Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
         if (!s.grazing) s.wanderAngle = Math.random() * Math.PI * 2;
       }
       if (!s.grazing && alignN === 0) {
@@ -965,7 +968,6 @@ export class ShepherdScene extends Phaser.Scene {
         s.sprite.y = this.fieldBottom - SHEEP_RADIUS;
         s.angle = -s.angle;
       }
-
 
       // Pen check — sheep center fully inside the pen circle
       const pdx = s.sprite.x - this.penX;
@@ -1038,127 +1040,127 @@ export class ShepherdScene extends Phaser.Scene {
       max: number;
       step: number;
     }> = [
-        {
-          label: "Max Speed",
-          get: () => SHEEP_MAX_SPEED,
-          set: (v) => {
-            SHEEP_MAX_SPEED = v;
-          },
-          min: 0,
-          max: 800,
-          step: 5,
+      {
+        label: "Max Speed",
+        get: () => SHEEP_MAX_SPEED,
+        set: (v) => {
+          SHEEP_MAX_SPEED = v;
         },
-        {
-          label: "Scared Max Speed",
-          get: () => SHEEP_SCARED_MAX_SPEED,
-          set: (v) => {
-            SHEEP_SCARED_MAX_SPEED = v;
-          },
-          min: 0,
-          max: 800,
-          step: 5,
+        min: 0,
+        max: 800,
+        step: 5,
+      },
+      {
+        label: "Scared Max Speed",
+        get: () => SHEEP_SCARED_MAX_SPEED,
+        set: (v) => {
+          SHEEP_SCARED_MAX_SPEED = v;
         },
-        {
-          label: "Damping",
-          get: () => SHEEP_DAMPING,
-          set: (v) => {
-            SHEEP_DAMPING = v;
-          },
-          min: 0.8,
-          max: 0.999,
-          step: 0.001,
+        min: 0,
+        max: 800,
+        step: 5,
+      },
+      {
+        label: "Damping",
+        get: () => SHEEP_DAMPING,
+        set: (v) => {
+          SHEEP_DAMPING = v;
         },
-        {
-          label: "Scared Damping",
-          get: () => SHEEP_SCARED_DAMPING,
-          set: (v) => {
-            SHEEP_SCARED_DAMPING = v;
-          },
-          min: 0.8,
-          max: 0.999,
-          step: 0.001,
+        min: 0.8,
+        max: 0.999,
+        step: 0.001,
+      },
+      {
+        label: "Scared Damping",
+        get: () => SHEEP_SCARED_DAMPING,
+        set: (v) => {
+          SHEEP_SCARED_DAMPING = v;
         },
-        {
-          label: "Wander Force",
-          get: () => SHEEP_WANDER_FORCE,
-          set: (v) => {
-            SHEEP_WANDER_FORCE = v;
-          },
-          min: 0,
-          max: 400,
-          step: 5,
+        min: 0.8,
+        max: 0.999,
+        step: 0.001,
+      },
+      {
+        label: "Wander Force",
+        get: () => SHEEP_WANDER_FORCE,
+        set: (v) => {
+          SHEEP_WANDER_FORCE = v;
         },
-        {
-          label: "Cohesion Force",
-          get: () => SHEEP_COHESION_FORCE,
-          set: (v) => {
-            SHEEP_COHESION_FORCE = v;
-          },
-          min: 0,
-          max: 200,
-          step: 2,
+        min: 0,
+        max: 400,
+        step: 5,
+      },
+      {
+        label: "Cohesion Force",
+        get: () => SHEEP_COHESION_FORCE,
+        set: (v) => {
+          SHEEP_COHESION_FORCE = v;
         },
-        {
-          label: "Alignment Force",
-          get: () => ALIGNMENT_FORCE,
-          set: (v) => {
-            ALIGNMENT_FORCE = v;
-          },
-          min: 0,
-          max: 300,
-          step: 5,
+        min: 0,
+        max: 200,
+        step: 2,
+      },
+      {
+        label: "Alignment Force",
+        get: () => ALIGNMENT_FORCE,
+        set: (v) => {
+          ALIGNMENT_FORCE = v;
         },
-        {
-          label: "Whistle Impulse",
-          get: () => WHISTLE_IMPULSE,
-          set: (v) => {
-            WHISTLE_IMPULSE = v;
-          },
-          min: 0,
-          max: 2000,
-          step: 25,
+        min: 0,
+        max: 300,
+        step: 5,
+      },
+      {
+        label: "Whistle Impulse",
+        get: () => WHISTLE_IMPULSE,
+        set: (v) => {
+          WHISTLE_IMPULSE = v;
         },
-        {
-          label: "Flee Force",
-          get: () => FLEE_FORCE,
-          set: (v) => {
-            FLEE_FORCE = v;
-          },
-          min: 0,
-          max: 1000,
-          step: 10,
+        min: 0,
+        max: 2000,
+        step: 25,
+      },
+      {
+        label: "Flee Force",
+        get: () => FLEE_FORCE,
+        set: (v) => {
+          FLEE_FORCE = v;
         },
-        {
-          label: "Fear Radius",
-          get: () => FEAR_RADIUS,
-          set: (v) => {
-            FEAR_RADIUS = v;
-          },
-          min: 0,
-          max: 500,
-          step: 5,
+        min: 0,
+        max: 1000,
+        step: 10,
+      },
+      {
+        label: "Fear Radius",
+        get: () => FEAR_RADIUS,
+        set: (v) => {
+          FEAR_RADIUS = v;
         },
-        {
-          label: "Panic Inherit",
-          get: () => PANIC_INHERIT,
-          set: (v) => {
-            PANIC_INHERIT = v;
-          },
-          min: 0,
-          max: 1,
-          step: 0.05,
+        min: 0,
+        max: 500,
+        step: 5,
+      },
+      {
+        label: "Panic Inherit",
+        get: () => PANIC_INHERIT,
+        set: (v) => {
+          PANIC_INHERIT = v;
         },
-        {
-          label: "Turn Rate",
-          get: () => SHEEP_TURN_RATE,
-          set: (v) => {
-            SHEEP_TURN_RATE = v;
-          },
-          min: 0.5,
-          max: 15,
-          step: 0.5,
+        min: 0,
+        max: 1,
+        step: 0.05,
+      },
+      {
+        label: "Turn Rate",
+        get: () => SHEEP_TURN_RATE,
+        set: (v) => {
+          SHEEP_TURN_RATE = v;
         },
-      ];
+        min: 0.5,
+        max: 15,
+        step: 0.5,
+      },
+    ];
 
     for (const cfg of params) {
       const row = document.createElement("div");
