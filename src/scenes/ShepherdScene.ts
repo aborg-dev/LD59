@@ -45,6 +45,9 @@ const DOG_SPEED = 950;
 let FEAR_RADIUS = 180;
 let FLEE_FORCE = 520;
 
+const CLIFF_WIDTH = 120; // width of the void strip on the right edge
+let CLIFF_DRIFT_FORCE = 50; // rightward pull toward the cliff
+
 const HAY_COST = 6;
 const HAY_RADIUS = 130;
 const HAY_EAT_DIST = 45;
@@ -126,6 +129,7 @@ export class ShepherdScene extends Phaser.Scene {
   private sheepToSpawn = 0;
   private waveSpawnOrigin = { x: 0, y: 0 };
   private waveSize = 0;
+  private sheepLost = 0;
   private lastShownSec = -1;
   private bannerText!: Phaser.GameObjects.Text;
   private bannerTween?: Phaser.Tweens.Tween;
@@ -143,6 +147,7 @@ export class ShepherdScene extends Phaser.Scene {
   private fieldBottom = 0;
   private hudCamera!: Phaser.Cameras.Scene2D.Camera;
   private currentZoom = 1;
+  private cliffX = 0;
   private debugPanel: HTMLDivElement | null = null;
 
   constructor() {
@@ -168,6 +173,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.phaseTimeLeftMs = WAVE_PREP_SEC * 1000;
     this.sheepToSpawn = 0;
     this.waveSize = 0;
+    this.sheepLost = 0;
     this.lastShownSec = -1;
     this.currentZoom = 1;
     this.hudCamera = this.cameras.add(0, 0, width, height);
@@ -178,6 +184,37 @@ export class ShepherdScene extends Phaser.Scene {
       .rectangle(width / 2, this.fieldTop + fieldH / 2, 6000, 4000, 0x4a8c3a)
       .setDepth(0);
     this.hudCamera.ignore(bg);
+
+    // Cliff — dark void strip on the right edge
+    this.cliffX = width - CLIFF_WIDTH;
+
+    const cliffGfx = this.add.graphics().setDepth(1);
+    cliffGfx.fillStyle(0x080604, 1);
+    cliffGfx.fillRect(this.cliffX, this.fieldTop, CLIFF_WIDTH, fieldH);
+    cliffGfx.lineStyle(6, 0xa07050, 1);
+    cliffGfx.beginPath();
+    cliffGfx.moveTo(this.cliffX, this.fieldTop);
+    cliffGfx.lineTo(this.cliffX, this.fieldBottom);
+    cliffGfx.strokePath();
+    cliffGfx.lineStyle(2, 0xffe0a0, 0.25);
+    cliffGfx.beginPath();
+    cliffGfx.moveTo(this.cliffX + 6, this.fieldTop);
+    cliffGfx.lineTo(this.cliffX + 6, this.fieldBottom);
+    cliffGfx.strokePath();
+    this.hudCamera.ignore(cliffGfx);
+
+    const cliffLabel = this.add
+      .text(this.cliffX + CLIFF_WIDTH / 2, this.fieldTop + fieldH / 2, "CLIFF", {
+        fontFamily: FONT_UI,
+        fontSize: 16,
+        color: "#ff7744",
+        stroke: "#000000",
+        strokeThickness: 3,
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5)
+      .setDepth(3);
+    this.hudCamera.ignore(cliffLabel);
 
     // Pen — circle in the middle
     this.penX = width / 2;
@@ -626,6 +663,7 @@ export class ShepherdScene extends Phaser.Scene {
   private startWave(): void {
     const cfg = waveConfig(this.waveNumber);
     this.waveSize = cfg.size;
+    this.sheepLost = 0;
     this.sheepToSpawn = 0;
     this.phaseTimeLeftMs = cfg.timeSec * 1000;
     this.wavePhase = "active";
@@ -637,25 +675,27 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private pickSpawnOrigin(): { x: number; y: number } {
-    const { width } = this.scale;
     const fieldH = this.fieldBottom - this.fieldTop;
-    const edge = Phaser.Math.Between(0, 3);
-    if (edge === 0) return { x: Phaser.Math.Between(80, width - 80), y: this.fieldTop + 20 };
-    if (edge === 1) return { x: width - 20, y: this.fieldTop + Phaser.Math.Between(80, fieldH - 80) };
-    if (edge === 2) return { x: Phaser.Math.Between(80, width - 80), y: this.fieldBottom - 20 };
+    // Right side is the cliff — spawn from top, bottom, or left only
+    const edge = Phaser.Math.Between(0, 2);
+    if (edge === 0) return { x: Phaser.Math.Between(80, this.cliffX - 80), y: this.fieldTop + 20 };
+    if (edge === 1) return { x: Phaser.Math.Between(80, this.cliffX - 80), y: this.fieldBottom - 20 };
     return { x: 20, y: this.fieldTop + Phaser.Math.Between(80, fieldH - 80) };
   }
 
   private completeWave(): void {
-    this.coins += WAVE_CLEAR_BONUS;
-    this.updateCoinText();
+    const perfect = this.sheepLost === 0;
+    if (perfect) {
+      this.coins += WAVE_CLEAR_BONUS;
+      this.updateCoinText();
+    }
     this.sound.play("score");
     this.waveNumber++;
     this.wavePhase = "prep";
     this.phaseTimeLeftMs = WAVE_PREP_SEC * 1000;
     this.lastShownSec = -1;
     this.waveText.setText(`Wave ${this.waveNumber}`);
-    this.showBanner(`Cleared! +$${WAVE_CLEAR_BONUS}`);
+    this.showBanner(perfect ? `Cleared! No sheep lost! +$${WAVE_CLEAR_BONUS}` : `Cleared! (Lost ${this.sheepLost} sheep, no bonus)`);
   }
 
   private showBanner(msg: string): void {
@@ -688,7 +728,6 @@ export class ShepherdScene extends Phaser.Scene {
   private step(): void {
     const dt = ShepherdScene.stepSec;
     const dtMs = dt * 1000;
-    const { width } = this.scale;
 
     if (this.whistleCooldownMs > 0) {
       this.whistleCooldownMs = Math.max(0, this.whistleCooldownMs - dtMs);
@@ -737,12 +776,13 @@ export class ShepherdScene extends Phaser.Scene {
         this.dog.y += (ddy / dDist) * move;
       }
     }
-    // Clamp dog to visible world area
+    // Clamp dog to visible world area and stop it at the cliff edge
     const wv = this.cameras.main.worldView;
     if (this.dog.x < wv.x + DOG_RADIUS) this.dog.x = wv.x + DOG_RADIUS;
     else if (this.dog.x > wv.right - DOG_RADIUS) this.dog.x = wv.right - DOG_RADIUS;
     if (this.dog.y < wv.y + DOG_RADIUS) this.dog.y = wv.y + DOG_RADIUS;
     else if (this.dog.y > wv.bottom - DOG_RADIUS) this.dog.y = wv.bottom - DOG_RADIUS;
+    if (this.dog.x > this.cliffX - DOG_RADIUS) this.dog.x = this.cliffX - DOG_RADIUS;
 
     // Sheep behavior
     for (let i = 0; i < this.sheep.length; i++) {
@@ -761,6 +801,9 @@ export class ShepherdScene extends Phaser.Scene {
         ax += (fdx / fd) * strength;
         ay += (fdy / fd) * strength;
       }
+
+      // Rightward pull toward the cliff
+      ax += CLIFF_DRIFT_FORCE;
 
       // Hay pulls sheep in from the outer radius and holds them in a ring
       // just outside the pile.
@@ -852,13 +895,19 @@ export class ShepherdScene extends Phaser.Scene {
       s.sprite.x += s.vx * dt;
       s.sprite.y += s.vy * dt;
 
-      // Field bounds
+      // Cliff — sheep that cross the edge fall into the void
+      if (this.isInCliff(s.sprite.x)) {
+        s.sprite.destroy();
+        this.sheep.splice(i, 1);
+        i--;
+        this.sheepLost++;
+        continue;
+      }
+
+      // Field bounds — left/top/bottom walls bounce; right edge is the cliff (no bounce)
       if (s.sprite.x < SHEEP_RADIUS) {
         s.sprite.x = SHEEP_RADIUS;
         s.vx = Math.abs(s.vx) * 0.5;
-      } else if (s.sprite.x > width - SHEEP_RADIUS) {
-        s.sprite.x = width - SHEEP_RADIUS;
-        s.vx = -Math.abs(s.vx) * 0.5;
       }
       if (s.sprite.y < this.fieldTop + SHEEP_RADIUS) {
         s.sprite.y = this.fieldTop + SHEEP_RADIUS;
@@ -908,6 +957,10 @@ export class ShepherdScene extends Phaser.Scene {
     }
   }
 
+  private isInCliff(x: number): boolean {
+    return x > this.cliffX;
+  }
+
   private toggleDebugPanel(): void {
     if (this.debugPanel) {
       this.debugPanel.remove();
@@ -947,6 +1000,7 @@ export class ShepherdScene extends Phaser.Scene {
       { label: "Flee Force",       get: () => FLEE_FORCE,             set: v => { FLEE_FORCE = v; },             min: 0,    max: 1000,  step: 10    },
       { label: "Fear Radius",      get: () => FEAR_RADIUS,            set: v => { FEAR_RADIUS = v; },            min: 0,    max: 500,   step: 5     },
       { label: "Panic Inherit",    get: () => PANIC_INHERIT,          set: v => { PANIC_INHERIT = v; },          min: 0,    max: 1,     step: 0.05  },
+      { label: "Cliff Drift",      get: () => CLIFF_DRIFT_FORCE,      set: v => { CLIFF_DRIFT_FORCE = v; },      min: 0,    max: 200,   step: 5     },
     ];
 
     for (const cfg of params) {
