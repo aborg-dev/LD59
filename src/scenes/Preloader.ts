@@ -33,7 +33,7 @@ export class Preloader extends Scene {
   }
 
   create() {
-    this.scene.start(import.meta.env.DEV ? "TowerLevelSelect" : "MainMenu");
+    this.scene.start(import.meta.env.DEV ? "Shepherd" : "MainMenu");
   }
 
   dumpState(): PreloaderState {

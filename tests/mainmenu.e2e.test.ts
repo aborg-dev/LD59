@@ -12,9 +12,9 @@ afterAll(async () => {
 });
 
 describe("boot e2e", () => {
-  it("dev mode loads straight into the level select", async () => {
+  it("dev mode loads straight into the shepherd game", async () => {
     expect(game.errors()).toEqual([]);
     const dump = await game.dumpState();
-    expect(dump.TowerLevelSelect?.active).toBe(true);
+    expect(dump.Shepherd?.active).toBe(true);
   });
 });

@@ -10,10 +10,9 @@ let currentUrl = "";
 let pageErrors: string[] = [];
 
 import type { StateDump } from "../src/main.js";
-import type { TowerLevelSelectState } from "../src/scenes/TowerLevelSelectScene.js";
-import type { TowerSceneState } from "../src/scenes/TowerScene.js";
+import type { ShepherdSceneState } from "../src/scenes/ShepherdScene.js";
 
-export type { StateDump, TowerLevelSelectState, TowerSceneState };
+export type { ShepherdSceneState, StateDump };
 
 async function ensurePage(
   url: string,
@@ -52,9 +51,7 @@ async function waitForGame(pg: Page): Promise<void> {
     () => {
       try {
         const s = window.dumpState();
-        return (
-          s.MainMenu?.active === true || s.TowerLevelSelect?.active === true
-        );
+        return s.MainMenu?.active === true || s.Shepherd?.active === true;
       } catch {
         return false;
       }
@@ -105,15 +102,6 @@ export async function dumpStateToFile(name?: string): Promise<string> {
 
 export async function startScene(key: string): Promise<void> {
   await page?.evaluate((k) => window.startScene(k), key);
-}
-
-export async function loadTowerLevel(index: number): Promise<void> {
-  await page?.evaluate((i) => {
-    const scene = window.game.scene.getScene("Tower") as unknown as {
-      loadLevel: (n: number) => void;
-    };
-    scene.loadLevel(i);
-  }, index);
 }
 
 export async function drag(

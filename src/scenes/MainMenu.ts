@@ -14,7 +14,7 @@ export class MainMenu extends Scene {
     const { width, height } = this.scale;
 
     this.add
-      .text(width / 2, height / 2 - 120, "Signal Towers", {
+      .text(width / 2, height / 2 - 120, "Shepherd Dog", {
         fontFamily: FONT_UI,
         fontSize: 56,
         color: "#ffe099",
@@ -40,7 +40,7 @@ export class MainMenu extends Scene {
 
     playBtn.on("pointerdown", () => {
       this.sound.play("pop");
-      this.scene.start("TowerLevelSelect");
+      this.scene.start("Shepherd");
     });
   }
 
