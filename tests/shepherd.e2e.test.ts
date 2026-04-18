@@ -66,6 +66,7 @@ describe("shepherd wave-based herding", () => {
       s.sprite.y = 400;
       s.vx = 0;
       s.vy = 0;
+      s.angle = 0; // already facing +x so the turn-rate limit doesn't block
       s.wanderAngle = 0;
       s.modeT = 999;
       s.grazing = true;
@@ -103,6 +104,7 @@ describe("shepherd wave-based herding", () => {
       s.sprite.y = hy;
       s.vx = 0;
       s.vy = 0;
+      s.angle = Math.PI; // facing -x so hay can pull it in without the turn-rate delay
       s.modeT = 999;
       s.grazing = true;
     })()`);
