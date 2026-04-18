@@ -206,14 +206,19 @@ export class ShepherdScene extends Phaser.Scene {
     this.hudCamera.ignore(cliffGfx);
 
     const cliffLabel = this.add
-      .text(this.cliffX + CLIFF_WIDTH / 2, this.fieldTop + fieldH / 2, "CLIFF", {
-        fontFamily: FONT_UI,
-        fontSize: 16,
-        color: "#ff7744",
-        stroke: "#000000",
-        strokeThickness: 3,
-        resolution: TEXT_RESOLUTION,
-      })
+      .text(
+        this.cliffX + CLIFF_WIDTH / 2,
+        this.fieldTop + fieldH / 2,
+        "CLIFF",
+        {
+          fontFamily: FONT_UI,
+          fontSize: 16,
+          color: "#ff7744",
+          stroke: "#000000",
+          strokeThickness: 3,
+          resolution: TEXT_RESOLUTION,
+        },
+      )
       .setOrigin(0.5)
       .setDepth(3);
     this.hudCamera.ignore(cliffLabel);
@@ -300,7 +305,10 @@ export class ShepherdScene extends Phaser.Scene {
         return;
       }
       const now = this.time.now;
-      if (now - lastTapTime < 300 && Math.hypot(p.x - lastTapX, p.y - lastTapY) < 80) {
+      if (
+        now - lastTapTime < 300 &&
+        Math.hypot(p.x - lastTapX, p.y - lastTapY) < 80
+      ) {
         this.whistle(wp.x, wp.y);
         lastTapTime = 0;
         return;
@@ -478,7 +486,9 @@ export class ShepherdScene extends Phaser.Scene {
     this.hudCamera.ignore(gfx);
 
     // Darker tuft on top for a pile-of-hay feel
-    const tuft = this.add.circle(x, y - 4, HAY_VISUAL_R * 0.5, 0xb8964a).setDepth(9);
+    const tuft = this.add
+      .circle(x, y - 4, HAY_VISUAL_R * 0.5, 0xb8964a)
+      .setDepth(9);
     this.hudCamera.ignore(tuft);
 
     this.hayPiles.push({ x, y, gfx, ring });
@@ -502,7 +512,9 @@ export class ShepherdScene extends Phaser.Scene {
     const v0 = 60;
 
     const initAngle = Math.atan2(dy, dx);
-    const s = this.add.rectangle(sx, sy, SHEEP_RADIUS * 2, SHEEP_RADIUS, 0xfafafa).setDepth(5);
+    const s = this.add
+      .rectangle(sx, sy, SHEEP_RADIUS * 2, SHEEP_RADIUS, 0xfafafa)
+      .setDepth(5);
     s.setStrokeStyle(2, 0x2b2b2b);
     s.rotation = initAngle;
     this.hudCamera.ignore(s);
@@ -635,8 +647,14 @@ export class ShepherdScene extends Phaser.Scene {
 
     for (const s of this.sheep) {
       if (s.penned) continue;
-      reqHalfW = Math.max(reqHalfW, Math.abs(s.sprite.x - this.penX) + SHEEP_RADIUS);
-      reqHalfH = Math.max(reqHalfH, Math.abs(s.sprite.y - this.penY) + SHEEP_RADIUS);
+      reqHalfW = Math.max(
+        reqHalfW,
+        Math.abs(s.sprite.x - this.penX) + SHEEP_RADIUS,
+      );
+      reqHalfH = Math.max(
+        reqHalfH,
+        Math.abs(s.sprite.y - this.penY) + SHEEP_RADIUS,
+      );
     }
 
     reqHalfW += MARGIN;
@@ -644,7 +662,7 @@ export class ShepherdScene extends Phaser.Scene {
 
     const targetZoom = Math.min(
       1,
-      Math.min((fieldW / 2) / reqHalfW, (fieldH / 2) / reqHalfH),
+      Math.min(fieldW / 2 / reqHalfW, fieldH / 2 / reqHalfH),
     );
     // Zoom out immediately when needed; only zoom back in between waves
     if (targetZoom < this.currentZoom || this.wavePhase === "prep") {
@@ -683,8 +701,16 @@ export class ShepherdScene extends Phaser.Scene {
     const fieldH = this.fieldBottom - this.fieldTop;
     // Right side is the cliff — spawn from top, bottom, or left only
     const edge = Phaser.Math.Between(0, 2);
-    if (edge === 0) return { x: Phaser.Math.Between(80, this.cliffX - 80), y: this.fieldTop + 20 };
-    if (edge === 1) return { x: Phaser.Math.Between(80, this.cliffX - 80), y: this.fieldBottom - 20 };
+    if (edge === 0)
+      return {
+        x: Phaser.Math.Between(80, this.cliffX - 80),
+        y: this.fieldTop + 20,
+      };
+    if (edge === 1)
+      return {
+        x: Phaser.Math.Between(80, this.cliffX - 80),
+        y: this.fieldBottom - 20,
+      };
     return { x: 20, y: this.fieldTop + Phaser.Math.Between(80, fieldH - 80) };
   }
 
@@ -700,7 +726,11 @@ export class ShepherdScene extends Phaser.Scene {
     this.phaseTimeLeftMs = WAVE_PREP_SEC * 1000;
     this.lastShownSec = -1;
     this.waveText.setText(`Wave ${this.waveNumber}`);
-    this.showBanner(perfect ? `Cleared! No sheep lost! +$${WAVE_CLEAR_BONUS}` : `Cleared! (Lost ${this.sheepLost} sheep, no bonus)`);
+    this.showBanner(
+      perfect
+        ? `Cleared! No sheep lost! +$${WAVE_CLEAR_BONUS}`
+        : `Cleared! (Lost ${this.sheepLost} sheep, no bonus)`,
+    );
   }
 
   private showBanner(msg: string): void {
@@ -784,10 +814,13 @@ export class ShepherdScene extends Phaser.Scene {
     // Clamp dog to visible world area and stop it at the cliff edge
     const wv = this.cameras.main.worldView;
     if (this.dog.x < wv.x + DOG_RADIUS) this.dog.x = wv.x + DOG_RADIUS;
-    else if (this.dog.x > wv.right - DOG_RADIUS) this.dog.x = wv.right - DOG_RADIUS;
+    else if (this.dog.x > wv.right - DOG_RADIUS)
+      this.dog.x = wv.right - DOG_RADIUS;
     if (this.dog.y < wv.y + DOG_RADIUS) this.dog.y = wv.y + DOG_RADIUS;
-    else if (this.dog.y > wv.bottom - DOG_RADIUS) this.dog.y = wv.bottom - DOG_RADIUS;
-    if (this.dog.x > this.cliffX - DOG_RADIUS) this.dog.x = this.cliffX - DOG_RADIUS;
+    else if (this.dog.y > wv.bottom - DOG_RADIUS)
+      this.dog.y = wv.bottom - DOG_RADIUS;
+    if (this.dog.x > this.cliffX - DOG_RADIUS)
+      this.dog.x = this.cliffX - DOG_RADIUS;
 
     // Sheep behavior
     for (let i = 0; i < this.sheep.length; i++) {
@@ -832,8 +865,12 @@ export class ShepherdScene extends Phaser.Scene {
       }
 
       // Flock: cohesion + alignment + panic contagion in one neighbour pass
-      let cohX = 0, cohY = 0, cohN = 0;
-      let alignVx = 0, alignVy = 0, alignN = 0;
+      let cohX = 0,
+        cohY = 0,
+        cohN = 0;
+      let alignVx = 0,
+        alignVy = 0,
+        alignN = 0;
       for (let j = 0; j < this.sheep.length; j++) {
         if (i === j) continue;
         const o = this.sheep[j];
@@ -842,9 +879,13 @@ export class ShepherdScene extends Phaser.Scene {
         const ody = o.sprite.y - s.sprite.y;
         const od = Math.hypot(odx, ody);
         if (od < SEPARATION_RADIUS || od > SHEEP_COHESION_RADIUS) continue;
-        cohX += odx; cohY += ody; cohN++;
+        cohX += odx;
+        cohY += ody;
+        cohN++;
         if (od < ALIGNMENT_RADIUS) {
-          alignVx += o.vx; alignVy += o.vy; alignN++;
+          alignVx += o.vx;
+          alignVy += o.vy;
+          alignN++;
         }
         // Panic spreads through the flock like a wave
         if (od < PANIC_RADIUS && o.scaredMs > s.scaredMs) {
@@ -871,8 +912,10 @@ export class ShepherdScene extends Phaser.Scene {
       if (s.modeT <= 0) {
         s.grazing = alignN === 0 ? !s.grazing : false;
         s.modeT = s.grazing
-          ? SHEEP_GRAZE_MIN_SEC + Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
-          : SHEEP_WALK_MIN_SEC + Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
+          ? SHEEP_GRAZE_MIN_SEC +
+            Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
+          : SHEEP_WALK_MIN_SEC +
+            Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
         if (!s.grazing) s.wanderAngle = Math.random() * Math.PI * 2;
       }
       if (!s.grazing && alignN === 0) {
@@ -995,28 +1038,148 @@ export class ShepherdScene extends Phaser.Scene {
 
     const title = document.createElement("div");
     title.textContent = "Sheep Debug  [ENTER to close]";
-    title.style.cssText = "font-size:13px;font-weight:bold;color:#adf;margin-bottom:10px;";
+    title.style.cssText =
+      "font-size:13px;font-weight:bold;color:#adf;margin-bottom:10px;";
     panel.appendChild(title);
 
     const params: Array<{
       label: string;
       get: () => number;
       set: (v: number) => void;
-      min: number; max: number; step: number;
+      min: number;
+      max: number;
+      step: number;
     }> = [
-      { label: "Max Speed",        get: () => SHEEP_MAX_SPEED,        set: v => { SHEEP_MAX_SPEED = v; },        min: 0,    max: 800,   step: 5     },
-      { label: "Scared Max Speed", get: () => SHEEP_SCARED_MAX_SPEED, set: v => { SHEEP_SCARED_MAX_SPEED = v; }, min: 0,    max: 800,   step: 5     },
-      { label: "Damping",          get: () => SHEEP_DAMPING,          set: v => { SHEEP_DAMPING = v; },          min: 0.80, max: 0.999, step: 0.001 },
-      { label: "Scared Damping",   get: () => SHEEP_SCARED_DAMPING,   set: v => { SHEEP_SCARED_DAMPING = v; },   min: 0.80, max: 0.999, step: 0.001 },
-      { label: "Wander Force",     get: () => SHEEP_WANDER_FORCE,     set: v => { SHEEP_WANDER_FORCE = v; },     min: 0,    max: 400,   step: 5     },
-      { label: "Cohesion Force",   get: () => SHEEP_COHESION_FORCE,   set: v => { SHEEP_COHESION_FORCE = v; },   min: 0,    max: 200,   step: 2     },
-      { label: "Alignment Force",  get: () => ALIGNMENT_FORCE,        set: v => { ALIGNMENT_FORCE = v; },        min: 0,    max: 300,   step: 5     },
-      { label: "Whistle Impulse",  get: () => WHISTLE_IMPULSE,        set: v => { WHISTLE_IMPULSE = v; },        min: 0,    max: 2000,  step: 25    },
-      { label: "Flee Force",       get: () => FLEE_FORCE,             set: v => { FLEE_FORCE = v; },             min: 0,    max: 1000,  step: 10    },
-      { label: "Fear Radius",      get: () => FEAR_RADIUS,            set: v => { FEAR_RADIUS = v; },            min: 0,    max: 500,   step: 5     },
-      { label: "Panic Inherit",    get: () => PANIC_INHERIT,          set: v => { PANIC_INHERIT = v; },          min: 0,    max: 1,     step: 0.05  },
-      { label: "Cliff Drift",      get: () => CLIFF_DRIFT_FORCE,      set: v => { CLIFF_DRIFT_FORCE = v; },      min: 0,    max: 200,   step: 5     },
-      { label: "Turn Rate",        get: () => SHEEP_TURN_RATE,        set: v => { SHEEP_TURN_RATE = v; },        min: 0.5,  max: 15,    step: 0.5   },
+      {
+        label: "Max Speed",
+        get: () => SHEEP_MAX_SPEED,
+        set: (v) => {
+          SHEEP_MAX_SPEED = v;
+        },
+        min: 0,
+        max: 800,
+        step: 5,
+      },
+      {
+        label: "Scared Max Speed",
+        get: () => SHEEP_SCARED_MAX_SPEED,
+        set: (v) => {
+          SHEEP_SCARED_MAX_SPEED = v;
+        },
+        min: 0,
+        max: 800,
+        step: 5,
+      },
+      {
+        label: "Damping",
+        get: () => SHEEP_DAMPING,
+        set: (v) => {
+          SHEEP_DAMPING = v;
+        },
+        min: 0.8,
+        max: 0.999,
+        step: 0.001,
+      },
+      {
+        label: "Scared Damping",
+        get: () => SHEEP_SCARED_DAMPING,
+        set: (v) => {
+          SHEEP_SCARED_DAMPING = v;
+        },
+        min: 0.8,
+        max: 0.999,
+        step: 0.001,
+      },
+      {
+        label: "Wander Force",
+        get: () => SHEEP_WANDER_FORCE,
+        set: (v) => {
+          SHEEP_WANDER_FORCE = v;
+        },
+        min: 0,
+        max: 400,
+        step: 5,
+      },
+      {
+        label: "Cohesion Force",
+        get: () => SHEEP_COHESION_FORCE,
+        set: (v) => {
+          SHEEP_COHESION_FORCE = v;
+        },
+        min: 0,
+        max: 200,
+        step: 2,
+      },
+      {
+        label: "Alignment Force",
+        get: () => ALIGNMENT_FORCE,
+        set: (v) => {
+          ALIGNMENT_FORCE = v;
+        },
+        min: 0,
+        max: 300,
+        step: 5,
+      },
+      {
+        label: "Whistle Impulse",
+        get: () => WHISTLE_IMPULSE,
+        set: (v) => {
+          WHISTLE_IMPULSE = v;
+        },
+        min: 0,
+        max: 2000,
+        step: 25,
+      },
+      {
+        label: "Flee Force",
+        get: () => FLEE_FORCE,
+        set: (v) => {
+          FLEE_FORCE = v;
+        },
+        min: 0,
+        max: 1000,
+        step: 10,
+      },
+      {
+        label: "Fear Radius",
+        get: () => FEAR_RADIUS,
+        set: (v) => {
+          FEAR_RADIUS = v;
+        },
+        min: 0,
+        max: 500,
+        step: 5,
+      },
+      {
+        label: "Panic Inherit",
+        get: () => PANIC_INHERIT,
+        set: (v) => {
+          PANIC_INHERIT = v;
+        },
+        min: 0,
+        max: 1,
+        step: 0.05,
+      },
+      {
+        label: "Cliff Drift",
+        get: () => CLIFF_DRIFT_FORCE,
+        set: (v) => {
+          CLIFF_DRIFT_FORCE = v;
+        },
+        min: 0,
+        max: 200,
+        step: 5,
+      },
+      {
+        label: "Turn Rate",
+        get: () => SHEEP_TURN_RATE,
+        set: (v) => {
+          SHEEP_TURN_RATE = v;
+        },
+        min: 0.5,
+        max: 15,
+        step: 0.5,
+      },
     ];
 
     for (const cfg of params) {
@@ -1024,12 +1187,14 @@ export class ShepherdScene extends Phaser.Scene {
       row.style.marginBottom = "7px";
 
       const labelRow = document.createElement("div");
-      labelRow.style.cssText = "display:flex;justify-content:space-between;margin-bottom:2px;";
+      labelRow.style.cssText =
+        "display:flex;justify-content:space-between;margin-bottom:2px;";
       const lbl = document.createElement("span");
       lbl.textContent = cfg.label;
       const val = document.createElement("span");
       val.style.color = "#fa8";
-      val.textContent = cfg.step < 0.01 ? cfg.get().toFixed(3) : String(cfg.get());
+      val.textContent =
+        cfg.step < 0.01 ? cfg.get().toFixed(3) : String(cfg.get());
       labelRow.appendChild(lbl);
       labelRow.appendChild(val);
 
