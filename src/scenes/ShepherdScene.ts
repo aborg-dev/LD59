@@ -926,7 +926,7 @@ export class ShepherdScene extends Phaser.Scene {
       "padding:10px;border-left:2px solid #446;z-index:9999;box-sizing:border-box;";
 
     const title = document.createElement("div");
-    title.textContent = "Sheep Debug  [` to close]";
+    title.textContent = "Sheep Debug  [ENTER to close]";
     title.style.cssText = "font-size:13px;font-weight:bold;color:#adf;margin-bottom:10px;";
     panel.appendChild(title);
 
