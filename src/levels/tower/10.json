@@ -10,18 +10,18 @@
     }
   ],
   "obstacles": [],
+  "range": 320,
   "inhibitors": [
     {
-      "x": 460,
-      "y": 220,
+      "x": 550,
+      "y": 270,
       "radius": 200
     },
     {
       "x": 820,
-      "y": 580,
+      "y": 600,
       "radius": 200
     }
   ],
-  "range": 320,
   "name": "Needle's Eye"
 }
