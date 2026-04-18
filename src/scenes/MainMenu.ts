@@ -5,6 +5,7 @@ import { FONT_BODY, FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
 export const GAMES: [string, string][] = [
   ["Soccer", "Soccer Fling"],
   ["Shepherd", "Shepherd Dog"],
+  ["CardGame", "Hand Signals"],
 ];
 
 export interface MainMenuState {

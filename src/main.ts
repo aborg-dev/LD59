@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
 import { Boot, type BootState } from "./scenes/Boot.js";
+import { CardGameScene, type CardGameState } from "./scenes/CardGameScene.js";
 import { GameOver, type GameOverState } from "./scenes/GameOver.js";
 import { MainMenu, type MainMenuState } from "./scenes/MainMenu.js";
 import { Preloader, type PreloaderState } from "./scenes/Preloader.js";
@@ -22,6 +23,7 @@ export interface StateDump {
   MainMenu: MainMenuState | null;
   Soccer: SoccerSceneState | null;
   Shepherd: ShepherdSceneState | null;
+  CardGame: CardGameState | null;
   GameOver: GameOverState | null;
 }
 
@@ -44,7 +46,15 @@ const config: Phaser.Types.Core.GameConfig = {
     width: FIELD_W,
     height: HUD_TOP_H + FIELD_H + HUD_BOTTOM_H,
   },
-  scene: [Boot, Preloader, MainMenu, SoccerScene, ShepherdScene, GameOver],
+  scene: [
+    Boot,
+    Preloader,
+    MainMenu,
+    SoccerScene,
+    ShepherdScene,
+    CardGameScene,
+    GameOver,
+  ],
 };
 
 const game = new Phaser.Game(config);
@@ -77,6 +87,7 @@ window.dumpState = () => ({
   MainMenu: tryDump(game.scene.getScene("MainMenu") as MainMenu),
   Soccer: tryDump(game.scene.getScene("Soccer") as SoccerScene),
   Shepherd: tryDump(game.scene.getScene("Shepherd") as ShepherdScene),
+  CardGame: tryDump(game.scene.getScene("CardGame") as CardGameScene),
   GameOver: tryDump(game.scene.getScene("GameOver") as GameOver),
 });
 

@@ -10,10 +10,11 @@ let currentUrl = "";
 let pageErrors: string[] = [];
 
 import type { StateDump } from "../src/main.js";
+import type { CardGameState } from "../src/scenes/CardGameScene.js";
 import type { ShepherdSceneState } from "../src/scenes/ShepherdScene.js";
 import type { SoccerSceneState } from "../src/scenes/SoccerScene.js";
 
-export type { ShepherdSceneState, SoccerSceneState, StateDump };
+export type { CardGameState, ShepherdSceneState, SoccerSceneState, StateDump };
 
 async function ensurePage(
   url: string,
