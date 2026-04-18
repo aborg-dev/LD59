@@ -17,6 +17,8 @@ const COLOR_LINK = 0x66ff88;
 const COLOR_PATH = 0xffe066;
 const COLOR_TOWER = 0xd8d8e0;
 const COLOR_TOWER_EDGE = 0x333344;
+const COLOR_INHIBITOR = 0xff3355;
+const COLOR_INHIBITOR_EDGE = 0x661122;
 const TERMINAL_COLORS = [0x4ecdc4, 0xff6b6b, 0x3dd14a];
 
 interface Obstacle {
@@ -31,9 +33,16 @@ interface Terminal {
   y: number;
 }
 
+interface Inhibitor {
+  x: number;
+  y: number;
+  radius: number;
+}
+
 interface Level {
   terminals: Terminal[];
   obstacles: Obstacle[];
+  inhibitors?: Inhibitor[];
   range: number;
   hint?: string;
 }
@@ -66,6 +75,7 @@ export class TowerScene extends Phaser.Scene {
   private fieldBottom = 0;
 
   private obstacleGfx!: Phaser.GameObjects.Graphics;
+  private inhibitorGfx!: Phaser.GameObjects.Graphics;
   private linkGfx!: Phaser.GameObjects.Graphics;
   private terminalGfx!: Phaser.GameObjects.Graphics;
   private pulseT = 0;
@@ -117,6 +127,7 @@ export class TowerScene extends Phaser.Scene {
     grid.strokePath();
 
     this.obstacleGfx = this.add.graphics().setDepth(2);
+    this.inhibitorGfx = this.add.graphics().setDepth(2);
     this.linkGfx = this.add.graphics().setDepth(3);
     this.terminalGfx = this.add.graphics().setDepth(6);
 
@@ -363,6 +374,41 @@ export class TowerScene extends Phaser.Scene {
         range: 260,
         hint: "Weave a tree through the slats.",
       },
+      // --- Inhibitor levels ---
+      {
+        terminals: [
+          { x: left, y: top + h * 0.5 },
+          { x: right, y: top + h * 0.5 },
+        ],
+        obstacles: [],
+        inhibitors: [{ x: w / 2, y: top + h * 0.5, radius: 150 }],
+        range: 320,
+        hint: "Jammers block the signal.\nRoute above or below.",
+      },
+      {
+        terminals: [
+          { x: left, y: top + h * 0.5 },
+          { x: right, y: top + h * 0.5 },
+        ],
+        obstacles: [],
+        inhibitors: [
+          { x: w * 0.35, y: top + h * 0.32, radius: 130 },
+          { x: w * 0.65, y: top + h * 0.68, radius: 130 },
+        ],
+        range: 280,
+        hint: "Two jammers in a gauntlet.\nThread around each.",
+      },
+      {
+        terminals: [
+          { x: left, y: top + h * 0.15 },
+          { x: right, y: top + h * 0.15 },
+          { x: w / 2, y: top + h * 0.85 },
+        ],
+        obstacles: [],
+        inhibitors: [{ x: w / 2, y: top + h * 0.5, radius: 120 }],
+        range: 450,
+        hint: "Three signals, one dead-center jammer.\nRoute around to reach all three.",
+      },
     ];
   }
 
@@ -384,6 +430,9 @@ export class TowerScene extends Phaser.Scene {
       this.obstacleGfx.strokeRoundedRect(o.x, o.y, o.w, o.h, 6);
     }
 
+    // Draw inhibitors
+    this.drawInhibitors();
+
     // Draw terminals
     this.drawTerminals();
 
@@ -394,6 +443,28 @@ export class TowerScene extends Phaser.Scene {
 
   private goToLevel(index: number): void {
     this.loadLevel(index);
+  }
+
+  private drawInhibitors(): void {
+    this.inhibitorGfx.clear();
+    const inhibitors = this.levels[this.levelIndex].inhibitors ?? [];
+    for (const jam of inhibitors) {
+      // Translucent jam field
+      this.inhibitorGfx.fillStyle(COLOR_INHIBITOR, 0.14);
+      this.inhibitorGfx.fillCircle(jam.x, jam.y, jam.radius);
+      this.inhibitorGfx.lineStyle(2, COLOR_INHIBITOR, 0.55);
+      this.inhibitorGfx.strokeCircle(jam.x, jam.y, jam.radius);
+      // Solid core
+      this.inhibitorGfx.fillStyle(COLOR_INHIBITOR_EDGE, 1);
+      this.inhibitorGfx.fillCircle(jam.x, jam.y, 22);
+      this.inhibitorGfx.fillStyle(COLOR_INHIBITOR, 1);
+      this.inhibitorGfx.fillCircle(jam.x, jam.y, 18);
+      // X mark
+      this.inhibitorGfx.lineStyle(3, 0xffffff, 0.9);
+      const s = 8;
+      this.inhibitorGfx.lineBetween(jam.x - s, jam.y - s, jam.x + s, jam.y + s);
+      this.inhibitorGfx.lineBetween(jam.x - s, jam.y + s, jam.x + s, jam.y - s);
+    }
   }
 
   private drawTerminals(): void {
@@ -468,6 +539,12 @@ export class TowerScene extends Phaser.Scene {
     // Don't place inside obstacle
     for (const o of level.obstacles) {
       if (x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.h) return;
+    }
+
+    // Don't place inside an inhibitor's jam field
+    for (const jam of level.inhibitors ?? []) {
+      if (Phaser.Math.Distance.Between(x, y, jam.x, jam.y) <= jam.radius)
+        return;
     }
 
     // Enforce minimum spacing
@@ -562,6 +639,10 @@ export class TowerScene extends Phaser.Scene {
     for (const o of level.obstacles) {
       const r = new Phaser.Geom.Rectangle(o.x, o.y, o.w, o.h);
       if (Phaser.Geom.Intersects.LineToRectangle(line, r)) return false;
+    }
+    for (const jam of level.inhibitors ?? []) {
+      const c = new Phaser.Geom.Circle(jam.x, jam.y, jam.radius);
+      if (Phaser.Geom.Intersects.LineToCircle(line, c)) return false;
     }
     return true;
   }

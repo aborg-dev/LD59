@@ -5,9 +5,11 @@ const HUD_TOP_H = 70;
 const HUD_BOTTOM_H = 80;
 
 // Keep in sync with TowerScene.buildLevels.
-export const TOWER_LEVEL_COUNT = 9;
-// Indexes of 3-terminal levels — matches TowerScene.buildLevels.
-const THREE_TERMINAL_FROM = 5;
+export const TOWER_LEVEL_COUNT = 12;
+// Indexes with 3 terminals — matches TowerScene.buildLevels.
+const THREE_TERMINAL_INDEXES = new Set([5, 6, 7, 8, 11]);
+// Indexes with inhibitors — matches TowerScene.buildLevels.
+const INHIBITOR_INDEXES = new Set([9, 10, 11]);
 
 export interface TowerLevelSelectState {
   active: boolean;
@@ -71,8 +73,9 @@ export class TowerLevelSelectScene extends Phaser.Scene {
       const tx = startX + col * (tileSize + gap);
       const ty = startY + row * (tileSize + gap);
 
-      const is3 = i >= THREE_TERMINAL_FROM;
-      const border = is3 ? 0x3dd14a : 0x4ecdc4;
+      const isJam = INHIBITOR_INDEXES.has(i);
+      const is3 = THREE_TERMINAL_INDEXES.has(i);
+      const border = isJam ? 0xff6b6b : is3 ? 0x3dd14a : 0x4ecdc4;
 
       const tile = this.add
         .rectangle(tx, ty, tileSize, tileSize, 0x225533)
@@ -92,11 +95,13 @@ export class TowerLevelSelectScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setDepth(3);
 
+      const label = isJam ? "jammers" : is3 ? "3 towers" : "2 towers";
+      const labelColor = isJam ? "#ffb3b3" : is3 ? "#b6e9bc" : "#a6ecec";
       this.add
-        .text(tx, ty + 52, is3 ? "3 towers" : "2 towers", {
+        .text(tx, ty + 52, label, {
           fontFamily: FONT_BODY,
           fontSize: 16,
-          color: is3 ? "#b6e9bc" : "#a6ecec",
+          color: labelColor,
           resolution: TEXT_RESOLUTION,
         })
         .setOrigin(0.5)
@@ -104,7 +109,9 @@ export class TowerLevelSelectScene extends Phaser.Scene {
 
       // Dot indicators
       const dotCount = is3 ? 3 : 2;
-      const dotColors = is3 ? [0x4ecdc4, 0xff6b6b, 0x3dd14a] : [0x4ecdc4, 0xff6b6b];
+      const dotColors = is3
+        ? [0x4ecdc4, 0xff6b6b, 0x3dd14a]
+        : [0x4ecdc4, 0xff6b6b];
       const dotY = ty - tileSize / 2 + 18;
       const dotSpacing = 14;
       const dotStartX = tx - ((dotCount - 1) * dotSpacing) / 2;
@@ -112,6 +119,16 @@ export class TowerLevelSelectScene extends Phaser.Scene {
         this.add
           .circle(dotStartX + d * dotSpacing, dotY, 5, dotColors[d])
           .setDepth(3);
+      }
+      if (isJam) {
+        const jx = tx + tileSize / 2 - 18;
+        const jy = ty - tileSize / 2 + 18;
+        const jam = this.add.graphics().setDepth(3);
+        jam.fillStyle(0xff3355, 1);
+        jam.fillCircle(jx, jy, 8);
+        jam.lineStyle(2, 0xffffff, 0.9);
+        jam.lineBetween(jx - 4, jy - 4, jx + 4, jy + 4);
+        jam.lineBetween(jx - 4, jy + 4, jx + 4, jy - 4);
       }
 
       tile.on("pointerdown", () => {
