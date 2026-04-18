@@ -1,0 +1,27 @@
+{
+  "terminals": [
+    {
+      "x": 80,
+      "y": 454
+    },
+    {
+      "x": 640,
+      "y": 966
+    }
+  ],
+  "obstacles": [],
+  "inhibitors": [
+    {
+      "x": 360,
+      "y": 454,
+      "radius": 200
+    },
+    {
+      "x": 360,
+      "y": 966,
+      "radius": 200
+    }
+  ],
+  "range": 280,
+  "hint": "Two stacked jammers.\nThe slot between them is the only way."
+}

@@ -1,0 +1,22 @@
+{
+  "terminals": [
+    {
+      "x": 80,
+      "y": 326
+    },
+    {
+      "x": 640,
+      "y": 1094
+    }
+  ],
+  "obstacles": [
+    {
+      "x": 216,
+      "y": 518,
+      "w": 280,
+      "h": 200
+    }
+  ],
+  "range": 280,
+  "hint": "Stone blocks the signal. Route around."
+}

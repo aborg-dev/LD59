@@ -1,15 +1,11 @@
 import * as Phaser from "phaser";
 import { FONT_BODY, FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
+import { TOWER_LEVELS } from "../levels/tower/index.js";
 
 const HUD_TOP_H = 70;
 const HUD_BOTTOM_H = 80;
 
-// Keep in sync with TowerScene.buildLevels.
-export const TOWER_LEVEL_COUNT = 12;
-// Indexes with 3 terminals — matches TowerScene.buildLevels.
-const THREE_TERMINAL_INDEXES = new Set([5, 6, 7, 8, 11]);
-// Indexes with inhibitors — matches TowerScene.buildLevels.
-const INHIBITOR_INDEXES = new Set([9, 10, 11]);
+export const TOWER_LEVEL_COUNT = TOWER_LEVELS.length;
 
 export interface TowerLevelSelectState {
   active: boolean;
@@ -73,8 +69,9 @@ export class TowerLevelSelectScene extends Phaser.Scene {
       const tx = startX + col * (tileSize + gap);
       const ty = startY + row * (tileSize + gap);
 
-      const isJam = INHIBITOR_INDEXES.has(i);
-      const is3 = THREE_TERMINAL_INDEXES.has(i);
+      const level = TOWER_LEVELS[i];
+      const isJam = (level.inhibitors?.length ?? 0) > 0;
+      const is3 = level.terminals.length >= 3;
       const border = isJam ? 0xff6b6b : is3 ? 0x3dd14a : 0x4ecdc4;
 
       const tile = this.add

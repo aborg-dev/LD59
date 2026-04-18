@@ -1,0 +1,26 @@
+{
+  "terminals": [
+    {
+      "x": 80,
+      "y": 262
+    },
+    {
+      "x": 640,
+      "y": 262
+    },
+    {
+      "x": 360,
+      "y": 1158
+    }
+  ],
+  "obstacles": [
+    {
+      "x": 180,
+      "y": 518,
+      "w": 360,
+      "h": 180
+    }
+  ],
+  "range": 320,
+  "hint": "A wall in the middle.\nRoute around and still link all three."
+}

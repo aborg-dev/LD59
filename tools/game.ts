@@ -107,6 +107,15 @@ export async function startScene(key: string): Promise<void> {
   await page?.evaluate((k) => window.startScene(k), key);
 }
 
+export async function loadTowerLevel(index: number): Promise<void> {
+  await page?.evaluate((i) => {
+    const scene = window.game.scene.getScene("Tower") as unknown as {
+      loadLevel: (n: number) => void;
+    };
+    scene.loadLevel(i);
+  }, index);
+}
+
 export async function drag(
   fromX: number,
   fromY: number,

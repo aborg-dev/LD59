@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
 import { FONT_BODY, FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
+import { TOWER_LEVELS, type TowerLevel } from "../levels/tower/index.js";
 
 const HUD_TOP_H = 70;
 const HUD_BOTTOM_H = 80;
@@ -21,32 +22,6 @@ const COLOR_INHIBITOR = 0xff3355;
 const COLOR_INHIBITOR_EDGE = 0x661122;
 const TERMINAL_COLORS = [0x4ecdc4, 0xff6b6b, 0x3dd14a];
 
-interface Obstacle {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-interface Terminal {
-  x: number;
-  y: number;
-}
-
-interface Inhibitor {
-  x: number;
-  y: number;
-  radius: number;
-}
-
-interface Level {
-  terminals: Terminal[];
-  obstacles: Obstacle[];
-  inhibitors?: Inhibitor[];
-  range: number;
-  hint?: string;
-}
-
 interface Tower {
   x: number;
   y: number;
@@ -65,7 +40,7 @@ export interface TowerSceneState {
 }
 
 export class TowerScene extends Phaser.Scene {
-  private levels: Level[] = [];
+  private levels: TowerLevel[] = TOWER_LEVELS;
   private levelIndex = 0;
   private towers: Tower[] = [];
   private connected = false;
@@ -101,8 +76,6 @@ export class TowerScene extends Phaser.Scene {
     this.connected = false;
     this.pathEdges = [];
     this.levelIndex = data?.startLevel ?? 0;
-
-    this.levels = this.buildLevels(width, this.fieldTop, this.fieldBottom);
 
     this.add
       .rectangle(
@@ -259,161 +232,6 @@ export class TowerScene extends Phaser.Scene {
     if (!this.connected) return;
     this.pulseT += delta * 0.006;
     this.drawLinks();
-  }
-
-  private buildLevels(w: number, top: number, bottom: number): Level[] {
-    const h = bottom - top;
-    const left = 80;
-    const right = w - 80;
-    return [
-      {
-        terminals: [
-          { x: left, y: top + h * 0.5 },
-          { x: right, y: top + h * 0.5 },
-        ],
-        obstacles: [],
-        range: 320,
-        hint: "Tap to place a relay tower.\nChain the signal across the field.",
-      },
-      {
-        terminals: [
-          { x: left, y: top + h * 0.2 },
-          { x: right, y: top + h * 0.8 },
-        ],
-        obstacles: [{ x: w * 0.3, y: top + h * 0.35, w: 280, h: 200 }],
-        range: 280,
-        hint: "Stone blocks the signal. Route around.",
-      },
-      {
-        terminals: [
-          { x: left, y: top + h * 0.5 },
-          { x: right, y: top + h * 0.5 },
-        ],
-        obstacles: [
-          { x: w * 0.2, y: top + h * 0.1, w: 120, h: h * 0.55 },
-          { x: w * 0.55, y: top + h * 0.35, w: 120, h: h * 0.55 },
-        ],
-        range: 300,
-        hint: "Zig-zag through the gaps.",
-      },
-      {
-        terminals: [
-          { x: left, y: top + h * 0.15 },
-          { x: right, y: top + h * 0.85 },
-        ],
-        obstacles: [
-          { x: 0, y: top + h * 0.3, w: w * 0.6, h: 80 },
-          { x: w * 0.4, y: top + h * 0.55, w: w * 0.6, h: 80 },
-          { x: w * 0.15, y: top + h * 0.78, w: 140, h: h * 0.18 },
-        ],
-        range: 260,
-        hint: "A winding corridor. Pick line-of-sight carefully.",
-      },
-      {
-        terminals: [
-          { x: left, y: top + h * 0.5 },
-          { x: right, y: top + h * 0.5 },
-        ],
-        obstacles: [
-          { x: w * 0.15, y: top + h * 0.05, w: 90, h: h * 0.35 },
-          { x: w * 0.15, y: top + h * 0.6, w: 90, h: h * 0.35 },
-          { x: w * 0.45, y: top + h * 0.2, w: 90, h: h * 0.6 },
-          { x: w * 0.72, y: top + h * 0.05, w: 90, h: h * 0.35 },
-          { x: w * 0.72, y: top + h * 0.6, w: 90, h: h * 0.35 },
-        ],
-        range: 240,
-        hint: "Tight slots. Plan before you place.",
-      },
-      // --- 3-terminal levels ---
-      {
-        terminals: [
-          { x: left, y: top + h * 0.35 },
-          { x: right, y: top + h * 0.35 },
-          { x: w / 2, y: top + h * 0.8 },
-        ],
-        obstacles: [],
-        range: 400,
-        hint: "Three outposts.\nConnect them all into one network.",
-      },
-      {
-        terminals: [
-          { x: left, y: top + h * 0.15 },
-          { x: right, y: top + h * 0.15 },
-          { x: w / 2, y: top + h * 0.85 },
-        ],
-        obstacles: [{ x: w * 0.25, y: top + h * 0.35, w: w * 0.5, h: 180 }],
-        range: 320,
-        hint: "A wall in the middle.\nRoute around and still link all three.",
-      },
-      {
-        terminals: [
-          { x: left, y: top + h * 0.1 },
-          { x: right, y: top + h * 0.5 },
-          { x: left + 40, y: top + h * 0.9 },
-        ],
-        obstacles: [
-          { x: w * 0.3, y: top + h * 0.2, w: 120, h: h * 0.25 },
-          { x: w * 0.3, y: top + h * 0.55, w: 120, h: h * 0.25 },
-          { x: w * 0.55, y: top + h * 0.3, w: 100, h: h * 0.4 },
-        ],
-        range: 300,
-        hint: "Three signals, obstacles between them.",
-      },
-      {
-        terminals: [
-          { x: left, y: top + h * 0.15 },
-          { x: right, y: top + h * 0.5 },
-          { x: w / 2, y: top + h * 0.92 },
-        ],
-        obstacles: [
-          { x: 0, y: top + h * 0.28, w: w * 0.55, h: 70 },
-          { x: w * 0.45, y: top + h * 0.42, w: w * 0.55, h: 70 },
-          { x: 0, y: top + h * 0.6, w: w * 0.45, h: 70 },
-          { x: w * 0.55, y: top + h * 0.75, w: w * 0.45, h: 70 },
-        ],
-        range: 260,
-        hint: "Weave a tree through the slats.",
-      },
-      // --- Inhibitor levels ---
-      {
-        terminals: [
-          { x: left, y: top + h * 0.3 },
-          { x: right, y: top + h * 0.7 },
-        ],
-        obstacles: [],
-        inhibitors: [
-          { x: w / 2, y: top + h * 0.3, radius: 200 },
-          { x: w / 2, y: top + h * 0.7, radius: 200 },
-        ],
-        range: 280,
-        hint: "Two stacked jammers.\nThe slot between them is the only way.",
-      },
-      {
-        terminals: [
-          { x: left, y: top + h * 0.5 },
-          { x: right, y: top + h * 0.5 },
-        ],
-        obstacles: [],
-        inhibitors: [
-          { x: w * 0.28, y: top + h * 0.45, radius: 80 },
-          { x: w * 0.5, y: top + h * 0.55, radius: 80 },
-          { x: w * 0.72, y: top + h * 0.45, radius: 80 },
-        ],
-        range: 260,
-        hint: "Three jammers on the line.\nWeave over, under, over.",
-      },
-      {
-        terminals: [
-          { x: left + 20, y: top + h * 0.18 },
-          { x: right - 20, y: top + h * 0.18 },
-          { x: w / 2, y: top + h * 0.85 },
-        ],
-        obstacles: [],
-        inhibitors: [{ x: w / 2, y: top + h * 0.5, radius: 150 }],
-        range: 380,
-        hint: "Big central jammer.\nConnect the top pair, then detour down.",
-      },
-    ];
   }
 
   private loadLevel(index: number): void {

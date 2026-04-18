@@ -1,0 +1,26 @@
+{
+  "terminals": [
+    {
+      "x": 100,
+      "y": 300.4
+    },
+    {
+      "x": 620,
+      "y": 300.4
+    },
+    {
+      "x": 360,
+      "y": 1158
+    }
+  ],
+  "obstacles": [],
+  "inhibitors": [
+    {
+      "x": 360,
+      "y": 710,
+      "radius": 150
+    }
+  ],
+  "range": 380,
+  "hint": "Big central jammer.\nConnect the top pair, then detour down."
+}

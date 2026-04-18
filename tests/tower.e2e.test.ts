@@ -80,10 +80,7 @@ describe("tower puzzle placement and connectivity", () => {
     await game.startScene("Tower");
     await game.advanceTime(50);
 
-    await game.eval_(`(() => {
-      const gs = window.game.scene.getScene('Tower');
-      gs.loadLevel(1);
-    })()`);
+    await game.loadTowerLevel(1);
     await game.advanceTime(50);
 
     await game.eval_(`(() => {
@@ -110,9 +107,7 @@ describe("tower puzzle placement and connectivity", () => {
     await game.advanceTime(50);
 
     // Level 5 is the first 3-terminal level (index 5).
-    await game.eval_(`(() => {
-      window.game.scene.getScene('Tower').loadLevel(5);
-    })()`);
+    await game.loadTowerLevel(5);
     await game.advanceTime(50);
 
     let s = await towerState();
@@ -151,6 +146,61 @@ describe("tower puzzle placement and connectivity", () => {
 
     const s = await towerState();
     expect(s.towers.length).toBe(8);
+  });
+
+  it("loads every level cleanly with structurally valid data", async () => {
+    await game.startScene("Tower");
+    await game.advanceTime(50);
+
+    const { levelCount } = await towerState();
+    expect(levelCount).toBe(12);
+
+    interface LevelShape {
+      terminals: { x: number; y: number }[];
+      obstacles: { x: number; y: number; w: number; h: number }[];
+      inhibitors?: { x: number; y: number; radius: number }[];
+      range: number;
+      hint?: string;
+    }
+
+    for (let i = 0; i < levelCount; i++) {
+      await game.loadTowerLevel(i);
+      await game.advanceTime(20);
+
+      const s = await towerState();
+      expect(s.levelIndex, `level ${i} index`).toBe(i);
+      expect(s.terminalCount, `level ${i} terminals`).toBeGreaterThanOrEqual(2);
+      expect(s.towers.length, `level ${i} towers reset`).toBe(0);
+      expect(s.connected, `level ${i} starts unconnected`).toBe(false);
+
+      const level = (await game.eval_(`(() => {
+        return JSON.parse(JSON.stringify(
+          window.game.scene.getScene('Tower').levels[${i}]
+        ));
+      })()`)) as LevelShape;
+
+      expect(level.range, `level ${i} range`).toBeGreaterThan(0);
+      expect(level.terminals.length, `level ${i} terminals shape`).toBe(
+        s.terminalCount,
+      );
+      for (const [ti, t] of level.terminals.entries()) {
+        expect(
+          Number.isFinite(t.x) && Number.isFinite(t.y),
+          `level ${i} terminal ${ti} finite`,
+        ).toBe(true);
+      }
+      for (const [oi, o] of level.obstacles.entries()) {
+        expect(o.w, `level ${i} obstacle ${oi} width`).toBeGreaterThan(0);
+        expect(o.h, `level ${i} obstacle ${oi} height`).toBeGreaterThan(0);
+      }
+      for (const [ji, j] of (level.inhibitors ?? []).entries()) {
+        expect(j.radius, `level ${i} inhibitor ${ji} radius`).toBeGreaterThan(
+          0,
+        );
+      }
+    }
+
+    expect(game.errors(), "no runtime errors during level loads").toEqual([]);
   });
 
   it("level select launches Tower at the chosen level", async () => {
