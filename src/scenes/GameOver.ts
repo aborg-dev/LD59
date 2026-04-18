@@ -8,13 +8,15 @@ export interface GameOverState {
 
 export class GameOver extends Scene {
   private finalScore = 0;
+  private returnScene = "MainMenu";
 
   constructor() {
     super("GameOver");
   }
 
-  create(data: { score?: number }) {
+  create(data: { score?: number; returnScene?: string }) {
     this.finalScore = data.score ?? 0;
+    this.returnScene = data.returnScene ?? "MainMenu";
     const { width, height } = this.scale;
 
     this.cameras.main.setBackgroundColor(0x1a1a2e);
@@ -58,19 +60,40 @@ export class GameOver extends Scene {
       )
       .setOrigin(0.5);
 
-    this.add
-      .text(width / 2, height / 2 + 140, "Tap to Play Again", {
+    // Play again
+    const playAgain = this.add
+      .text(width / 2, height / 2 + 160, "Play Again", {
         fontFamily: FONT_BODY,
-        fontSize: 24,
+        fontSize: 28,
         color: "#ffffff",
+        backgroundColor: "#333344",
+        padding: { left: 24, right: 24, top: 12, bottom: 12 },
         align: "center",
         resolution: TEXT_RESOLUTION,
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
 
-    this.input.once("pointerdown", () => {
+    playAgain.on("pointerdown", () => {
       this.sound.play("pop");
-      this.scene.start("GameScene");
+      this.scene.start(this.returnScene);
+    });
+
+    // Back to menu
+    const menu = this.add
+      .text(width / 2, height / 2 + 240, "Menu", {
+        fontFamily: FONT_BODY,
+        fontSize: 24,
+        color: "#aaaaaa",
+        align: "center",
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+
+    menu.on("pointerdown", () => {
+      this.sound.play("pop");
+      this.scene.start("MainMenu");
     });
   }
 

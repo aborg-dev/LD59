@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "test": "vitest run tests/game.e2e.test.ts"
+    "test": "vitest run tests/"
   },
   "keywords": [],
   "author": "",

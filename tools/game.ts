@@ -10,9 +10,9 @@ let currentUrl = "";
 let pageErrors: string[] = [];
 
 import type { StateDump } from "../src/main.js";
-import type { GameSceneState } from "../src/scenes/GameScene.js";
+import type { SoccerSceneState } from "../src/scenes/SoccerScene.js";
 
-export type { GameSceneState, StateDump };
+export type { SoccerSceneState, StateDump };
 
 async function ensurePage(
   url: string,

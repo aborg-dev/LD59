@@ -1,12 +1,52 @@
-# Soccer Fling - Phaser 4 Game
+# Game Jam Prototypes - Phaser 4
+
+Multi-game prototype repo. Each game is a self-contained scene with its own
+test file. The MainMenu acts as a game selector.
 
 ## Quick commands
 
 - `just dev` - start dev server (vite on 0.0.0.0:5173)
 - `just lint` / `just lint-fix` - biome linter
-- `just test` - start dev server, run e2e tests, cleanup
+- `just test` - start dev server, run all e2e tests, cleanup
 
-## Debugging the game
+## Project structure
+
+```
+src/scenes/
+  Boot.ts          — init, transitions to Preloader
+  Preloader.ts     — loads shared assets
+  MainMenu.ts      — game selector (GAMES array defines the list)
+  GameOver.ts       — shared end screen, returns to the originating game
+  SoccerScene.ts   — "Soccer Fling" prototype
+tests/
+  soccer.e2e.test.ts — e2e tests for Soccer
+tools/
+  game.ts          — Playwright helpers (launch, advanceTime, dumpState, etc.)
+```
+
+## Adding a new game prototype
+
+1. **Create the scene** — add `src/scenes/MyGameScene.ts`:
+   - Extend `Phaser.Scene`, use a short key: `super("MyGame")`
+   - Add a `dumpState()` method returning a typed state object
+   - End the game with `this.scene.start("GameOver", { score, returnScene: "MyGame" })`
+
+2. **Register in MainMenu** — edit `src/scenes/MainMenu.ts`:
+   - Add to the `GAMES` array: `["MyGame", "My Game Label"]`
+
+3. **Register in main.ts**:
+   - Import the scene class and state type
+   - Add it to the `scene` array in the Phaser config
+   - Add its state to the `StateDump` interface and `dumpState()` function
+
+4. **Add tests** — create `tests/mygame.e2e.test.ts`:
+   - Use `game.startScene("MyGame")` to enter
+   - Access state via `game.dumpState().MyGame`
+   - Use `game.eval_()` to reach into scene internals for test setup
+
+5. **Add assets** — put new assets in `public/assets/` and load in `Preloader.ts`
+
+## Debugging
 
 Write throwaway scripts to `debug/` (gitignored) and run with `npx tsx`.
 The dev server is assumed to be running.
@@ -44,7 +84,7 @@ const url = process.env.TEST_URL || "http://localhost:5173";
   await game.screenshot("explore-result");
   await game.close();
 })();
-// Then: jq '.GameScene.circle' debug/dumps/after-drag-*.json
+// Then: jq '.Soccer.ball' debug/dumps/after-drag-*.json
 // Or:   jq 'to_entries[] | select(.value.active) | .key' debug/dumps/initial-*.json
 ```
 

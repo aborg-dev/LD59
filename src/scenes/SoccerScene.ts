@@ -7,7 +7,7 @@ export const HUD_BOTTOM_H = 80;
 export const FIELD_W = 720;
 export const FIELD_H = 1280;
 
-export interface GameSceneState {
+export interface SoccerSceneState {
   active: boolean;
   ball: { x: number; y: number; radius: number };
   velocity: { x: number; y: number };
@@ -19,7 +19,7 @@ export interface GameSceneState {
   viewport: { width: number; height: number };
 }
 
-export class GameScene extends Phaser.Scene {
+export class SoccerScene extends Phaser.Scene {
   private ball!: Phaser.GameObjects.Sprite;
   private scoreText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
@@ -58,7 +58,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   constructor() {
-    super("GameScene");
+    super("Soccer");
   }
 
   create(): void {
@@ -285,10 +285,10 @@ export class GameScene extends Phaser.Scene {
     this.gameOver = true;
     this.velocityX = 0;
     this.velocityY = 0;
-    this.scene.start("GameOver", { score: this.score });
+    this.scene.start("GameOver", { score: this.score, returnScene: "Soccer" });
   }
 
-  dumpState(): GameSceneState {
+  dumpState(): SoccerSceneState {
     return {
       active: this.scene.isActive(),
       ball: { x: this.ball.x, y: this.ball.y, radius: this.radius },
@@ -308,16 +308,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   private static readonly stepMs = 16.666;
-  private static readonly stepSec = GameScene.stepMs / 1000;
+  private static readonly stepSec = SoccerScene.stepMs / 1000;
 
   update(_time: number, delta: number): void {
     if (this.gameOver) return;
 
     this.accumulator += delta;
-    while (this.accumulator >= GameScene.stepMs) {
+    while (this.accumulator >= SoccerScene.stepMs) {
       this.step();
       if (this.gameOver) return;
-      this.accumulator -= GameScene.stepMs;
+      this.accumulator -= SoccerScene.stepMs;
     }
   }
 
@@ -325,7 +325,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.ball.visible) return;
     if (this.dragging) return;
 
-    const dt = GameScene.stepSec;
+    const dt = SoccerScene.stepSec;
     const { width, height } = this.scale;
     const fieldTop = HUD_TOP_H;
     const fieldBottom = height - HUD_BOTTOM_H;
