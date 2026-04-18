@@ -5,7 +5,6 @@ const HUD_TOP_H = 70;
 const HUD_BOTTOM_H = 80;
 
 const WAVE_PREP_SEC = 5;
-const WAVE_SPAWN_SPREAD_MS = 3000;
 const WAVE_CLEAR_BONUS = 3;
 
 function waveConfig(n: number): { size: number; timeSec: number } {
@@ -25,17 +24,21 @@ const SHEEP_GRAZE_MAX_SEC = 4.0;
 const SHEEP_WALK_MIN_SEC = 0.8;
 const SHEEP_WALK_MAX_SEC = 2.2;
 const SHEEP_COHESION_RADIUS = 160;
-const SHEEP_COHESION_FORCE = 28;
+const SHEEP_COHESION_FORCE = 55;
+const ALIGNMENT_RADIUS = 130;
+const ALIGNMENT_FORCE = 100;
 const SEPARATION_RADIUS = 42;
 const SEPARATION_FORCE = 240;
 const SHEEP_DAMPING = 0.9;
+const PANIC_RADIUS = 90;
+const PANIC_INHERIT = 0.7;
 
 const WHISTLE_RADIUS = 260;
-const WHISTLE_IMPULSE = 1400;
+const WHISTLE_IMPULSE = 750;
 const WHISTLE_COOLDOWN_MS = 700;
 const WHISTLE_SCARED_MS = 700;
-const SHEEP_SCARED_MAX_SPEED = 560;
-const SHEEP_SCARED_DAMPING = 0.985;
+const SHEEP_SCARED_MAX_SPEED = 300;
+const SHEEP_SCARED_DAMPING = 0.975;
 
 const DOG_RADIUS = 22;
 const DOG_SPEED = 950;
@@ -122,7 +125,6 @@ export class ShepherdScene extends Phaser.Scene {
   private phaseTimeLeftMs = 0;
   private sheepToSpawn = 0;
   private waveSpawnOrigin = { x: 0, y: 0 };
-  private nextSpawnMs = 0;
   private waveSize = 0;
   private lastShownSec = -1;
   private bannerText!: Phaser.GameObjects.Text;
@@ -448,7 +450,7 @@ export class ShepherdScene extends Phaser.Scene {
 
   private spawnSheep(): void {
     // Scatter around the wave's shared spawn origin so the flock arrives as a group
-    const jitter = 30;
+    const jitter = 60;
     const sx = this.waveSpawnOrigin.x + Phaser.Math.Between(-jitter, jitter);
     const sy = this.waveSpawnOrigin.y + Phaser.Math.Between(-jitter, jitter);
 
@@ -622,14 +624,14 @@ export class ShepherdScene extends Phaser.Scene {
   private startWave(): void {
     const cfg = waveConfig(this.waveNumber);
     this.waveSize = cfg.size;
-    this.sheepToSpawn = cfg.size;
-    this.nextSpawnMs = 0;
+    this.sheepToSpawn = 0;
     this.phaseTimeLeftMs = cfg.timeSec * 1000;
     this.wavePhase = "active";
     this.lastShownSec = -1;
     this.waveText.setText(`Wave ${this.waveNumber}`);
     this.showBanner(`Wave ${this.waveNumber}!`);
     this.waveSpawnOrigin = this.pickSpawnOrigin();
+    for (let i = 0; i < cfg.size; i++) this.spawnSheep();
   }
 
   private pickSpawnOrigin(): { x: number; y: number } {
@@ -697,26 +699,13 @@ export class ShepherdScene extends Phaser.Scene {
     if (this.wavePhase === "prep") {
       if (this.phaseTimeLeftMs <= 0) this.startWave();
     } else {
-      // Stagger spawns across the first WAVE_SPAWN_SPREAD_MS of the wave
-      if (this.sheepToSpawn > 0) {
-        this.nextSpawnMs -= dtMs;
-        if (this.nextSpawnMs <= 0) {
-          this.spawnSheep();
-          this.sheepToSpawn--;
-          this.nextSpawnMs =
-            this.waveSize > 1 ? WAVE_SPAWN_SPREAD_MS / this.waveSize : 0;
-        }
-      }
-
-      // Wave clear? (all spawned, all penned)
-      if (this.sheepToSpawn === 0) {
-        const unpenned = this.sheep.filter((s) => !s.penned).length;
-        if (unpenned === 0) {
-          this.completeWave();
-        } else if (this.phaseTimeLeftMs <= 0) {
-          this.endGame();
-          return;
-        }
+      // Wave clear? (all penned)
+      const unpenned = this.sheep.filter((s) => !s.penned).length;
+      if (unpenned === 0) {
+        this.completeWave();
+      } else if (this.phaseTimeLeftMs <= 0) {
+        this.endGame();
+        return;
       }
     }
 
@@ -791,27 +780,9 @@ export class ShepherdScene extends Phaser.Scene {
         }
       }
 
-      // Graze/walk alternation
-      s.modeT -= dt;
-      if (s.modeT <= 0) {
-        s.grazing = !s.grazing;
-        s.modeT = s.grazing
-          ? SHEEP_GRAZE_MIN_SEC +
-            Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
-          : SHEEP_WALK_MIN_SEC +
-            Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
-        if (!s.grazing) s.wanderAngle = Math.random() * Math.PI * 2;
-      }
-      if (!s.grazing) {
-        s.wanderAngle += (Math.random() - 0.5) * 0.4;
-        ax += Math.cos(s.wanderAngle) * SHEEP_WANDER_FORCE;
-        ay += Math.sin(s.wanderAngle) * SHEEP_WANDER_FORCE;
-      }
-
-      // Cohesion — pull toward other unpenned sheep
-      let cohX = 0;
-      let cohY = 0;
-      let cohN = 0;
+      // Flock: cohesion + alignment + panic contagion in one neighbour pass
+      let cohX = 0, cohY = 0, cohN = 0;
+      let alignVx = 0, alignVy = 0, alignN = 0;
       for (let j = 0; j < this.sheep.length; j++) {
         if (i === j) continue;
         const o = this.sheep[j];
@@ -819,10 +790,14 @@ export class ShepherdScene extends Phaser.Scene {
         const odx = o.sprite.x - s.sprite.x;
         const ody = o.sprite.y - s.sprite.y;
         const od = Math.hypot(odx, ody);
-        if (od > SEPARATION_RADIUS && od < SHEEP_COHESION_RADIUS) {
-          cohX += odx;
-          cohY += ody;
-          cohN++;
+        if (od < SEPARATION_RADIUS || od > SHEEP_COHESION_RADIUS) continue;
+        cohX += odx; cohY += ody; cohN++;
+        if (od < ALIGNMENT_RADIUS) {
+          alignVx += o.vx; alignVy += o.vy; alignN++;
+        }
+        // Panic spreads through the flock like a wave
+        if (od < PANIC_RADIUS && o.scaredMs > s.scaredMs) {
+          s.scaredMs = Math.max(s.scaredMs, o.scaredMs * PANIC_INHERIT);
         }
       }
       if (cohN > 0) {
@@ -831,6 +806,28 @@ export class ShepherdScene extends Phaser.Scene {
           ax += (cohX / cm) * SHEEP_COHESION_FORCE;
           ay += (cohY / cm) * SHEEP_COHESION_FORCE;
         }
+      }
+      if (alignN > 0) {
+        const am = Math.hypot(alignVx, alignVy);
+        if (am > 0.01) {
+          ax += (alignVx / am) * ALIGNMENT_FORCE;
+          ay += (alignVy / am) * ALIGNMENT_FORCE;
+        }
+      }
+
+      // Wander/graze — only when isolated (flock members follow alignment instead)
+      s.modeT -= dt;
+      if (s.modeT <= 0) {
+        s.grazing = alignN === 0 ? !s.grazing : false;
+        s.modeT = s.grazing
+          ? SHEEP_GRAZE_MIN_SEC + Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
+          : SHEEP_WALK_MIN_SEC + Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
+        if (!s.grazing) s.wanderAngle = Math.random() * Math.PI * 2;
+      }
+      if (!s.grazing && alignN === 0) {
+        s.wanderAngle += (Math.random() - 0.5) * 0.4;
+        ax += Math.cos(s.wanderAngle) * SHEEP_WANDER_FORCE;
+        ay += Math.sin(s.wanderAngle) * SHEEP_WANDER_FORCE;
       }
 
       // Scared tick (set by whistle)
@@ -881,6 +878,29 @@ export class ShepherdScene extends Phaser.Scene {
         this.coins++;
         this.updateCoinText();
         this.sound.play("score");
+      }
+    }
+
+    // Positional overlap resolution — push overlapping sheep apart directly
+    const minSep = SHEEP_RADIUS * 2;
+    for (let i = 0; i < this.sheep.length; i++) {
+      const a = this.sheep[i];
+      if (a.penned) continue;
+      for (let j = i + 1; j < this.sheep.length; j++) {
+        const b = this.sheep[j];
+        if (b.penned) continue;
+        const dx = b.sprite.x - a.sprite.x;
+        const dy = b.sprite.y - a.sprite.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < minSep && dist > 0.01) {
+          const push = (minSep - dist) / 2;
+          const nx = dx / dist;
+          const ny = dy / dist;
+          a.sprite.x -= nx * push;
+          a.sprite.y -= ny * push;
+          b.sprite.x += nx * push;
+          b.sprite.y += ny * push;
+        }
       }
     }
   }
