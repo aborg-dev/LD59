@@ -11,7 +11,13 @@ const DOG_RADIUS = 22;
 
 const DOG_SPEED = 360;
 const SHEEP_MAX_SPEED = 220;
-const SHEEP_WANDER_SPEED = 28;
+const SHEEP_WANDER_FORCE = 140;
+const SHEEP_GRAZE_MIN_SEC = 1.5;
+const SHEEP_GRAZE_MAX_SEC = 4.0;
+const SHEEP_WALK_MIN_SEC = 0.8;
+const SHEEP_WALK_MAX_SEC = 2.2;
+const SHEEP_COHESION_RADIUS = 160;
+const SHEEP_COHESION_FORCE = 28;
 const FEAR_RADIUS = 180;
 const FLEE_FORCE = 520;
 const SEPARATION_RADIUS = 42;
@@ -30,7 +36,8 @@ interface Sheep {
   vx: number;
   vy: number;
   penned: boolean;
-  wanderT: number;
+  grazing: boolean;
+  modeT: number;
   wanderAngle: number;
   scaredMs: number;
 }
@@ -147,7 +154,8 @@ export class ShepherdScene extends Phaser.Scene {
         vx: 0,
         vy: 0,
         penned: false,
-        wanderT: Math.random() * 2,
+        grazing: Math.random() < 0.5,
+        modeT: Math.random() * 3,
         wanderAngle: Math.random() * Math.PI * 2,
         scaredMs: 0,
       });
@@ -456,14 +464,47 @@ export class ShepherdScene extends Phaser.Scene {
         }
       }
 
-      // Wander — slow idle drift
-      s.wanderT -= dt;
-      if (s.wanderT <= 0) {
-        s.wanderAngle += (Math.random() - 0.5) * 1.6;
-        s.wanderT = 0.5 + Math.random();
+      // Graze/walk alternation — sheep mostly stand, then drift briefly
+      s.modeT -= dt;
+      if (s.modeT <= 0) {
+        s.grazing = !s.grazing;
+        s.modeT = s.grazing
+          ? SHEEP_GRAZE_MIN_SEC +
+            Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
+          : SHEEP_WALK_MIN_SEC +
+            Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
+        if (!s.grazing) s.wanderAngle = Math.random() * Math.PI * 2;
       }
-      ax += Math.cos(s.wanderAngle) * SHEEP_WANDER_SPEED;
-      ay += Math.sin(s.wanderAngle) * SHEEP_WANDER_SPEED;
+      if (!s.grazing) {
+        s.wanderAngle += (Math.random() - 0.5) * 0.4;
+        ax += Math.cos(s.wanderAngle) * SHEEP_WANDER_FORCE;
+        ay += Math.sin(s.wanderAngle) * SHEEP_WANDER_FORCE;
+      }
+
+      // Cohesion — gentle pull toward nearby sheep (flocking)
+      let cohX = 0;
+      let cohY = 0;
+      let cohN = 0;
+      for (let j = 0; j < this.sheep.length; j++) {
+        if (i === j) continue;
+        const o = this.sheep[j];
+        if (o.penned) continue;
+        const odx = o.sprite.x - s.sprite.x;
+        const ody = o.sprite.y - s.sprite.y;
+        const od = Math.hypot(odx, ody);
+        if (od > SEPARATION_RADIUS && od < SHEEP_COHESION_RADIUS) {
+          cohX += odx;
+          cohY += ody;
+          cohN++;
+        }
+      }
+      if (cohN > 0) {
+        const cm = Math.hypot(cohX, cohY);
+        if (cm > 0.01) {
+          ax += (cohX / cm) * SHEEP_COHESION_FORCE;
+          ay += (cohY / cm) * SHEEP_COHESION_FORCE;
+        }
+      }
 
       // Scared tick (set by bark)
       if (s.scaredMs > 0) s.scaredMs = Math.max(0, s.scaredMs - dt * 1000);
