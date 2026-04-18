@@ -88,7 +88,7 @@ describe("shepherd wave-based herding", () => {
     expect(after.x).toBeGreaterThan(before.x);
   });
 
-  it("places a whistle tower and pushes sheep toward the pen", async () => {
+  it("places a hay pile and lures sheep toward it", async () => {
     await game.startScene("Shepherd");
 
     await game.eval_(`(() => {
@@ -96,27 +96,26 @@ describe("shepherd wave-based herding", () => {
       for (const s of gs.sheep) s.sprite.destroy();
       gs.sheep = [];
       gs.coins = 10;
-      gs.buildMode = true;
-      const tx = gs.penX + gs.penR + 60;
-      const ty = gs.penY;
-      gs.tryPlaceTower(tx, ty);
+      gs.placing = true;
+      const hx = gs.penX + gs.penR + 60;
+      const hy = gs.penY;
+      gs.tryPlaceHay(hx, hy);
       gs.dog.x = 60;
       gs.dog.y = 100;
       gs.targetX = gs.dog.x;
       gs.targetY = gs.dog.y;
       gs.spawnSheep();
       const s = gs.sheep[gs.sheep.length - 1];
-      s.sprite.x = tx + 20;
-      s.sprite.y = ty;
+      s.sprite.x = hx + 90;
+      s.sprite.y = hy;
       s.vx = 0;
       s.vy = 0;
       s.modeT = 999;
       s.grazing = true;
-      gs.towers[0].pulseMs = 999999;
     })()`);
 
     const st0 = await shepherdState();
-    expect(st0.towers.length).toBe(1);
+    expect(st0.hayPiles.length).toBe(1);
     expect(st0.coins).toBe(7);
 
     const sheepBefore = st0.sheep.at(-1);

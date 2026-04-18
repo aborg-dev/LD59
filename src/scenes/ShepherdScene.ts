@@ -41,11 +41,12 @@ const BARK_SCARED_MS = 700;
 const SHEEP_SCARED_MAX_SPEED = 560;
 const SHEEP_SCARED_DAMPING = 0.985;
 
-const TOWER_COST = 3;
-const TOWER_RADIUS = 240;
-const TOWER_PULSE_MS = 1600;
-const TOWER_IMPULSE = 260;
-const TOWER_VISUAL_R = 18;
+const HAY_COST = 3;
+const HAY_RADIUS = 130;
+const HAY_EAT_DIST = 45;
+const HAY_FORCE = 900;
+const HAY_PUSH_FORCE = 1400;
+const HAY_VISUAL_R = 16;
 
 interface Sheep {
   sprite: Phaser.GameObjects.Arc;
@@ -58,13 +59,11 @@ interface Sheep {
   scaredMs: number;
 }
 
-interface Tower {
+interface HayPile {
   x: number;
   y: number;
   gfx: Phaser.GameObjects.Arc;
   ring: Phaser.GameObjects.Arc;
-  pulseRing: Phaser.GameObjects.Arc;
-  pulseMs: number;
 }
 
 export interface ShepherdSceneState {
@@ -72,10 +71,10 @@ export interface ShepherdSceneState {
   dog: { x: number; y: number };
   sheep: { x: number; y: number; penned: boolean }[];
   pen: { x: number; y: number; radius: number };
-  towers: { x: number; y: number }[];
+  hayPiles: { x: number; y: number }[];
   score: number;
   coins: number;
-  buildMode: boolean;
+  placing: boolean;
   wave: {
     number: number;
     phase: "prep" | "active";
@@ -92,7 +91,7 @@ export interface ShepherdSceneState {
 export class ShepherdScene extends Phaser.Scene {
   private dog!: Phaser.GameObjects.Arc;
   private sheep: Sheep[] = [];
-  private towers: Tower[] = [];
+  private hayPiles: HayPile[] = [];
   private score = 0;
   private coins = 0;
   private accumulator = 0;
@@ -101,8 +100,8 @@ export class ShepherdScene extends Phaser.Scene {
   private targetY = 0;
   private barkCooldownMs = 0;
   private barkRing!: Phaser.GameObjects.Arc;
-  private buildMode = false;
-  private buildPreview!: Phaser.GameObjects.Arc;
+  private placing = false;
+  private placePreview!: Phaser.GameObjects.Arc;
 
   // Wave state
   private waveNumber = 1;
@@ -135,7 +134,7 @@ export class ShepherdScene extends Phaser.Scene {
   private coinText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
   private barkBtn!: Phaser.GameObjects.Text;
-  private buildBtn!: Phaser.GameObjects.Text;
+  private hayBtn!: Phaser.GameObjects.Text;
 
   private fieldTop = 0;
   private fieldBottom = 0;
@@ -156,8 +155,8 @@ export class ShepherdScene extends Phaser.Scene {
     this.gameOver = false;
     this.barkCooldownMs = 0;
     this.sheep = [];
-    this.towers = [];
-    this.buildMode = false;
+    this.hayPiles = [];
+    this.placing = false;
     this.waveNumber = 1;
     this.wavePhase = "prep";
     this.phaseTimeLeftMs = WAVE_PREP_SEC * 1000;
@@ -203,16 +202,16 @@ export class ShepherdScene extends Phaser.Scene {
       .setDepth(9);
     this.barkRing.setStrokeStyle(3, 0xffff88, 0);
 
-    // Build preview (hidden until build mode)
-    this.buildPreview = this.add
-      .circle(0, 0, TOWER_RADIUS, 0x66ccff, 0.08)
+    // Hay placement preview (hidden until placing mode)
+    this.placePreview = this.add
+      .circle(0, 0, HAY_RADIUS, 0xffd966, 0.1)
       .setDepth(4);
-    this.buildPreview.setStrokeStyle(2, 0x66ccff, 0.6);
-    this.buildPreview.setVisible(false);
+    this.placePreview.setStrokeStyle(2, 0xffd966, 0.7);
+    this.placePreview.setVisible(false);
 
     // Spacebar triggers bark; WASD + arrows drive the dog
     this.input.keyboard?.on("keydown-SPACE", () => this.bark());
-    this.input.keyboard?.on("keydown-B", () => this.toggleBuildMode());
+    this.input.keyboard?.on("keydown-H", () => this.togglePlacing());
     const kb = this.input.keyboard;
     if (kb) {
       const K = Phaser.Input.Keyboard.KeyCodes;
@@ -230,48 +229,31 @@ export class ShepherdScene extends Phaser.Scene {
       };
     }
 
-    // Input — tap/drag in field to set dog target, double-tap to bark,
-    // OR in build mode, tap places a tower.
-    let lastTapTime = 0;
-    let lastTapX = 0;
-    let lastTapY = 0;
+    // Input — dog auto-follows the cursor; click barks.
+    // In placing mode, click drops a hay pile and the dog holds position.
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       if (this.gameOver) return;
       if (p.y < this.fieldTop || p.y > this.fieldBottom) return;
-      if (this.buildMode) {
-        this.tryPlaceTower(p.x, p.y);
+      if (this.placing) {
+        this.tryPlaceHay(p.x, p.y);
         return;
       }
-      const now = this.time.now;
-      if (
-        now - lastTapTime < 300 &&
-        Math.hypot(p.x - lastTapX, p.y - lastTapY) < 80
-      ) {
-        this.bark();
-        lastTapTime = 0;
-        return;
-      }
-      lastTapTime = now;
-      lastTapX = p.x;
-      lastTapY = p.y;
-      this.targetX = p.x;
-      this.targetY = p.y;
+      this.bark();
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
       if (this.gameOver) return;
       if (p.y < this.fieldTop || p.y > this.fieldBottom) {
-        this.buildPreview.setVisible(false);
+        this.placePreview.setVisible(false);
         return;
       }
-      if (this.buildMode) {
-        this.buildPreview.setVisible(true);
-        this.buildPreview.setPosition(p.x, p.y);
-        const ok = this.canPlaceTower(p.x, p.y);
-        this.buildPreview.setFillStyle(ok ? 0x66ccff : 0xff6666, 0.08);
-        this.buildPreview.setStrokeStyle(2, ok ? 0x66ccff : 0xff6666, 0.6);
+      if (this.placing) {
+        this.placePreview.setVisible(true);
+        this.placePreview.setPosition(p.x, p.y);
+        const ok = this.canPlaceHay(p.x, p.y);
+        this.placePreview.setFillStyle(ok ? 0xffd966 : 0xff6666, 0.1);
+        this.placePreview.setStrokeStyle(2, ok ? 0xffd966 : 0xff6666, 0.7);
         return;
       }
-      if (!p.isDown) return;
       this.targetX = p.x;
       this.targetY = p.y;
     });
@@ -334,7 +316,7 @@ export class ShepherdScene extends Phaser.Scene {
 
     this.showBanner(`Wave ${this.waveNumber} — prep`);
 
-    // --- Bottom HUD: BARK | BUILD | MENU ---
+    // --- Bottom HUD: BARK | HAY | MENU ---
     this.add
       .rectangle(width / 2, height, width, HUD_BOTTOM_H, 0x111122)
       .setOrigin(0.5, 1)
@@ -362,16 +344,16 @@ export class ShepherdScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     this.barkBtn.on("pointerdown", () => this.bark());
 
-    this.buildBtn = this.add
-      .text(width * 0.5, btnY, `BUILD $${TOWER_COST}`, {
+    this.hayBtn = this.add
+      .text(width * 0.5, btnY, `HAY $${HAY_COST}`, {
         ...btnStyle,
-        backgroundColor: "#305080",
+        backgroundColor: "#8a6a1f",
         fontSize: 24,
       })
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
-    this.buildBtn.on("pointerdown", () => this.toggleBuildMode());
+    this.hayBtn.on("pointerdown", () => this.togglePlacing());
 
     const menuBtn = this.add
       .text(width * 0.8, btnY, "MENU", btnStyle)
@@ -384,58 +366,46 @@ export class ShepherdScene extends Phaser.Scene {
     });
   }
 
-  private toggleBuildMode(): void {
+  private togglePlacing(): void {
     if (this.gameOver) return;
-    this.buildMode = !this.buildMode;
-    this.buildPreview.setVisible(false);
-    this.buildBtn.setBackgroundColor(this.buildMode ? "#66aaff" : "#305080");
+    this.placing = !this.placing;
+    this.placePreview.setVisible(false);
+    this.hayBtn.setBackgroundColor(this.placing ? "#d4a84a" : "#8a6a1f");
     this.sound.play("pop");
   }
 
-  private canPlaceTower(x: number, y: number): boolean {
-    if (this.coins < TOWER_COST) return false;
+  private canPlaceHay(x: number, y: number): boolean {
+    if (this.coins < HAY_COST) return false;
     // Can't place in HUD
     if (y < this.fieldTop + 20 || y > this.fieldBottom - 20) return false;
     if (x < 20 || x > this.scale.width - 20) return false;
     // Can't place inside pen
     if (Math.hypot(x - this.penX, y - this.penY) < this.penR + 30) return false;
     // Spacing
-    for (const t of this.towers) {
-      if (Math.hypot(x - t.x, y - t.y) < 60) return false;
+    for (const h of this.hayPiles) {
+      if (Math.hypot(x - h.x, y - h.y) < 50) return false;
     }
     return true;
   }
 
-  private tryPlaceTower(x: number, y: number): void {
-    if (!this.canPlaceTower(x, y)) {
+  private tryPlaceHay(x: number, y: number): void {
+    if (!this.canPlaceHay(x, y)) {
       this.sound.play("pop");
       return;
     }
-    this.coins -= TOWER_COST;
+    this.coins -= HAY_COST;
     this.updateCoinText();
 
-    const ring = this.add
-      .circle(x, y, TOWER_RADIUS, 0x66ccff, 0.04)
-      .setDepth(3);
-    ring.setStrokeStyle(1, 0x66ccff, 0.3);
+    const ring = this.add.circle(x, y, HAY_RADIUS, 0xffd966, 0.06).setDepth(3);
+    ring.setStrokeStyle(1, 0xffd966, 0.4);
 
-    const pulseRing = this.add.circle(x, y, 10, 0xffffff, 0).setDepth(4);
-    pulseRing.setStrokeStyle(3, 0x99eeff, 0);
+    const gfx = this.add.circle(x, y, HAY_VISUAL_R, 0xe6c85a).setDepth(8);
+    gfx.setStrokeStyle(3, 0x6b4a1f);
 
-    const gfx = this.add.circle(x, y, TOWER_VISUAL_R, 0x6688cc).setDepth(8);
-    gfx.setStrokeStyle(3, 0x112244);
+    // Darker tuft on top for a pile-of-hay feel
+    this.add.circle(x, y - 4, HAY_VISUAL_R * 0.5, 0xb8964a).setDepth(9);
 
-    // Small yellow nib to evoke a whistle
-    this.add.circle(x, y, TOWER_VISUAL_R * 0.4, 0xffe066).setDepth(9);
-
-    this.towers.push({
-      x,
-      y,
-      gfx,
-      ring,
-      pulseRing,
-      pulseMs: Math.random() * TOWER_PULSE_MS,
-    });
+    this.hayPiles.push({ x, y, gfx, ring });
     this.sound.play("score");
   }
 
@@ -521,38 +491,33 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   /**
-   * Tower pulse — push nearby sheep toward the pen center.
-   * Runs once per tower per pulse cycle.
+   * Hay pull/push combined into one step. Sheep are drawn in from HAY_RADIUS
+   * toward HAY_EAT_DIST, then pushed back out if they get closer than that,
+   * so they cluster in a ring around the pile instead of sitting on it.
    */
-  private towerPulse(t: Tower): void {
-    for (const s of this.sheep) {
-      if (s.penned) continue;
-      const dx = s.sprite.x - t.x;
-      const dy = s.sprite.y - t.y;
+  private hayForce(sx: number, sy: number): { ax: number; ay: number } {
+    let ax = 0;
+    let ay = 0;
+    for (const h of this.hayPiles) {
+      const dx = h.x - sx;
+      const dy = h.y - sy;
       const d = Math.hypot(dx, dy);
-      if (d > TOWER_RADIUS || d < 0.01) continue;
-      // Push toward pen
-      const tdx = this.penX - s.sprite.x;
-      const tdy = this.penY - s.sprite.y;
-      const td = Math.hypot(tdx, tdy) || 1;
-      const falloff = 1 - d / TOWER_RADIUS;
-      const k = falloff * TOWER_IMPULSE;
-      s.vx += (tdx / td) * k;
-      s.vy += (tdy / td) * k;
+      if (d > HAY_RADIUS || d < 0.01) continue;
+      const nx = dx / d;
+      const ny = dy / d;
+      if (d > HAY_EAT_DIST) {
+        const t = (d - HAY_EAT_DIST) / (HAY_RADIUS - HAY_EAT_DIST);
+        const k = t * HAY_FORCE;
+        ax += nx * k;
+        ay += ny * k;
+      } else {
+        const t = 1 - d / HAY_EAT_DIST;
+        const k = t * HAY_PUSH_FORCE;
+        ax -= nx * k;
+        ay -= ny * k;
+      }
     }
-
-    // Pulse ring visual
-    t.pulseRing.setRadius(10);
-    t.pulseRing.setStrokeStyle(3, 0x99eeff, 0.9);
-    this.tweens.add({
-      targets: t.pulseRing,
-      radius: TOWER_RADIUS,
-      strokeAlpha: 0,
-      duration: 500,
-      onComplete: () => {
-        t.pulseRing.setStrokeStyle(3, 0x99eeff, 0);
-      },
-    });
+    return { ax, ay };
   }
 
   private endGame(): void {
@@ -575,10 +540,10 @@ export class ShepherdScene extends Phaser.Scene {
         penned: s.penned,
       })),
       pen: { x: this.penX, y: this.penY, radius: this.penR },
-      towers: this.towers.map((t) => ({ x: t.x, y: t.y })),
+      hayPiles: this.hayPiles.map((h) => ({ x: h.x, y: h.y })),
       score: this.score,
       coins: this.coins,
-      buildMode: this.buildMode,
+      placing: this.placing,
       wave: {
         number: this.waveNumber,
         phase: this.wavePhase,
@@ -695,15 +660,6 @@ export class ShepherdScene extends Phaser.Scene {
       }
     }
 
-    // Tower pulses
-    for (const t of this.towers) {
-      t.pulseMs += dtMs;
-      if (t.pulseMs >= TOWER_PULSE_MS) {
-        t.pulseMs = 0;
-        this.towerPulse(t);
-      }
-    }
-
     // Dog movement — keyboard overrides the tap target when any key is held
     let kx = 0;
     let ky = 0;
@@ -721,7 +677,7 @@ export class ShepherdScene extends Phaser.Scene {
       this.dog.y += (ky / klen) * step;
       this.targetX = this.dog.x;
       this.targetY = this.dog.y;
-    } else if (!this.buildMode) {
+    } else {
       const ddx = this.targetX - this.dog.x;
       const ddy = this.targetY - this.dog.y;
       const dDist = Math.hypot(ddx, ddy);
@@ -749,6 +705,12 @@ export class ShepherdScene extends Phaser.Scene {
         ax += (fdx / fd) * strength;
         ay += (fdy / fd) * strength;
       }
+
+      // Hay pulls sheep in from the outer radius and holds them in a ring
+      // just outside the pile.
+      const hay = this.hayForce(s.sprite.x, s.sprite.y);
+      ax += hay.ax;
+      ay += hay.ay;
 
       // Separation from other sheep
       for (let j = 0; j < this.sheep.length; j++) {
