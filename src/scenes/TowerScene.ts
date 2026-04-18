@@ -293,13 +293,15 @@ export class TowerScene extends Phaser.Scene {
     const { terminals, range } = this.levels[this.levelIndex];
     this.terminalGfx.clear();
 
+    const level = this.levels[this.levelIndex];
     for (let i = 0; i < terminals.length; i++) {
       const t = terminals[i];
       const color = TERMINAL_COLORS[i % TERMINAL_COLORS.length];
+      const pts = this.rangePoints(t.x, t.y, range, level);
       this.terminalGfx.fillStyle(color, 0.07);
-      this.terminalGfx.fillCircle(t.x, t.y, range);
+      this.terminalGfx.fillPoints(pts, true);
       this.terminalGfx.lineStyle(2, color, 0.22);
-      this.terminalGfx.strokeCircle(t.x, t.y, range);
+      this.terminalGfx.strokePoints(pts, true);
     }
     for (let i = 0; i < terminals.length; i++) {
       const t = terminals[i];
@@ -377,14 +379,88 @@ export class TowerScene extends Phaser.Scene {
     this.placeTower(x, y);
   }
 
+  private rayRectDist(
+    ox: number, oy: number,
+    dx: number, dy: number,
+    rx: number, ry: number,
+    rw: number, rh: number,
+  ): number | null {
+    let tEnter = 0;
+    let tExit = Infinity;
+    if (Math.abs(dx) < 1e-9) {
+      if (ox < rx || ox > rx + rw) return null;
+    } else {
+      let t1 = (rx - ox) / dx;
+      let t2 = (rx + rw - ox) / dx;
+      if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+      tEnter = Math.max(tEnter, t1);
+      tExit = Math.min(tExit, t2);
+    }
+    if (Math.abs(dy) < 1e-9) {
+      if (oy < ry || oy > ry + rh) return null;
+    } else {
+      let t1 = (ry - oy) / dy;
+      let t2 = (ry + rh - oy) / dy;
+      if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+      tEnter = Math.max(tEnter, t1);
+      tExit = Math.min(tExit, t2);
+    }
+    if (tEnter > tExit || tEnter <= 0) return null;
+    return tEnter;
+  }
+
+  private rayCircleDist(
+    ox: number, oy: number,
+    dx: number, dy: number,
+    cx: number, cy: number,
+    r: number,
+  ): number | null {
+    const fx = ox - cx;
+    const fy = oy - cy;
+    const b = 2 * (fx * dx + fy * dy);
+    const c = fx * fx + fy * fy - r * r;
+    const disc = b * b - 4 * c;
+    if (disc < 0) return null;
+    const t = (-b - Math.sqrt(disc)) / 2;
+    if (t <= 0) return null;
+    return t;
+  }
+
+  private rangePoints(
+    x: number,
+    y: number,
+    range: number,
+    level: TowerLevel,
+  ): Phaser.Math.Vector2[] {
+    const NUM_RAYS = 360;
+    const points: Phaser.Math.Vector2[] = [];
+    for (let i = 0; i < NUM_RAYS; i++) {
+      const angle = (i / NUM_RAYS) * Math.PI * 2;
+      const dx = Math.cos(angle);
+      const dy = Math.sin(angle);
+      let dist = range;
+      for (const o of level.obstacles) {
+        const d = this.rayRectDist(x, y, dx, dy, o.x, o.y, o.w, o.h);
+        if (d !== null && d < dist) dist = d;
+      }
+      for (const jam of level.inhibitors ?? []) {
+        const d = this.rayCircleDist(x, y, dx, dy, jam.x, jam.y, jam.radius);
+        if (d !== null && d < dist) dist = d;
+      }
+      points.push(new Phaser.Math.Vector2(x + dx * dist, y + dy * dist));
+    }
+    return points;
+  }
+
   private placeTower(x: number, y: number): void {
     const level = this.levels[this.levelIndex];
 
     const rangeGfx = this.add.graphics().setDepth(2);
+    const rangePts = this.rangePoints(x, y, level.range, level);
     rangeGfx.fillStyle(COLOR_RANGE, 0.06);
-    rangeGfx.fillCircle(x, y, level.range);
+    rangeGfx.fillPoints(rangePts, true);
     rangeGfx.lineStyle(1, COLOR_RANGE, 0.2);
-    rangeGfx.strokeCircle(x, y, level.range);
+    rangeGfx.strokePoints(rangePts, true);
 
     const gfx = this.add.graphics().setDepth(7);
     gfx.fillStyle(COLOR_TOWER_EDGE, 1);
