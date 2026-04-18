@@ -153,15 +153,17 @@ export class SoccerScene extends Phaser.Scene {
 
     const btnY = fieldBottom + HUD_BOTTOM_H / 2;
 
+    const btnStyle = {
+      fontFamily: FONT_BODY,
+      fontSize: 22,
+      color: "#ffffff",
+      backgroundColor: "#333344",
+      padding: { left: 18, right: 18, top: 10, bottom: 10 },
+      resolution: TEXT_RESOLUTION,
+    };
+
     const restartText = this.add
-      .text(width / 2 - 130, btnY, "RESTART", {
-        fontFamily: FONT_BODY,
-        fontSize: 22,
-        color: "#ffffff",
-        backgroundColor: "#333344",
-        padding: { left: 18, right: 18, top: 10, bottom: 10 },
-        resolution: TEXT_RESOLUTION,
-      })
+      .text(width / 2 - 200, btnY, "RESTART", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
@@ -171,16 +173,20 @@ export class SoccerScene extends Phaser.Scene {
       this.scene.restart();
     });
 
+    const menuText = this.add
+      .text(width / 2, btnY, "MENU", btnStyle)
+      .setOrigin(0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+
+    menuText.on("pointerdown", () => {
+      this.sound.play("pop");
+      this.scene.start("MainMenu");
+    });
+
     const muted = this.game.sound.mute;
     this.muteText = this.add
-      .text(width / 2 + 130, btnY, muted ? "UNMUTE" : "MUTE", {
-        fontFamily: FONT_BODY,
-        fontSize: 22,
-        color: "#ffffff",
-        backgroundColor: "#333344",
-        padding: { left: 18, right: 18, top: 10, bottom: 10 },
-        resolution: TEXT_RESOLUTION,
-      })
+      .text(width / 2 + 200, btnY, muted ? "UNMUTE" : "MUTE", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
