@@ -22,7 +22,7 @@ export class GameOver extends Scene {
     this.cameras.main.setBackgroundColor(0x1a1a2e);
 
     this.add
-      .text(width / 2, height / 2 - 100, "Time's Up!", {
+      .text(width / 2, height / 2 - 100, "Game Over", {
         fontFamily: FONT_UI,
         fontSize: 48,
         color: "#ffffff",
@@ -49,7 +49,7 @@ export class GameOver extends Scene {
       .text(
         width / 2,
         height / 2 + 60,
-        this.finalScore === 1 ? "goal" : "goals",
+        "sheep penned",
         {
           fontFamily: FONT_BODY,
           fontSize: 28,
