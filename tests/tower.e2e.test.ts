@@ -106,7 +106,10 @@ describe("tower puzzle placement and connectivity", () => {
     await game.startScene("Tower");
     await game.advanceTime(50);
 
-    // Level 5 is the first 3-terminal level (index 5).
+    // Level 5 is the first 3-terminal level (index 5). The two top terminals
+    // are too far apart for any single relay to reach all three within range,
+    // so two relays are needed: one between the top pair, one toward the
+    // bottom terminal.
     await game.loadTowerLevel(5);
     await game.advanceTime(50);
 
@@ -114,18 +117,19 @@ describe("tower puzzle placement and connectivity", () => {
     expect(s.terminalCount).toBe(3);
     expect(s.connected).toBe(false);
 
-    // Place a single relay at the centroid of the three terminals
     await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Tower');
-      const ts = gs.levels[5].terminals;
-      const cx = (ts[0].x + ts[1].x + ts[2].x) / 3;
-      const cy = (ts[0].y + ts[1].y + ts[2].y) / 3;
-      gs.onFieldTap(cx, cy);
+      const [a, b, c] = gs.levels[5].terminals;
+      // Place a relay at the midpoint of each top-terminal-to-bottom segment;
+      // both midpoints are inside range of their two endpoints, so the spanning
+      // tree A—M1—C—M2—B forms.
+      gs.onFieldTap((a.x + c.x) / 2, (a.y + c.y) / 2);
+      gs.onFieldTap((b.x + c.x) / 2, (b.y + c.y) / 2);
     })()`);
     await game.advanceTime(50);
 
     s = await towerState();
-    expect(s.towers.length).toBe(1);
+    expect(s.towers.length).toBe(2);
     expect(s.connected).toBe(true);
   });
 

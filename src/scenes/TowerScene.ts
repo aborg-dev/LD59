@@ -1,9 +1,17 @@
 import * as Phaser from "phaser";
 import { FONT_BODY, FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
-import { TOWER_LEVELS, type TowerLevel } from "../levels/tower/index.js";
+import {
+  cleanLevel,
+  TOWER_LEVELS,
+  type TowerInhibitor,
+  type TowerLevel,
+  type TowerObstacle,
+  type TowerTerminal,
+} from "../levels/tower/index.js";
 
 const HUD_TOP_H = 70;
 const HUD_BOTTOM_H = 80;
+const EDITOR_PALETTE_H = 56;
 
 const TOWER_VISUAL_R = 18;
 const TERMINAL_VISUAL_R = 28;
@@ -22,11 +30,48 @@ const COLOR_INHIBITOR = 0xff3355;
 const COLOR_INHIBITOR_EDGE = 0x661122;
 const TERMINAL_COLORS = [0x4ecdc4, 0xff6b6b, 0x3dd14a];
 
+const EDITOR_HANDLE_COLOR = 0xffff66;
+const EDITOR_HANDLE_ACTIVE = 0xffffff;
+const EDITOR_PALETTE_BG = 0x1b1b2c;
+const GRID_SNAP = 10;
+
+const RANGE_MIN = 120;
+const RANGE_MAX = 720;
+const RANGE_STEP = 20;
+
+const DEFAULT_OBSTACLE_W = 160;
+const DEFAULT_OBSTACLE_H = 100;
+const MIN_OBSTACLE_W = 40;
+const MIN_OBSTACLE_H = 40;
+const DEFAULT_INHIBITOR_RADIUS = 120;
+const MIN_INHIBITOR_RADIUS = 30;
+const OBSTACLE_CORNER_SIZE = 18;
+
 interface Tower {
   x: number;
   y: number;
   gfx: Phaser.GameObjects.Graphics;
   rangeGfx: Phaser.GameObjects.Graphics;
+}
+
+type PlaceMode = "terminal" | "obstacle" | "inhibitor" | "delete" | null;
+type HandleKind =
+  | "terminal"
+  | "obstacleBody"
+  | "obstacleCorner"
+  | "inhibitorBody"
+  | "inhibitorRadius";
+
+interface TerminalHandleSet {
+  body: Phaser.GameObjects.Arc;
+}
+interface ObstacleHandleSet {
+  body: Phaser.GameObjects.Zone;
+  corner: Phaser.GameObjects.Rectangle;
+}
+interface InhibitorHandleSet {
+  body: Phaser.GameObjects.Arc;
+  radius: Phaser.GameObjects.Arc;
 }
 
 export interface TowerSceneState {
@@ -37,6 +82,12 @@ export interface TowerSceneState {
   towers: { x: number; y: number }[];
   connected: boolean;
   viewport: { width: number; height: number };
+  editor?: {
+    active: boolean;
+    dirty: boolean;
+    placeMode: PlaceMode;
+    draft: TowerLevel | null;
+  };
 }
 
 export class TowerScene extends Phaser.Scene {
@@ -49,6 +100,7 @@ export class TowerScene extends Phaser.Scene {
   private fieldTop = HUD_TOP_H;
   private fieldBottom = 0;
 
+  private fieldGrid!: Phaser.GameObjects.Graphics;
   private obstacleGfx!: Phaser.GameObjects.Graphics;
   private inhibitorGfx!: Phaser.GameObjects.Graphics;
   private linkGfx!: Phaser.GameObjects.Graphics;
@@ -61,6 +113,21 @@ export class TowerScene extends Phaser.Scene {
   private hintText!: Phaser.GameObjects.Text;
   private nextBtn!: Phaser.GameObjects.Text;
   private muteText!: Phaser.GameObjects.Text;
+  private resetBtn!: Phaser.GameObjects.Text;
+  private editBtn: Phaser.GameObjects.Text | null = null;
+
+  private editorActive = false;
+  private draft: TowerLevel | null = null;
+  private dirty = false;
+  private placeMode: PlaceMode = null;
+  private paletteGroup: Phaser.GameObjects.GameObject[] = [];
+  private paletteButtons: Map<string, Phaser.GameObjects.Text> = new Map();
+  private rangeLabel: Phaser.GameObjects.Text | null = null;
+  private saveStatusText: Phaser.GameObjects.Text | null = null;
+  private saveStatusTimer = 0;
+  private terminalHandles: TerminalHandleSet[] = [];
+  private obstacleHandles: ObstacleHandleSet[] = [];
+  private inhibitorHandles: InhibitorHandleSet[] = [];
 
   constructor() {
     super("Tower");
@@ -70,34 +137,28 @@ export class TowerScene extends Phaser.Scene {
     const { width, height } = this.scale;
     this.fieldTop = HUD_TOP_H;
     this.fieldBottom = height - HUD_BOTTOM_H;
-    const fieldH = this.fieldBottom - this.fieldTop;
 
     this.towers = [];
     this.connected = false;
     this.pathEdges = [];
     this.levelIndex = data?.startLevel ?? 0;
+    this.editorActive = false;
+    this.draft = null;
+    this.dirty = false;
+    this.placeMode = null;
+    this.terminalHandles = [];
+    this.obstacleHandles = [];
+    this.inhibitorHandles = [];
+    this.paletteGroup = [];
+    this.paletteButtons.clear();
+    this.input.mouse?.disableContextMenu();
 
     this.add
-      .rectangle(
-        width / 2,
-        this.fieldTop + fieldH / 2,
-        width,
-        fieldH,
-        COLOR_FIELD,
-      )
+      .rectangle(width / 2, height / 2, width, height, COLOR_FIELD)
       .setDepth(0);
 
-    const grid = this.add.graphics().setDepth(1);
-    grid.lineStyle(1, COLOR_GRID, 0.7);
-    for (let x = 40; x < width; x += 40) {
-      grid.moveTo(x, this.fieldTop);
-      grid.lineTo(x, this.fieldBottom);
-    }
-    for (let y = this.fieldTop + 40; y < this.fieldBottom; y += 40) {
-      grid.moveTo(0, y);
-      grid.lineTo(width, y);
-    }
-    grid.strokePath();
+    this.fieldGrid = this.add.graphics().setDepth(1);
+    this.drawFieldGrid();
 
     this.obstacleGfx = this.add.graphics().setDepth(2);
     this.inhibitorGfx = this.add.graphics().setDepth(2);
@@ -134,9 +195,8 @@ export class TowerScene extends Phaser.Scene {
       .setOrigin(1, 0.5)
       .setDepth(101);
 
-    // Hint/status texts inside field
     this.hintText = this.add
-      .text(width / 2, this.fieldTop + 24, "", {
+      .text(width / 2, HUD_TOP_H + 24, "", {
         fontFamily: FONT_BODY,
         fontSize: 18,
         color: "#cfe7d5",
@@ -173,12 +233,12 @@ export class TowerScene extends Phaser.Scene {
       resolution: TEXT_RESOLUTION,
     };
 
-    const resetBtn = this.add
+    this.resetBtn = this.add
       .text(width / 2 - 240, btnY, "RESET", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
-    resetBtn.on("pointerdown", () => {
+    this.resetBtn.on("pointerdown", () => {
       this.sound.play("pop");
       this.clearTowers();
       this.refresh();
@@ -190,6 +250,9 @@ export class TowerScene extends Phaser.Scene {
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
     menuBtn.on("pointerdown", () => {
+      if (this.editorActive && this.draft) {
+        this.levels[this.levelIndex] = this.cloneLevel(this.draft);
+      }
       this.sound.play("pop");
       this.scene.start("TowerLevelSelect");
     });
@@ -219,19 +282,85 @@ export class TowerScene extends Phaser.Scene {
       this.goToLevel(this.levelIndex + 1);
     });
 
-    // Field input — tap to place, tap on tower to remove
+    if (import.meta.env.DEV) {
+      this.editBtn = this.add
+        .text(24, btnY, "EDIT", {
+          ...btnStyle,
+          backgroundColor: "#663388",
+        })
+        .setOrigin(0, 0.5)
+        .setDepth(101)
+        .setInteractive({ useHandCursor: true });
+      this.editBtn.on("pointerdown", () => this.toggleEditor());
+    }
+
+    // Field input — tap to place, tap on tower to remove (gameplay)
+    //                 editor: palette place, drag handles, right-click delete
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       if (p.y < this.fieldTop || p.y > this.fieldBottom) return;
-      this.onFieldTap(p.x, p.y);
+      if (this.editorActive) {
+        this.onEditorFieldTap(p);
+      } else {
+        this.onFieldTap(p.x, p.y);
+      }
     });
+
+    // Drag events for editor handles
+    this.input.on(
+      "drag",
+      (
+        _pointer: Phaser.Input.Pointer,
+        obj: Phaser.GameObjects.GameObject,
+        dragX: number,
+        dragY: number,
+      ) => {
+        if (!this.editorActive) return;
+        this.onEditorDrag(obj, dragX, dragY);
+      },
+    );
+    this.input.on(
+      "dragend",
+      (_pointer: Phaser.Input.Pointer, _obj: Phaser.GameObjects.GameObject) => {
+        if (!this.editorActive) return;
+        this.snapDraftToGrid();
+        this.rebuildHandles();
+        this.redrawDraft();
+        this.dirty = true;
+      },
+    );
 
     this.loadLevel(this.levelIndex);
   }
 
   update(_time: number, delta: number): void {
+    if (this.saveStatusTimer > 0) {
+      this.saveStatusTimer -= delta;
+      if (this.saveStatusTimer <= 0 && this.saveStatusText) {
+        this.saveStatusText.setText("");
+      }
+    }
     if (!this.connected) return;
     this.pulseT += delta * 0.006;
     this.drawLinks();
+  }
+
+  private drawFieldGrid(): void {
+    const { width } = this.scale;
+    this.fieldGrid.clear();
+    this.fieldGrid.lineStyle(1, COLOR_GRID, 0.7);
+    for (let x = 40; x < width; x += 40) {
+      this.fieldGrid.moveTo(x, this.fieldTop);
+      this.fieldGrid.lineTo(x, this.fieldBottom);
+    }
+    for (let y = this.fieldTop + 40; y < this.fieldBottom; y += 40) {
+      this.fieldGrid.moveTo(0, y);
+      this.fieldGrid.lineTo(width, y);
+    }
+    this.fieldGrid.strokePath();
+  }
+
+  private currentLevel(): TowerLevel {
+    return this.draft ?? this.levels[this.levelIndex];
   }
 
   private loadLevel(index: number): void {
@@ -239,27 +368,21 @@ export class TowerScene extends Phaser.Scene {
       this.scene.start("TowerLevelSelect");
       return;
     }
+    if (index !== this.levelIndex && this.draft) {
+      // Switching levels — drop the in-progress draft from the previous level.
+      this.draft = null;
+      this.dirty = false;
+    }
     this.levelIndex = index;
     this.clearTowers();
-    const level = this.levels[index];
+    const level = this.currentLevel();
 
-    // Draw obstacles
-    this.obstacleGfx.clear();
-    for (const o of level.obstacles) {
-      this.obstacleGfx.fillStyle(COLOR_OBSTACLE, 1);
-      this.obstacleGfx.lineStyle(3, COLOR_OBSTACLE_EDGE);
-      this.obstacleGfx.fillRoundedRect(o.x, o.y, o.w, o.h, 6);
-      this.obstacleGfx.strokeRoundedRect(o.x, o.y, o.w, o.h, 6);
-    }
-
-    // Draw inhibitors
+    this.drawObstacles();
     this.drawInhibitors();
-
-    // Draw terminals
     this.drawTerminals();
 
     this.levelText.setText(`Level ${index + 1}/${this.levels.length}`);
-    this.hintText.setText(level.hint ?? "");
+    this.hintText.setText(this.editorActive ? "" : (level.hint ?? ""));
     this.refresh();
   }
 
@@ -267,21 +390,29 @@ export class TowerScene extends Phaser.Scene {
     this.loadLevel(index);
   }
 
+  private drawObstacles(): void {
+    const level = this.currentLevel();
+    this.obstacleGfx.clear();
+    for (const o of level.obstacles) {
+      this.obstacleGfx.fillStyle(COLOR_OBSTACLE, 1);
+      this.obstacleGfx.lineStyle(3, COLOR_OBSTACLE_EDGE);
+      this.obstacleGfx.fillRoundedRect(o.x, o.y, o.w, o.h, 6);
+      this.obstacleGfx.strokeRoundedRect(o.x, o.y, o.w, o.h, 6);
+    }
+  }
+
   private drawInhibitors(): void {
     this.inhibitorGfx.clear();
-    const inhibitors = this.levels[this.levelIndex].inhibitors ?? [];
+    const inhibitors = this.currentLevel().inhibitors ?? [];
     for (const jam of inhibitors) {
-      // Translucent jam field
       this.inhibitorGfx.fillStyle(COLOR_INHIBITOR, 0.14);
       this.inhibitorGfx.fillCircle(jam.x, jam.y, jam.radius);
       this.inhibitorGfx.lineStyle(2, COLOR_INHIBITOR, 0.55);
       this.inhibitorGfx.strokeCircle(jam.x, jam.y, jam.radius);
-      // Solid core
       this.inhibitorGfx.fillStyle(COLOR_INHIBITOR_EDGE, 1);
       this.inhibitorGfx.fillCircle(jam.x, jam.y, 22);
       this.inhibitorGfx.fillStyle(COLOR_INHIBITOR, 1);
       this.inhibitorGfx.fillCircle(jam.x, jam.y, 18);
-      // X mark
       this.inhibitorGfx.lineStyle(3, 0xffffff, 0.9);
       const s = 8;
       this.inhibitorGfx.lineBetween(jam.x - s, jam.y - s, jam.x + s, jam.y + s);
@@ -290,7 +421,7 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private drawTerminals(): void {
-    const { terminals, range } = this.levels[this.levelIndex];
+    const { terminals, range } = this.currentLevel();
     this.terminalGfx.clear();
 
     const level = this.levels[this.levelIndex];
@@ -316,7 +447,6 @@ export class TowerScene extends Phaser.Scene {
     y: number,
     color: number,
   ): void {
-    // Base
     g.fillStyle(COLOR_TOWER_EDGE, 1);
     g.fillRoundedRect(
       x - TERMINAL_VISUAL_R,
@@ -325,18 +455,15 @@ export class TowerScene extends Phaser.Scene {
       10,
       3,
     );
-    // Body
     g.fillStyle(color, 1);
     g.lineStyle(3, 0x000000, 1);
     g.fillCircle(x, y, TERMINAL_VISUAL_R);
     g.strokeCircle(x, y, TERMINAL_VISUAL_R);
-    // Inner dot
     g.fillStyle(0xffffff, 0.9);
     g.fillCircle(x, y, TERMINAL_VISUAL_R * 0.35);
   }
 
   private onFieldTap(x: number, y: number): void {
-    // Remove existing tower if tap is on one
     for (let i = 0; i < this.towers.length; i++) {
       const t = this.towers[i];
       if (Phaser.Math.Distance.Between(x, y, t.x, t.y) <= TOWER_VISUAL_R + 10) {
@@ -349,9 +476,7 @@ export class TowerScene extends Phaser.Scene {
       }
     }
 
-    const level = this.levels[this.levelIndex];
-
-    // Don't place on any terminal
+    const level = this.currentLevel();
     for (const term of level.terminals) {
       if (
         Phaser.Math.Distance.Between(x, y, term.x, term.y) <
@@ -359,19 +484,13 @@ export class TowerScene extends Phaser.Scene {
       )
         return;
     }
-
-    // Don't place inside obstacle
     for (const o of level.obstacles) {
       if (x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.h) return;
     }
-
-    // Don't place inside an inhibitor's jam field
     for (const jam of level.inhibitors ?? []) {
       if (Phaser.Math.Distance.Between(x, y, jam.x, jam.y) <= jam.radius)
         return;
     }
-
-    // Enforce minimum spacing
     for (const t of this.towers) {
       if (Phaser.Math.Distance.Between(x, y, t.x, t.y) < PLACE_MIN_DIST) return;
     }
@@ -380,10 +499,14 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private rayRectDist(
-    ox: number, oy: number,
-    dx: number, dy: number,
-    rx: number, ry: number,
-    rw: number, rh: number,
+    ox: number,
+    oy: number,
+    dx: number,
+    dy: number,
+    rx: number,
+    ry: number,
+    rw: number,
+    rh: number,
   ): number | null {
     let tEnter = 0;
     let tExit = Infinity;
@@ -392,7 +515,11 @@ export class TowerScene extends Phaser.Scene {
     } else {
       let t1 = (rx - ox) / dx;
       let t2 = (rx + rw - ox) / dx;
-      if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+      if (t1 > t2) {
+        const tmp = t1;
+        t1 = t2;
+        t2 = tmp;
+      }
       tEnter = Math.max(tEnter, t1);
       tExit = Math.min(tExit, t2);
     }
@@ -401,7 +528,11 @@ export class TowerScene extends Phaser.Scene {
     } else {
       let t1 = (ry - oy) / dy;
       let t2 = (ry + rh - oy) / dy;
-      if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+      if (t1 > t2) {
+        const tmp = t1;
+        t1 = t2;
+        t2 = tmp;
+      }
       tEnter = Math.max(tEnter, t1);
       tExit = Math.min(tExit, t2);
     }
@@ -410,9 +541,12 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private rayCircleDist(
-    ox: number, oy: number,
-    dx: number, dy: number,
-    cx: number, cy: number,
+    ox: number,
+    oy: number,
+    dx: number,
+    dy: number,
+    cx: number,
+    cy: number,
     r: number,
   ): number | null {
     const fx = ox - cx;
@@ -453,8 +587,7 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private placeTower(x: number, y: number): void {
-    const level = this.levels[this.levelIndex];
-
+    const level = this.currentLevel();
     const rangeGfx = this.add.graphics().setDepth(2);
     const rangePts = this.rangePoints(x, y, level.range, level);
     rangeGfx.fillStyle(COLOR_RANGE, 0.06);
@@ -492,6 +625,12 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private refresh(): void {
+    if (this.editorActive) {
+      this.budgetText.setText(this.dirty ? "UNSAVED" : "SAVED");
+      this.statusText.setText("");
+      this.nextBtn.setVisible(false);
+      return;
+    }
     this.budgetText.setText(`Towers: ${this.towers.length}`);
     const { connected, edges } = this.computeConnectivity();
     const wasConnected = this.connected;
@@ -502,7 +641,7 @@ export class TowerScene extends Phaser.Scene {
     if (connected && !wasConnected) this.sound.play("score");
 
     if (connected) {
-      const n = this.levels[this.levelIndex].terminals.length;
+      const n = this.currentLevel().terminals.length;
       this.statusText.setText(
         n > 2 ? "ALL TOWERS LINKED — tap NEXT" : "SIGNAL THROUGH — tap NEXT",
       );
@@ -515,7 +654,7 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private nodes(): { x: number; y: number }[] {
-    const level = this.levels[this.levelIndex];
+    const level = this.currentLevel();
     return [
       ...level.terminals,
       ...this.towers.map((t) => ({ x: t.x, y: t.y })),
@@ -523,14 +662,14 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private terminalCount(): number {
-    return this.levels[this.levelIndex].terminals.length;
+    return this.currentLevel().terminals.length;
   }
 
   private canLink(
     a: { x: number; y: number },
     b: { x: number; y: number },
   ): boolean {
-    const level = this.levels[this.levelIndex];
+    const level = this.currentLevel();
     if (Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y) > level.range)
       return false;
     const line = new Phaser.Geom.Line(a.x, a.y, b.x, b.y);
@@ -552,7 +691,6 @@ export class TowerScene extends Phaser.Scene {
     const nodes = this.nodes();
     const termCount = this.terminalCount();
 
-    // BFS from terminal 0
     const prev = new Map<number, number>();
     prev.set(0, -1);
     const queue: number[] = [0];
@@ -567,12 +705,10 @@ export class TowerScene extends Phaser.Scene {
       }
     }
 
-    // All terminals must be reachable
     for (let t = 0; t < termCount; t++) {
       if (!prev.has(t)) return { connected: false, edges: [] };
     }
 
-    // Build tree: union of shortest paths from each terminal back to 0
     const seen = new Set<string>();
     const edges: [number, number][] = [];
     for (let t = 1; t < termCount; t++) {
@@ -594,10 +730,13 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private drawLinks(): void {
+    if (this.editorActive) {
+      this.linkGfx.clear();
+      return;
+    }
     const nodes = this.nodes();
     this.linkGfx.clear();
 
-    // All potential edges between towers + terminals (faint)
     this.linkGfx.lineStyle(2, COLOR_LINK, 0.35);
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
@@ -612,7 +751,6 @@ export class TowerScene extends Phaser.Scene {
       }
     }
 
-    // Spanning tree edges — bright, pulsing
     if (this.connected && this.pathEdges.length > 0) {
       const pulse = 0.55 + 0.45 * Math.sin(this.pulseT);
       this.linkGfx.lineStyle(6, COLOR_PATH, 0.9);
@@ -636,15 +774,557 @@ export class TowerScene extends Phaser.Scene {
     }
   }
 
+  // ---------- editor ----------
+
+  private toggleEditor(): void {
+    if (this.editorActive) {
+      this.exitEditor();
+    } else {
+      this.enterEditor();
+    }
+  }
+
+  private enterEditor(): void {
+    this.sound.play("pop");
+    this.clearTowers();
+    if (!this.draft) {
+      this.draft = this.cloneLevel(this.levels[this.levelIndex]);
+      this.dirty = false;
+    }
+    this.editorActive = true;
+    this.placeMode = null;
+    this.fieldTop = HUD_TOP_H + EDITOR_PALETTE_H;
+    this.drawFieldGrid();
+    this.hintText.setText("");
+    this.resetBtn.setVisible(false);
+    this.nextBtn.setVisible(false);
+    this.muteText.setVisible(false);
+    if (this.editBtn) this.editBtn.setText("PLAY");
+    this.buildPalette();
+    this.rebuildHandles();
+    this.redrawDraft();
+    this.refresh();
+  }
+
+  private exitEditor(): void {
+    if (!this.draft) return;
+    this.sound.play("pop");
+    // Promote the draft into the in-memory level so it stays the active
+    // playable version even if the user later returns to this scene without
+    // saving to disk. SAVE is what persists across page reloads.
+    this.levels[this.levelIndex] = this.cloneLevel(this.draft);
+    this.editorActive = false;
+    this.placeMode = null;
+    this.destroyHandles();
+    this.destroyPalette();
+    this.fieldTop = HUD_TOP_H;
+    this.drawFieldGrid();
+    if (this.editBtn) this.editBtn.setText("EDIT");
+    this.resetBtn.setVisible(true);
+    this.muteText.setVisible(true);
+    this.loadLevel(this.levelIndex);
+  }
+
+  private cloneLevel(level: TowerLevel): TowerLevel {
+    return {
+      terminals: level.terminals.map((t) => ({ ...t })),
+      obstacles: level.obstacles.map((o) => ({ ...o })),
+      inhibitors: level.inhibitors?.map((j) => ({ ...j })) ?? [],
+      range: level.range,
+      hint: level.hint,
+    };
+  }
+
+  private buildPalette(): void {
+    const { width } = this.scale;
+    const paletteY = HUD_TOP_H;
+    const centerY = paletteY + EDITOR_PALETTE_H / 2;
+
+    const bg = this.add
+      .rectangle(
+        width / 2,
+        paletteY,
+        width,
+        EDITOR_PALETTE_H,
+        EDITOR_PALETTE_BG,
+      )
+      .setOrigin(0.5, 0)
+      .setDepth(95);
+    this.paletteGroup.push(bg);
+
+    const btnStyle = {
+      fontFamily: FONT_BODY,
+      fontSize: 18,
+      color: "#ffffff",
+      backgroundColor: "#3a3a55",
+      padding: { left: 12, right: 12, top: 6, bottom: 6 },
+      resolution: TEXT_RESOLUTION,
+    };
+
+    const makeBtn = (
+      x: number,
+      label: string,
+      onClick: () => void,
+      key?: string,
+    ): Phaser.GameObjects.Text => {
+      const t = this.add
+        .text(x, centerY, label, btnStyle)
+        .setOrigin(0, 0.5)
+        .setDepth(96)
+        .setInteractive({ useHandCursor: true });
+      t.on("pointerdown", (p: Phaser.Input.Pointer) => {
+        if (p.rightButtonDown()) return;
+        onClick();
+      });
+      this.paletteGroup.push(t);
+      if (key) this.paletteButtons.set(key, t);
+      return t;
+    };
+
+    let x = 16;
+    makeBtn(x, "+ Terminal", () => this.setPlaceMode("terminal"), "terminal");
+    x += 130;
+    makeBtn(x, "+ Obstacle", () => this.setPlaceMode("obstacle"), "obstacle");
+    x += 130;
+    makeBtn(
+      x,
+      "+ Inhibitor",
+      () => this.setPlaceMode("inhibitor"),
+      "inhibitor",
+    );
+    x += 140;
+    const deleteBtn = makeBtn(
+      x,
+      "× Delete",
+      () => this.setPlaceMode("delete"),
+      "delete",
+    );
+    deleteBtn.setStyle({ ...btnStyle, backgroundColor: "#883344" });
+    x += 110;
+
+    // Range steppers
+    const rangeMinus = makeBtn(x, "Range −", () =>
+      this.adjustRange(-RANGE_STEP),
+    );
+    void rangeMinus;
+    x += 100;
+    this.rangeLabel = this.add
+      .text(x, centerY, `${this.draft?.range ?? 0}`, {
+        fontFamily: FONT_UI,
+        fontSize: 22,
+        color: "#ffe099",
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0, 0.5)
+      .setDepth(96);
+    this.paletteGroup.push(this.rangeLabel);
+    x += 70;
+    makeBtn(x, "Range +", () => this.adjustRange(RANGE_STEP));
+    x += 100;
+
+    // Save / Exit
+    const saveBtn = makeBtn(x, "SAVE", () => this.saveLevel(), "save");
+    saveBtn.setStyle({ ...btnStyle, backgroundColor: "#446633" });
+    x += 80;
+    const exitBtn = makeBtn(x, "PLAY", () => this.exitEditor());
+    exitBtn.setStyle({ ...btnStyle, backgroundColor: "#663344" });
+    x += 80;
+
+    this.saveStatusText = this.add
+      .text(width - 16, centerY, "", {
+        fontFamily: FONT_BODY,
+        fontSize: 16,
+        color: "#88ff99",
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(1, 0.5)
+      .setDepth(96);
+    this.paletteGroup.push(this.saveStatusText);
+
+    this.updatePaletteVisuals();
+  }
+
+  private destroyPalette(): void {
+    for (const obj of this.paletteGroup) obj.destroy();
+    this.paletteGroup = [];
+    this.paletteButtons.clear();
+    this.rangeLabel = null;
+    this.saveStatusText = null;
+  }
+
+  private updatePaletteVisuals(): void {
+    for (const [key, btn] of this.paletteButtons) {
+      if (key === "save") continue;
+      const active = this.placeMode === key;
+      if (key === "delete") {
+        btn.setStyle({
+          backgroundColor: active ? "#cc4466" : "#883344",
+          color: active ? "#ffff99" : "#ffffff",
+        });
+      } else {
+        btn.setStyle({
+          backgroundColor: active ? "#5a5a88" : "#3a3a55",
+          color: active ? "#ffff99" : "#ffffff",
+        });
+      }
+    }
+    if (this.rangeLabel && this.draft) {
+      this.rangeLabel.setText(`${this.draft.range}`);
+    }
+  }
+
+  private setPlaceMode(mode: Exclude<PlaceMode, null>): void {
+    this.placeMode = this.placeMode === mode ? null : mode;
+    this.updatePaletteVisuals();
+  }
+
+  private adjustRange(delta: number): void {
+    if (!this.draft) return;
+    const next = Phaser.Math.Clamp(
+      this.draft.range + delta,
+      RANGE_MIN,
+      RANGE_MAX,
+    );
+    if (next === this.draft.range) return;
+    this.draft.range = next;
+    this.dirty = true;
+    this.drawTerminals();
+    this.updatePaletteVisuals();
+    this.refresh();
+  }
+
+  private onEditorFieldTap(p: Phaser.Input.Pointer): void {
+    if (!this.draft) return;
+    const hits = this.input.hitTestPointer(p);
+    const hitHandle = hits.some((h) => h.getData("editor") === true);
+
+    if (p.rightButtonDown() || this.placeMode === "delete") {
+      if (hitHandle) this.deleteHandleTarget(hits);
+      return;
+    }
+    if (hitHandle) return; // drag or no-op; don't place through handles
+    if (!this.placeMode) return;
+
+    const x = this.snap(p.x);
+    const y = this.snap(p.y);
+    if (y < this.fieldTop || y > this.fieldBottom) return;
+
+    if (this.placeMode === "terminal") {
+      this.draft.terminals.push({ x, y });
+    } else if (this.placeMode === "obstacle") {
+      this.draft.obstacles.push({
+        x: x - DEFAULT_OBSTACLE_W / 2,
+        y: y - DEFAULT_OBSTACLE_H / 2,
+        w: DEFAULT_OBSTACLE_W,
+        h: DEFAULT_OBSTACLE_H,
+      });
+    } else if (this.placeMode === "inhibitor") {
+      if (!this.draft.inhibitors) this.draft.inhibitors = [];
+      this.draft.inhibitors.push({
+        x,
+        y,
+        radius: DEFAULT_INHIBITOR_RADIUS,
+      });
+    }
+    this.dirty = true;
+    this.sound.play("pop");
+    this.rebuildHandles();
+    this.redrawDraft();
+    this.refresh();
+  }
+
+  private deleteHandleTarget(hits: Phaser.GameObjects.GameObject[]): void {
+    if (!this.draft) return;
+    for (const h of hits) {
+      if (h.getData("editor") !== true) continue;
+      const kind = h.getData("kind") as HandleKind;
+      const idx = h.getData("index") as number;
+      if (kind === "terminal") {
+        this.draft.terminals.splice(idx, 1);
+      } else if (kind === "obstacleBody" || kind === "obstacleCorner") {
+        this.draft.obstacles.splice(idx, 1);
+      } else if (kind === "inhibitorBody" || kind === "inhibitorRadius") {
+        this.draft.inhibitors?.splice(idx, 1);
+      }
+      this.dirty = true;
+      this.sound.play("pop");
+      this.rebuildHandles();
+      this.redrawDraft();
+      this.refresh();
+      return;
+    }
+  }
+
+  private onEditorDrag(
+    obj: Phaser.GameObjects.GameObject,
+    dragX: number,
+    dragY: number,
+  ): void {
+    if (!this.draft) return;
+    if (obj.getData("editor") !== true) return;
+    const kind = obj.getData("kind") as HandleKind;
+    const idx = obj.getData("index") as number;
+    const clampedY = Phaser.Math.Clamp(dragY, this.fieldTop, this.fieldBottom);
+
+    if (kind === "terminal") {
+      const t = this.draft.terminals[idx];
+      if (!t) return;
+      t.x = dragX;
+      t.y = clampedY;
+      (obj as Phaser.GameObjects.Arc).setPosition(t.x, t.y);
+    } else if (kind === "obstacleBody") {
+      const o = this.draft.obstacles[idx];
+      if (!o) return;
+      o.x = dragX - o.w / 2;
+      o.y = clampedY - o.h / 2;
+      const set = this.obstacleHandles[idx];
+      if (set) {
+        (set.body as Phaser.GameObjects.Zone).setPosition(
+          o.x + o.w / 2,
+          o.y + o.h / 2,
+        );
+        set.corner.setPosition(o.x + o.w, o.y + o.h);
+      }
+    } else if (kind === "obstacleCorner") {
+      const o = this.draft.obstacles[idx];
+      if (!o) return;
+      o.w = Math.max(MIN_OBSTACLE_W, dragX - o.x);
+      o.h = Math.max(MIN_OBSTACLE_H, clampedY - o.y);
+      const set = this.obstacleHandles[idx];
+      if (set) {
+        set.corner.setPosition(o.x + o.w, o.y + o.h);
+        (set.body as Phaser.GameObjects.Zone).setPosition(
+          o.x + o.w / 2,
+          o.y + o.h / 2,
+        );
+        set.body.setSize(o.w, o.h);
+        if (set.body.input) {
+          set.body.input.hitArea = new Phaser.Geom.Rectangle(0, 0, o.w, o.h);
+        }
+      }
+    } else if (kind === "inhibitorBody") {
+      const j = this.draft.inhibitors?.[idx];
+      if (!j) return;
+      j.x = dragX;
+      j.y = clampedY;
+      const set = this.inhibitorHandles[idx];
+      if (set) {
+        set.body.setPosition(j.x, j.y);
+        set.radius.setPosition(j.x + j.radius, j.y);
+      }
+    } else if (kind === "inhibitorRadius") {
+      const j = this.draft.inhibitors?.[idx];
+      if (!j) return;
+      const dx = dragX - j.x;
+      const dy = clampedY - j.y;
+      j.radius = Math.max(
+        MIN_INHIBITOR_RADIUS,
+        Math.round(Math.sqrt(dx * dx + dy * dy)),
+      );
+      const set = this.inhibitorHandles[idx];
+      if (set) {
+        set.radius.setPosition(j.x + j.radius, j.y);
+      }
+    }
+    this.dirty = true;
+    this.redrawDraft();
+    this.refresh();
+  }
+
+  private snap(v: number): number {
+    return Math.round(v / GRID_SNAP) * GRID_SNAP;
+  }
+
+  private snapDraftToGrid(): void {
+    if (!this.draft) return;
+    for (const t of this.draft.terminals) {
+      t.x = this.snap(t.x);
+      t.y = this.snap(t.y);
+    }
+    for (const o of this.draft.obstacles) {
+      o.x = this.snap(o.x);
+      o.y = this.snap(o.y);
+      o.w = Math.max(MIN_OBSTACLE_W, this.snap(o.w));
+      o.h = Math.max(MIN_OBSTACLE_H, this.snap(o.h));
+    }
+    for (const j of this.draft.inhibitors ?? []) {
+      j.x = this.snap(j.x);
+      j.y = this.snap(j.y);
+      j.radius = Math.max(MIN_INHIBITOR_RADIUS, this.snap(j.radius));
+    }
+  }
+
+  private redrawDraft(): void {
+    this.drawObstacles();
+    this.drawInhibitors();
+    this.drawTerminals();
+  }
+
+  private destroyHandles(): void {
+    for (const h of this.terminalHandles) h.body.destroy();
+    for (const h of this.obstacleHandles) {
+      h.body.destroy();
+      h.corner.destroy();
+    }
+    for (const h of this.inhibitorHandles) {
+      h.body.destroy();
+      h.radius.destroy();
+    }
+    this.terminalHandles = [];
+    this.obstacleHandles = [];
+    this.inhibitorHandles = [];
+  }
+
+  private rebuildHandles(): void {
+    this.destroyHandles();
+    if (!this.draft) return;
+
+    const d = this.draft;
+    for (let i = 0; i < d.terminals.length; i++) {
+      const t = d.terminals[i];
+      const body = this.add
+        .circle(t.x, t.y, TERMINAL_VISUAL_R + 4, EDITOR_HANDLE_COLOR, 0.25)
+        .setStrokeStyle(2, EDITOR_HANDLE_COLOR, 0.9)
+        .setDepth(20);
+      body.setInteractive({ draggable: true, useHandCursor: true });
+      body.setData("editor", true);
+      body.setData("kind", "terminal");
+      body.setData("index", i);
+      this.terminalHandles.push({ body });
+    }
+
+    for (let i = 0; i < d.obstacles.length; i++) {
+      const o = d.obstacles[i];
+      const body = this.add.zone(o.x + o.w / 2, o.y + o.h / 2, o.w, o.h);
+      body.setOrigin(0.5, 0.5);
+      body.setInteractive({ draggable: true, useHandCursor: true });
+      body.setData("editor", true);
+      body.setData("kind", "obstacleBody");
+      body.setData("index", i);
+      body.setDepth(18);
+
+      const corner = this.add
+        .rectangle(
+          o.x + o.w,
+          o.y + o.h,
+          OBSTACLE_CORNER_SIZE,
+          OBSTACLE_CORNER_SIZE,
+          EDITOR_HANDLE_ACTIVE,
+          0.9,
+        )
+        .setStrokeStyle(2, 0x000000, 1)
+        .setDepth(21);
+      corner.setInteractive({ draggable: true, useHandCursor: true });
+      corner.setData("editor", true);
+      corner.setData("kind", "obstacleCorner");
+      corner.setData("index", i);
+      this.obstacleHandles.push({ body, corner });
+    }
+
+    const jams = d.inhibitors ?? [];
+    for (let i = 0; i < jams.length; i++) {
+      const j = jams[i];
+      const body = this.add
+        .circle(j.x, j.y, 26, EDITOR_HANDLE_COLOR, 0.35)
+        .setStrokeStyle(2, EDITOR_HANDLE_COLOR, 0.9)
+        .setDepth(20);
+      body.setInteractive({ draggable: true, useHandCursor: true });
+      body.setData("editor", true);
+      body.setData("kind", "inhibitorBody");
+      body.setData("index", i);
+
+      const radius = this.add
+        .circle(j.x + j.radius, j.y, 12, EDITOR_HANDLE_ACTIVE, 0.9)
+        .setStrokeStyle(2, 0x000000, 1)
+        .setDepth(21);
+      radius.setInteractive({ draggable: true, useHandCursor: true });
+      radius.setData("editor", true);
+      radius.setData("kind", "inhibitorRadius");
+      radius.setData("index", i);
+      this.inhibitorHandles.push({ body, radius });
+    }
+  }
+
+  private serializedLevel(): TowerLevel {
+    if (!this.draft) throw new Error("no draft");
+    const out: TowerLevel = {
+      terminals: this.draft.terminals.map((t) => ({ x: t.x, y: t.y })),
+      obstacles: this.draft.obstacles.map((o) => ({
+        x: o.x,
+        y: o.y,
+        w: o.w,
+        h: o.h,
+      })),
+      range: this.draft.range,
+    };
+    if (this.draft.inhibitors && this.draft.inhibitors.length > 0) {
+      out.inhibitors = this.draft.inhibitors.map((j) => ({
+        x: j.x,
+        y: j.y,
+        radius: j.radius,
+      }));
+    }
+    if (this.draft.hint) out.hint = this.draft.hint;
+    return cleanLevel(out);
+  }
+
+  private async saveLevel(): Promise<void> {
+    if (!this.draft) return;
+    this.snapDraftToGrid();
+    const payload = {
+      index: this.levelIndex,
+      level: this.serializedLevel(),
+    };
+    this.setSaveStatus("Saving…", "#ffe099");
+    try {
+      const res = await fetch("/api/save-level", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      this.levels[this.levelIndex] = this.cloneLevel(payload.level);
+      this.dirty = false;
+      this.setSaveStatus("Saved", "#88ff99");
+      this.sound.play("score");
+      this.redrawDraft();
+      this.rebuildHandles();
+      this.refresh();
+    } catch (err) {
+      this.setSaveStatus(`Save failed: ${err}`, "#ff6666");
+    }
+  }
+
+  private setSaveStatus(msg: string, color: string): void {
+    if (!this.saveStatusText) return;
+    this.saveStatusText.setColor(color);
+    this.saveStatusText.setText(msg);
+    this.saveStatusTimer = 3000;
+  }
+
+  private dumpEditorState(): TowerSceneState["editor"] {
+    return {
+      active: this.editorActive,
+      dirty: this.dirty,
+      placeMode: this.editorActive ? this.placeMode : null,
+      draft: this.draft ? this.cloneLevel(this.draft) : null,
+    };
+  }
+
   dumpState(): TowerSceneState {
+    const level = this.currentLevel();
     return {
       active: this.scene.isActive(),
       levelIndex: this.levelIndex,
       levelCount: this.levels.length,
-      terminalCount: this.levels[this.levelIndex]?.terminals.length ?? 0,
+      terminalCount: level?.terminals.length ?? 0,
       towers: this.towers.map((t) => ({ x: t.x, y: t.y })),
       connected: this.connected,
       viewport: { width: this.scale.width, height: this.scale.height },
+      editor: this.dumpEditorState(),
     };
   }
 }
+
+// Keep the imported types reachable for downstream consumers.
+export type { TowerInhibitor, TowerLevel, TowerObstacle, TowerTerminal };

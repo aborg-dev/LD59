@@ -1,4 +1,5 @@
 node_modules/
 debug/
+dist/
 .mcp.json
 .claude/settings.json
