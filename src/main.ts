@@ -16,6 +16,7 @@ import {
   SoccerScene,
   type SoccerSceneState,
 } from "./scenes/SoccerScene.js";
+import { TowerScene, type TowerSceneState } from "./scenes/TowerScene.js";
 
 export interface StateDump {
   Boot: BootState | null;
@@ -24,6 +25,7 @@ export interface StateDump {
   Soccer: SoccerSceneState | null;
   Shepherd: ShepherdSceneState | null;
   CardGame: CardGameState | null;
+  Tower: TowerSceneState | null;
   GameOver: GameOverState | null;
 }
 
@@ -53,6 +55,7 @@ const config: Phaser.Types.Core.GameConfig = {
     SoccerScene,
     ShepherdScene,
     CardGameScene,
+    TowerScene,
     GameOver,
   ],
 };
@@ -88,6 +91,7 @@ window.dumpState = () => ({
   Soccer: tryDump(game.scene.getScene("Soccer") as SoccerScene),
   Shepherd: tryDump(game.scene.getScene("Shepherd") as ShepherdScene),
   CardGame: tryDump(game.scene.getScene("CardGame") as CardGameScene),
+  Tower: tryDump(game.scene.getScene("Tower") as TowerScene),
   GameOver: tryDump(game.scene.getScene("GameOver") as GameOver),
 });
 

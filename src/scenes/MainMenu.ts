@@ -6,6 +6,7 @@ export const GAMES: [string, string][] = [
   ["Soccer", "Soccer Fling"],
   ["Shepherd", "Shepherd Dog"],
   ["CardGame", "Hand Signals"],
+  ["Tower", "Signal Towers"],
 ];
 
 export interface MainMenuState {
