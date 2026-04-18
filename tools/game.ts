@@ -10,16 +10,14 @@ let currentUrl = "";
 let pageErrors: string[] = [];
 
 import type { StateDump } from "../src/main.js";
-import type { CardGameState } from "../src/scenes/CardGameScene.js";
 import type { ShepherdSceneState } from "../src/scenes/ShepherdScene.js";
-import type { SoccerSceneState } from "../src/scenes/SoccerScene.js";
+import type { TowerLevelSelectState } from "../src/scenes/TowerLevelSelectScene.js";
 import type { TowerSceneState } from "../src/scenes/TowerScene.js";
 
 export type {
-  CardGameState,
   ShepherdSceneState,
-  SoccerSceneState,
   StateDump,
+  TowerLevelSelectState,
   TowerSceneState,
 };
 

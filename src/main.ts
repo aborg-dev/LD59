@@ -1,6 +1,5 @@
 import * as Phaser from "phaser";
 import { Boot, type BootState } from "./scenes/Boot.js";
-import { CardGameScene, type CardGameState } from "./scenes/CardGameScene.js";
 import { GameOver, type GameOverState } from "./scenes/GameOver.js";
 import { MainMenu, type MainMenuState } from "./scenes/MainMenu.js";
 import { Preloader, type PreloaderState } from "./scenes/Preloader.js";
@@ -9,23 +8,23 @@ import {
   type ShepherdSceneState,
 } from "./scenes/ShepherdScene.js";
 import {
-  FIELD_H,
-  FIELD_W,
-  HUD_BOTTOM_H,
-  HUD_TOP_H,
-  SoccerScene,
-  type SoccerSceneState,
-} from "./scenes/SoccerScene.js";
+  TowerLevelSelectScene,
+  type TowerLevelSelectState,
+} from "./scenes/TowerLevelSelectScene.js";
 import { TowerScene, type TowerSceneState } from "./scenes/TowerScene.js";
+
+const FIELD_W = 720;
+const FIELD_H = 1280;
+const HUD_TOP_H = 70;
+const HUD_BOTTOM_H = 80;
 
 export interface StateDump {
   Boot: BootState | null;
   Preloader: PreloaderState | null;
   MainMenu: MainMenuState | null;
-  Soccer: SoccerSceneState | null;
   Shepherd: ShepherdSceneState | null;
-  CardGame: CardGameState | null;
   Tower: TowerSceneState | null;
+  TowerLevelSelect: TowerLevelSelectState | null;
   GameOver: GameOverState | null;
 }
 
@@ -52,9 +51,8 @@ const config: Phaser.Types.Core.GameConfig = {
     Boot,
     Preloader,
     MainMenu,
-    SoccerScene,
     ShepherdScene,
-    CardGameScene,
+    TowerLevelSelectScene,
     TowerScene,
     GameOver,
   ],
@@ -88,10 +86,11 @@ window.dumpState = () => ({
   Boot: tryDump(game.scene.getScene("Boot") as Boot),
   Preloader: tryDump(game.scene.getScene("Preloader") as Preloader),
   MainMenu: tryDump(game.scene.getScene("MainMenu") as MainMenu),
-  Soccer: tryDump(game.scene.getScene("Soccer") as SoccerScene),
   Shepherd: tryDump(game.scene.getScene("Shepherd") as ShepherdScene),
-  CardGame: tryDump(game.scene.getScene("CardGame") as CardGameScene),
   Tower: tryDump(game.scene.getScene("Tower") as TowerScene),
+  TowerLevelSelect: tryDump(
+    game.scene.getScene("TowerLevelSelect") as TowerLevelSelectScene,
+  ),
   GameOver: tryDump(game.scene.getScene("GameOver") as GameOver),
 });
 

@@ -3,10 +3,8 @@ import { FONT_BODY, FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
 
 /** Register each prototype here: [scene key, display label] */
 export const GAMES: [string, string][] = [
-  ["Soccer", "Soccer Fling"],
   ["Shepherd", "Shepherd Dog"],
-  ["CardGame", "Hand Signals"],
-  ["Tower", "Signal Towers"],
+  ["TowerLevelSelect", "Signal Towers"],
 ];
 
 export interface MainMenuState {

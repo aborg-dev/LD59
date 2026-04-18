@@ -81,7 +81,7 @@ export class TowerScene extends Phaser.Scene {
     super("Tower");
   }
 
-  create(): void {
+  create(data?: { startLevel?: number }): void {
     const { width, height } = this.scale;
     this.fieldTop = HUD_TOP_H;
     this.fieldBottom = height - HUD_BOTTOM_H;
@@ -90,7 +90,7 @@ export class TowerScene extends Phaser.Scene {
     this.towers = [];
     this.connected = false;
     this.pathEdges = [];
-    this.levelIndex = 0;
+    this.levelIndex = data?.startLevel ?? 0;
 
     this.levels = this.buildLevels(width, this.fieldTop, this.fieldBottom);
 
@@ -207,7 +207,7 @@ export class TowerScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     menuBtn.on("pointerdown", () => {
       this.sound.play("pop");
-      this.scene.start("MainMenu");
+      this.scene.start("TowerLevelSelect");
     });
 
     const muted = this.game.sound.mute;
@@ -241,7 +241,7 @@ export class TowerScene extends Phaser.Scene {
       this.onFieldTap(p.x, p.y);
     });
 
-    this.loadLevel(0);
+    this.loadLevel(this.levelIndex);
   }
 
   update(_time: number, delta: number): void {
@@ -368,10 +368,7 @@ export class TowerScene extends Phaser.Scene {
 
   private loadLevel(index: number): void {
     if (index >= this.levels.length) {
-      this.scene.start("GameOver", {
-        score: this.levels.length,
-        returnScene: "Tower",
-      });
+      this.scene.start("TowerLevelSelect");
       return;
     }
     this.levelIndex = index;

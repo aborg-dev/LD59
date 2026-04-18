@@ -135,7 +135,10 @@ describe("tower puzzle placement and connectivity", () => {
   });
 
   it("allows placing many towers (unbounded budget)", async () => {
-    await game.startScene("Tower");
+    // Start at level 0 (no obstacles) to ensure every tap lands in open space.
+    await game.eval_(`(() => {
+      window.game.scene.start('Tower', { startLevel: 0 });
+    })()`);
     await game.advanceTime(50);
 
     await game.eval_(`(() => {
@@ -148,5 +151,19 @@ describe("tower puzzle placement and connectivity", () => {
 
     const s = await towerState();
     expect(s.towers.length).toBe(8);
+  });
+
+  it("level select launches Tower at the chosen level", async () => {
+    await game.startScene("TowerLevelSelect");
+    await game.advanceTime(50);
+
+    await game.eval_(`(() => {
+      window.game.scene.start('Tower', { startLevel: 3 });
+    })()`);
+    await game.advanceTime(50);
+
+    const s = await towerState();
+    expect(s.levelIndex).toBe(3);
+    expect(s.towers.length).toBe(0);
   });
 });
