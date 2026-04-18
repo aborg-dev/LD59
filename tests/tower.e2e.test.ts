@@ -164,7 +164,7 @@ describe("tower puzzle placement and connectivity", () => {
       obstacles: { x: number; y: number; w: number; h: number }[];
       inhibitors?: { x: number; y: number; radius: number }[];
       range: number;
-      hint?: string;
+      name?: string;
     }
 
     for (let i = 0; i < levelCount; i++) {

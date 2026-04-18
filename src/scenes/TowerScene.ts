@@ -108,7 +108,6 @@ export class TowerScene extends Phaser.Scene {
   private levelText!: Phaser.GameObjects.Text;
   private budgetText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
-  private hintText!: Phaser.GameObjects.Text;
   private nextBtn!: Phaser.GameObjects.Text;
   private muteText!: Phaser.GameObjects.Text;
   private resetBtn!: Phaser.GameObjects.Text;
@@ -192,16 +191,6 @@ export class TowerScene extends Phaser.Scene {
       })
       .setOrigin(1, 0.5)
       .setDepth(101);
-
-    this.hintText = this.add
-      .text(width / 2, HUD_TOP_H + 24, "", {
-        fontFamily: FONT_BODY,
-        fontSize: 18,
-        color: "#cfe7d5",
-        resolution: TEXT_RESOLUTION,
-      })
-      .setOrigin(0.5, 0)
-      .setDepth(50);
 
     this.statusText = this.add
       .text(width / 2, this.fieldBottom - 34, "", {
@@ -382,8 +371,8 @@ export class TowerScene extends Phaser.Scene {
     this.drawInhibitors();
     this.drawTerminals();
 
-    this.levelText.setText(`Level ${index + 1}/${this.levels.length}`);
-    this.hintText.setText(this.editorActive ? "" : (level.hint ?? ""));
+    const suffix = level.name ? ` — ${level.name}` : "";
+    this.levelText.setText(`Level ${index + 1}/${this.levels.length}${suffix}`);
     this.refresh();
   }
 
@@ -798,7 +787,6 @@ export class TowerScene extends Phaser.Scene {
     }
     this.editorActive = true;
     this.placeMode = null;
-    this.hintText.setText("");
     this.resetBtn.setVisible(false);
     this.nextBtn.setVisible(false);
     if (this.editBtn) this.editBtn.setText("PLAY");
@@ -833,7 +821,7 @@ export class TowerScene extends Phaser.Scene {
       obstacles: level.obstacles.map((o) => ({ ...o })),
       inhibitors: level.inhibitors?.map((j) => ({ ...j })) ?? [],
       range: level.range,
-      hint: level.hint,
+      name: level.name,
     };
   }
 
@@ -1252,7 +1240,7 @@ export class TowerScene extends Phaser.Scene {
         radius: j.radius,
       }));
     }
-    if (this.draft.hint) out.hint = this.draft.hint;
+    if (this.draft.name) out.name = this.draft.name;
     return cleanLevel(out);
   }
 

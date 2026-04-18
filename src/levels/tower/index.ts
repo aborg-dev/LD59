@@ -21,7 +21,7 @@ export interface TowerLevel {
   obstacles: TowerObstacle[];
   inhibitors?: TowerInhibitor[];
   range: number;
-  hint?: string;
+  name?: string;
 }
 
 const modules = import.meta.glob<TowerLevel>("./*.json", {

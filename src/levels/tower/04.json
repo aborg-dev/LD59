@@ -30,5 +30,5 @@
     }
   ],
   "range": 300,
-  "hint": "A winding corridor. Pick line-of-sight carefully."
+  "name": "Corridor"
 }

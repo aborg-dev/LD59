@@ -11,5 +11,5 @@
   ],
   "obstacles": [],
   "range": 460,
-  "hint": "Tap to place a relay tower.\nChain the signal across the field."
+  "name": "First Signal"
 }
