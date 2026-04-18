@@ -292,10 +292,8 @@ export class ShepherdScene extends Phaser.Scene {
     );
     this.input.keyboard?.on("keydown-ENTER", () => this.toggleDebugPanel());
 
-    // Click: place hay / move dog. Double-tap: whistle at that spot.
-    let lastTapTime = 0;
-    let lastTapX = 0;
-    let lastTapY = 0;
+    // Mouse movement steers the dog; click barks from the dog's position.
+    // In placing mode, click drops a hay pile and the dog holds position.
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       if (this.gameOver) return;
       if (p.y > this.fieldBottom) return;
@@ -304,25 +302,12 @@ export class ShepherdScene extends Phaser.Scene {
         this.tryPlaceHay(wp.x, wp.y);
         return;
       }
-      const now = this.time.now;
-      if (
-        now - lastTapTime < 300 &&
-        Math.hypot(p.x - lastTapX, p.y - lastTapY) < 80
-      ) {
-        this.whistle(wp.x, wp.y);
-        lastTapTime = 0;
-        return;
-      }
-      lastTapTime = now;
-      lastTapX = p.x;
-      lastTapY = p.y;
-      this.targetX = wp.x;
-      this.targetY = wp.y;
+      this.whistle(this.dog.x, this.dog.y);
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
       if (this.gameOver) return;
       if (!this.placing) {
-        if (p.isDown) {
+        if (p.y <= this.fieldBottom) {
           const wp = this.cameras.main.getWorldPoint(p.x, p.y);
           this.targetX = wp.x;
           this.targetY = wp.y;
