@@ -58,7 +58,8 @@ type HandleKind =
   | "obstacleBody"
   | "obstacleCorner"
   | "inhibitorBody"
-  | "inhibitorRadius";
+  | "inhibitorRadius"
+  | "tower";
 
 interface TerminalHandleSet {
   body: Phaser.GameObjects.Arc;
@@ -70,6 +71,9 @@ interface ObstacleHandleSet {
 interface InhibitorHandleSet {
   body: Phaser.GameObjects.Arc;
   radius: Phaser.GameObjects.Arc;
+}
+interface TowerHandleSet {
+  body: Phaser.GameObjects.Arc;
 }
 
 export interface TowerSceneState {
@@ -125,6 +129,7 @@ export class TowerScene extends Phaser.Scene {
   private terminalHandles: TerminalHandleSet[] = [];
   private obstacleHandles: ObstacleHandleSet[] = [];
   private inhibitorHandles: InhibitorHandleSet[] = [];
+  private towerHandles: TowerHandleSet[] = [];
 
   constructor() {
     super("Tower");
@@ -577,15 +582,19 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private placeTower(x: number, y: number): void {
-    const level = this.currentLevel();
     const rangeGfx = this.add.graphics().setDepth(2);
-    const rangePts = this.rangePoints(x, y, level.range, level);
-    rangeGfx.fillStyle(COLOR_RANGE, 0.06);
-    rangeGfx.fillPoints(rangePts, true);
-    rangeGfx.lineStyle(1, COLOR_RANGE, 0.2);
-    rangeGfx.strokePoints(rangePts, true);
-
     const gfx = this.add.graphics().setDepth(7);
+    const t: Tower = { x, y, gfx, rangeGfx };
+    this.towers.push(t);
+    this.drawTowerVisual(t);
+    this.redrawTowerRanges();
+    this.sound.play("pop");
+    this.refresh();
+  }
+
+  private drawTowerVisual(t: Tower): void {
+    const { x, y, gfx } = t;
+    gfx.clear();
     gfx.fillStyle(COLOR_TOWER_EDGE, 1);
     gfx.fillRoundedRect(
       x - TOWER_VISUAL_R,
@@ -600,10 +609,6 @@ export class TowerScene extends Phaser.Scene {
     gfx.strokeCircle(x, y, TOWER_VISUAL_R);
     gfx.fillStyle(0xffe066, 1);
     gfx.fillCircle(x, y, TOWER_VISUAL_R * 0.4);
-
-    this.towers.push({ x, y, gfx, rangeGfx });
-    this.sound.play("pop");
-    this.refresh();
   }
 
   private redrawTowerRanges(): void {
@@ -1031,14 +1036,23 @@ export class TowerScene extends Phaser.Scene {
       if (h.getData("editor") !== true) continue;
       const kind = h.getData("kind") as HandleKind;
       const idx = h.getData("index") as number;
+      let mutatedDraft = true;
       if (kind === "terminal") {
         this.draft.terminals.splice(idx, 1);
       } else if (kind === "obstacleBody" || kind === "obstacleCorner") {
         this.draft.obstacles.splice(idx, 1);
       } else if (kind === "inhibitorBody" || kind === "inhibitorRadius") {
         this.draft.inhibitors?.splice(idx, 1);
+      } else if (kind === "tower") {
+        const tw = this.towers[idx];
+        if (tw) {
+          tw.gfx.destroy();
+          tw.rangeGfx.destroy();
+          this.towers.splice(idx, 1);
+        }
+        mutatedDraft = false;
       }
-      this.dirty = true;
+      if (mutatedDraft) this.dirty = true;
       this.sound.play("pop");
       this.rebuildHandles();
       this.redrawDraft();
@@ -1058,12 +1072,22 @@ export class TowerScene extends Phaser.Scene {
     const idx = obj.getData("index") as number;
     const clampedY = Phaser.Math.Clamp(dragY, this.fieldTop, this.fieldBottom);
 
+    let mutatedDraft = true;
     if (kind === "terminal") {
       const t = this.draft.terminals[idx];
       if (!t) return;
       t.x = dragX;
       t.y = clampedY;
       (obj as Phaser.GameObjects.Arc).setPosition(t.x, t.y);
+    } else if (kind === "tower") {
+      const t = this.towers[idx];
+      if (!t) return;
+      t.x = dragX;
+      t.y = clampedY;
+      (obj as Phaser.GameObjects.Arc).setPosition(t.x, t.y);
+      this.drawTowerVisual(t);
+      // Tower moves don't dirty the draft — towers aren't level data.
+      mutatedDraft = false;
     } else if (kind === "obstacleBody") {
       const o = this.draft.obstacles[idx];
       if (!o) return;
@@ -1118,7 +1142,7 @@ export class TowerScene extends Phaser.Scene {
         set.radius.setPosition(j.x + j.radius, j.y);
       }
     }
-    this.dirty = true;
+    if (mutatedDraft) this.dirty = true;
     this.redrawDraft();
     this.refresh();
   }
@@ -1128,6 +1152,11 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private snapDraftToGrid(): void {
+    for (const t of this.towers) {
+      t.x = this.snap(t.x);
+      t.y = this.snap(t.y);
+      this.drawTowerVisual(t);
+    }
     if (!this.draft) return;
     for (const t of this.draft.terminals) {
       t.x = this.snap(t.x);
@@ -1163,9 +1192,11 @@ export class TowerScene extends Phaser.Scene {
       h.body.destroy();
       h.radius.destroy();
     }
+    for (const h of this.towerHandles) h.body.destroy();
     this.terminalHandles = [];
     this.obstacleHandles = [];
     this.inhibitorHandles = [];
+    this.towerHandles = [];
   }
 
   private rebuildHandles(): void {
@@ -1235,6 +1266,19 @@ export class TowerScene extends Phaser.Scene {
       radius.setData("kind", "inhibitorRadius");
       radius.setData("index", i);
       this.inhibitorHandles.push({ body, radius });
+    }
+
+    for (let i = 0; i < this.towers.length; i++) {
+      const t = this.towers[i];
+      const body = this.add
+        .circle(t.x, t.y, TOWER_VISUAL_R + 6, EDITOR_HANDLE_COLOR, 0.25)
+        .setStrokeStyle(2, EDITOR_HANDLE_COLOR, 0.9)
+        .setDepth(20);
+      body.setInteractive({ draggable: true, useHandCursor: true });
+      body.setData("editor", true);
+      body.setData("kind", "tower");
+      body.setData("index", i);
+      this.towerHandles.push({ body });
     }
   }
 
