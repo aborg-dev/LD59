@@ -716,6 +716,61 @@ export class ShepherdScene extends Phaser.Scene {
         ? `Cleared! No sheep lost! +$${WAVE_CLEAR_BONUS}`
         : `Cleared! (Lost ${this.sheepLost} sheep, no bonus)`,
     );
+    this.sheepLost = 0;
+    this.clearPennedSheep();
+  }
+
+  /** Pop the sheep and emit a small ring when it crosses into the pen. */
+  private playPenEntryFx(s: Sheep): void {
+    // Color settles into the "penned" gold over a short tween rather than snapping.
+    this.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: 260,
+      onUpdate: (tween) => {
+        const t = tween.getValue() ?? 0;
+        const r = Math.round(250 + (255 - 250) * t); // 0xfa → 0xff
+        const g = Math.round(250 + (224 - 250) * t); // 0xfa → 0xe0
+        const b = Math.round(250 + (153 - 250) * t); // 0xfa → 0x99
+        s.sprite.setFillStyle((r << 16) | (g << 8) | b);
+      },
+    });
+    // Scale pop — brief squash-and-stretch as the sheep settles.
+    this.tweens.add({
+      targets: s.sprite,
+      scale: 1.3,
+      duration: 120,
+      yoyo: true,
+      ease: "Quad.easeOut",
+    });
+    // Expanding ring emitted from the sheep's position.
+    const ring = this.add
+      .circle(s.sprite.x, s.sprite.y, 6, 0xffffff, 0)
+      .setDepth(11);
+    ring.setStrokeStyle(3, 0xffe099, 1);
+    this.hudCamera.ignore(ring);
+    this.tweens.add({
+      targets: ring,
+      radius: SHEEP_RADIUS * 2.4,
+      strokeAlpha: 0,
+      duration: 450,
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  /** Retire all penned sheep with a quick fade-out so the pen is ready for the next wave. */
+  private clearPennedSheep(): void {
+    const retiring = this.sheep.filter((s) => s.penned);
+    this.sheep = this.sheep.filter((s) => !s.penned);
+    for (const s of retiring) {
+      this.tweens.add({
+        targets: s.sprite,
+        alpha: 0,
+        scale: 0.3,
+        duration: 450,
+        onComplete: () => s.sprite.destroy(),
+      });
+    }
   }
 
   private showBanner(msg: string): void {
@@ -967,11 +1022,11 @@ export class ShepherdScene extends Phaser.Scene {
         s.penned = true;
         s.vx = 0;
         s.vy = 0;
-        s.sprite.setFillStyle(0xffe099);
         this.score++;
         this.coins++;
         this.updateCoinText();
         this.sound.play("score");
+        this.playPenEntryFx(s);
       }
     }
 
