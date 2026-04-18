@@ -606,6 +606,18 @@ export class TowerScene extends Phaser.Scene {
     this.refresh();
   }
 
+  private redrawTowerRanges(): void {
+    const level = this.currentLevel();
+    for (const t of this.towers) {
+      const pts = this.rangePoints(t.x, t.y, level.range, level);
+      t.rangeGfx.clear();
+      t.rangeGfx.fillStyle(COLOR_RANGE, 0.06);
+      t.rangeGfx.fillPoints(pts, true);
+      t.rangeGfx.lineStyle(1, COLOR_RANGE, 0.2);
+      t.rangeGfx.strokePoints(pts, true);
+    }
+  }
+
   private clearTowers(): void {
     for (const t of this.towers) {
       t.gfx.destroy();
@@ -615,22 +627,26 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private refresh(): void {
+    const { connected, edges } = this.computeConnectivity();
+    const wasConnected = this.connected;
+    this.connected = connected;
+    this.pathEdges = edges;
+    this.drawLinks();
+
     if (this.editorActive) {
       if (this.saveStatusTimer <= 0) {
         this.budgetText.setColor(this.dirty ? "#ffe099" : "#88ff99");
         this.budgetText.setText(this.dirty ? "UNSAVED" : "SAVED");
       }
+      // In editor mode we draw the live link tree (so the author can see
+      // how their geometry breaks existing networks) but hide the
+      // gameplay NEXT / status banner; the user exits via PLAY.
       this.statusText.setText("");
       this.nextBtn.setVisible(false);
       return;
     }
     this.budgetText.setColor("#ffffff");
     this.budgetText.setText(`Towers: ${this.towers.length}`);
-    const { connected, edges } = this.computeConnectivity();
-    const wasConnected = this.connected;
-    this.connected = connected;
-    this.pathEdges = edges;
-    this.drawLinks();
 
     if (connected && !wasConnected) this.sound.play("score");
 
@@ -724,10 +740,6 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private drawLinks(): void {
-    if (this.editorActive) {
-      this.linkGfx.clear();
-      return;
-    }
     const nodes = this.nodes();
     this.linkGfx.clear();
 
@@ -780,7 +792,8 @@ export class TowerScene extends Phaser.Scene {
 
   private enterEditor(): void {
     this.sound.play("pop");
-    this.clearTowers();
+    // Keep already-placed towers visible so the author can see how their
+    // current tree reacts as the level geometry changes.
     if (!this.draft) {
       this.draft = this.cloneLevel(this.levels[this.levelIndex]);
       this.dirty = false;
@@ -840,7 +853,7 @@ export class TowerScene extends Phaser.Scene {
       this.resetBtn,
     ];
     for (const btn of order) {
-      if (!btn || !btn.visible) continue;
+      if (!btn?.visible) continue;
       btn.setX(x);
       x -= btn.width + gap;
     }
@@ -1134,6 +1147,7 @@ export class TowerScene extends Phaser.Scene {
     this.drawObstacles();
     this.drawInhibitors();
     this.drawTerminals();
+    this.redrawTowerRanges();
   }
 
   private destroyHandles(): void {
