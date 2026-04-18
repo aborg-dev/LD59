@@ -100,6 +100,7 @@ export class ShepherdScene extends Phaser.Scene {
   private wavePhase: "prep" | "active" = "prep";
   private phaseTimeLeftMs = 0;
   private sheepToSpawn = 0;
+  private waveSpawnOrigin = { x: 0, y: 0 };
   private nextSpawnMs = 0;
   private waveSize = 0;
   private lastShownSec = -1;
@@ -117,6 +118,8 @@ export class ShepherdScene extends Phaser.Scene {
 
   private fieldTop = 0;
   private fieldBottom = 0;
+  private hudCamera!: Phaser.Cameras.Scene2D.Camera;
+  private currentZoom = 1;
 
   constructor() {
     super("Shepherd");
@@ -142,11 +145,14 @@ export class ShepherdScene extends Phaser.Scene {
     this.sheepToSpawn = 0;
     this.waveSize = 0;
     this.lastShownSec = -1;
+    this.currentZoom = 1;
+    this.hudCamera = this.cameras.add(0, 0, width, height);
 
-    // Grass background
-    this.add
-      .rectangle(width / 2, this.fieldTop + fieldH / 2, width, fieldH, 0x4a8c3a)
+    // Grass background — large so it fills the view when zoomed out
+    const bg = this.add
+      .rectangle(width / 2, this.fieldTop + fieldH / 2, 6000, 4000, 0x4a8c3a)
       .setDepth(0);
+    this.hudCamera.ignore(bg);
 
     // Pen — circle in the middle
     this.penX = width / 2;
@@ -156,8 +162,9 @@ export class ShepherdScene extends Phaser.Scene {
       .circle(this.penX, this.penY, this.penR, 0x8b5a2b, 0.25)
       .setDepth(1);
     pen.setStrokeStyle(4, 0xffe099);
+    this.hudCamera.ignore(pen);
 
-    this.add
+    const penLabel = this.add
       .text(this.penX, this.penY, "PEN", {
         fontFamily: FONT_UI,
         fontSize: 24,
@@ -166,12 +173,14 @@ export class ShepherdScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(2);
+    this.hudCamera.ignore(penLabel);
 
     // Whistle visualization (hidden by default, positioned on each whistle)
     this.whistleRing = this.add
       .circle(0, 0, WHISTLE_RADIUS, 0xffffff, 0.0)
       .setDepth(9);
     this.whistleRing.setStrokeStyle(3, 0xffff88, 0);
+    this.hudCamera.ignore(this.whistleRing);
 
     // Hay placement preview (hidden until placing mode)
     this.placePreview = this.add
@@ -179,6 +188,7 @@ export class ShepherdScene extends Phaser.Scene {
       .setDepth(4);
     this.placePreview.setStrokeStyle(2, 0xffd966, 0.7);
     this.placePreview.setVisible(false);
+    this.hudCamera.ignore(this.placePreview);
 
     this.input.keyboard?.on("keydown-H", () => this.togglePlacing());
 
@@ -186,12 +196,13 @@ export class ShepherdScene extends Phaser.Scene {
     // sheep. In placing mode, clicks drop a hay pile instead.
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       if (this.gameOver) return;
-      if (p.y < this.fieldTop || p.y > this.fieldBottom) return;
+      if (p.y > this.fieldBottom) return;
+      const wp = this.cameras.main.getWorldPoint(p.x, p.y);
       if (this.placing) {
-        this.tryPlaceHay(p.x, p.y);
+        this.tryPlaceHay(wp.x, wp.y);
         return;
       }
-      this.whistle(p.x, p.y);
+      this.whistle(wp.x, wp.y);
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
       if (this.gameOver) return;
@@ -199,22 +210,24 @@ export class ShepherdScene extends Phaser.Scene {
         this.placePreview.setVisible(false);
         return;
       }
-      if (p.y < this.fieldTop || p.y > this.fieldBottom) {
+      if (p.y > this.fieldBottom) {
         this.placePreview.setVisible(false);
         return;
       }
+      const wp = this.cameras.main.getWorldPoint(p.x, p.y);
       this.placePreview.setVisible(true);
-      this.placePreview.setPosition(p.x, p.y);
-      const ok = this.canPlaceHay(p.x, p.y);
+      this.placePreview.setPosition(wp.x, wp.y);
+      const ok = this.canPlaceHay(wp.x, wp.y);
       this.placePreview.setFillStyle(ok ? 0xffd966 : 0xff6666, 0.1);
       this.placePreview.setStrokeStyle(2, ok ? 0xffd966 : 0xff6666, 0.7);
     });
 
     // --- Top HUD: timer | coins | wave ---
-    this.add
+    const hudTopBar = this.add
       .rectangle(width / 2, 0, width, HUD_TOP_H, 0x111122)
       .setOrigin(0.5, 0)
       .setDepth(100);
+    this.cameras.main.ignore(hudTopBar);
 
     this.timerText = this.add
       .text(24, HUD_TOP_H / 2, String(WAVE_PREP_SEC), {
@@ -227,6 +240,7 @@ export class ShepherdScene extends Phaser.Scene {
       })
       .setOrigin(0, 0.5)
       .setDepth(101);
+    this.cameras.main.ignore(this.timerText);
 
     this.coinText = this.add
       .text(width / 2, HUD_TOP_H / 2, "$0", {
@@ -239,6 +253,7 @@ export class ShepherdScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0.5)
       .setDepth(101);
+    this.cameras.main.ignore(this.coinText);
 
     this.waveText = this.add
       .text(width - 24, HUD_TOP_H / 2, `Wave ${this.waveNumber}`, {
@@ -251,8 +266,9 @@ export class ShepherdScene extends Phaser.Scene {
       })
       .setOrigin(1, 0.5)
       .setDepth(101);
+    this.cameras.main.ignore(this.waveText);
 
-    // Mid-field banner for wave transitions
+    // Mid-field banner for wave transitions — on HUD camera so it stays at fixed screen position
     this.bannerText = this.add
       .text(width / 2, this.fieldTop + 60, "", {
         fontFamily: FONT_UI,
@@ -265,14 +281,16 @@ export class ShepherdScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(50)
       .setAlpha(0);
+    this.cameras.main.ignore(this.bannerText);
 
     this.showBanner(`Wave ${this.waveNumber} — prep`);
 
     // --- Bottom HUD: HAY | MENU ---
-    this.add
+    const hudBottomBar = this.add
       .rectangle(width / 2, height, width, HUD_BOTTOM_H, 0x111122)
       .setOrigin(0.5, 1)
       .setDepth(100);
+    this.cameras.main.ignore(hudBottomBar);
 
     const btnY = this.fieldBottom + HUD_BOTTOM_H / 2;
 
@@ -295,6 +313,7 @@ export class ShepherdScene extends Phaser.Scene {
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
     this.hayBtn.on("pointerdown", () => this.togglePlacing());
+    this.cameras.main.ignore(this.hayBtn);
 
     const menuBtn = this.add
       .text(width * 0.7, btnY, "MENU", btnStyle)
@@ -305,6 +324,7 @@ export class ShepherdScene extends Phaser.Scene {
       this.sound.play("pop");
       this.scene.start("MainMenu");
     });
+    this.cameras.main.ignore(menuBtn);
   }
 
   private togglePlacing(): void {
@@ -339,12 +359,15 @@ export class ShepherdScene extends Phaser.Scene {
 
     const ring = this.add.circle(x, y, HAY_RADIUS, 0xffd966, 0.06).setDepth(3);
     ring.setStrokeStyle(1, 0xffd966, 0.4);
+    this.hudCamera.ignore(ring);
 
     const gfx = this.add.circle(x, y, HAY_VISUAL_R, 0xe6c85a).setDepth(8);
     gfx.setStrokeStyle(3, 0x6b4a1f);
+    this.hudCamera.ignore(gfx);
 
     // Darker tuft on top for a pile-of-hay feel
-    this.add.circle(x, y - 4, HAY_VISUAL_R * 0.5, 0xb8964a).setDepth(9);
+    const tuft = this.add.circle(x, y - 4, HAY_VISUAL_R * 0.5, 0xb8964a).setDepth(9);
+    this.hudCamera.ignore(tuft);
 
     this.hayPiles.push({ x, y, gfx, ring });
     this.sound.play("score");
@@ -355,35 +378,20 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private spawnSheep(): void {
-    const { width } = this.scale;
-    const fieldH = this.fieldBottom - this.fieldTop;
+    // Scatter around the wave's shared spawn origin so the flock arrives as a group
+    const jitter = 30;
+    const sx = this.waveSpawnOrigin.x + Phaser.Math.Between(-jitter, jitter);
+    const sy = this.waveSpawnOrigin.y + Phaser.Math.Between(-jitter, jitter);
 
-    // Pick a random edge and a spawn position just inside it
-    const edge = Phaser.Math.Between(0, 3);
-    let sx: number;
-    let sy: number;
-    if (edge === 0) {
-      sx = Phaser.Math.Between(40, width - 40);
-      sy = this.fieldTop + 20;
-    } else if (edge === 1) {
-      sx = width - 20;
-      sy = this.fieldTop + Phaser.Math.Between(40, fieldH - 40);
-    } else if (edge === 2) {
-      sx = Phaser.Math.Between(40, width - 40);
-      sy = this.fieldBottom - 20;
-    } else {
-      sx = 20;
-      sy = this.fieldTop + Phaser.Math.Between(40, fieldH - 40);
-    }
-
-    // Initial drift toward center (not too strong — sheep still wander)
-    const dx = this.penX - sx;
-    const dy = this.penY - sy;
+    // Initial velocity pointing away from the pen
+    const dx = sx - this.penX;
+    const dy = sy - this.penY;
     const d = Math.hypot(dx, dy) || 1;
-    const v0 = 40;
+    const v0 = 60;
 
     const s = this.add.circle(sx, sy, SHEEP_RADIUS, 0xfafafa).setDepth(5);
     s.setStrokeStyle(2, 0x2b2b2b);
+    this.hudCamera.ignore(s);
     this.sheep.push({
       sprite: s,
       vx: (dx / d) * v0,
@@ -500,6 +508,36 @@ export class ShepherdScene extends Phaser.Scene {
   private static readonly stepMs = 16.666;
   private static readonly stepSec = ShepherdScene.stepMs / 1000;
 
+  private updateZoom(): void {
+    const fieldW = this.scale.width;
+    const fieldH = this.fieldBottom - this.fieldTop;
+    // Extra space beyond the farthest sheep so the player can whistle from behind
+    const MARGIN = WHISTLE_RADIUS + 40;
+
+    let reqHalfW = this.penR;
+    let reqHalfH = this.penR;
+
+    for (const s of this.sheep) {
+      if (s.penned) continue;
+      reqHalfW = Math.max(reqHalfW, Math.abs(s.sprite.x - this.penX) + SHEEP_RADIUS);
+      reqHalfH = Math.max(reqHalfH, Math.abs(s.sprite.y - this.penY) + SHEEP_RADIUS);
+    }
+
+    reqHalfW += MARGIN;
+    reqHalfH += MARGIN;
+
+    const targetZoom = Math.min(
+      1,
+      Math.min((fieldW / 2) / reqHalfW, (fieldH / 2) / reqHalfH),
+    );
+    // Zoom out immediately when needed; only zoom back in between waves
+    if (targetZoom < this.currentZoom || this.wavePhase === "prep") {
+      this.currentZoom += (targetZoom - this.currentZoom) * 0.05;
+    }
+    this.cameras.main.setZoom(this.currentZoom);
+    this.cameras.main.centerOn(this.penX, this.penY);
+  }
+
   update(_time: number, delta: number): void {
     if (this.gameOver) return;
     this.accumulator += delta;
@@ -508,6 +546,7 @@ export class ShepherdScene extends Phaser.Scene {
       if (this.gameOver) return;
       this.accumulator -= ShepherdScene.stepMs;
     }
+    this.updateZoom();
   }
 
   private startWave(): void {
@@ -520,6 +559,17 @@ export class ShepherdScene extends Phaser.Scene {
     this.lastShownSec = -1;
     this.waveText.setText(`Wave ${this.waveNumber}`);
     this.showBanner(`Wave ${this.waveNumber}!`);
+    this.waveSpawnOrigin = this.pickSpawnOrigin();
+  }
+
+  private pickSpawnOrigin(): { x: number; y: number } {
+    const { width } = this.scale;
+    const fieldH = this.fieldBottom - this.fieldTop;
+    const edge = Phaser.Math.Between(0, 3);
+    if (edge === 0) return { x: Phaser.Math.Between(80, width - 80), y: this.fieldTop + 20 };
+    if (edge === 1) return { x: width - 20, y: this.fieldTop + Phaser.Math.Between(80, fieldH - 80) };
+    if (edge === 2) return { x: Phaser.Math.Between(80, width - 80), y: this.fieldBottom - 20 };
+    return { x: 20, y: this.fieldTop + Phaser.Math.Between(80, fieldH - 80) };
   }
 
   private completeWave(): void {
