@@ -17,9 +17,7 @@ function waveConfig(n: number): { size: number; timeSec: number } {
 
 const PEN_RADIUS = 120;
 const SHEEP_RADIUS = 18;
-const DOG_RADIUS = 22;
 
-const DOG_SPEED = 950;
 const SHEEP_MAX_SPEED = 220;
 const SHEEP_WANDER_FORCE = 140;
 const SHEEP_GRAZE_MIN_SEC = 1.5;
@@ -28,20 +26,18 @@ const SHEEP_WALK_MIN_SEC = 0.8;
 const SHEEP_WALK_MAX_SEC = 2.2;
 const SHEEP_COHESION_RADIUS = 160;
 const SHEEP_COHESION_FORCE = 28;
-const FEAR_RADIUS = 180;
-const FLEE_FORCE = 520;
 const SEPARATION_RADIUS = 42;
 const SEPARATION_FORCE = 240;
 const SHEEP_DAMPING = 0.9;
 
-const BARK_RADIUS = 420;
-const BARK_IMPULSE = 1400;
-const BARK_COOLDOWN_MS = 700;
-const BARK_SCARED_MS = 700;
+const WHISTLE_RADIUS = 260;
+const WHISTLE_IMPULSE = 1400;
+const WHISTLE_COOLDOWN_MS = 700;
+const WHISTLE_SCARED_MS = 700;
 const SHEEP_SCARED_MAX_SPEED = 560;
 const SHEEP_SCARED_DAMPING = 0.985;
 
-const HAY_COST = 3;
+const HAY_COST = 6;
 const HAY_RADIUS = 130;
 const HAY_EAT_DIST = 45;
 const HAY_FORCE = 900;
@@ -68,7 +64,6 @@ interface HayPile {
 
 export interface ShepherdSceneState {
   active: boolean;
-  dog: { x: number; y: number };
   sheep: { x: number; y: number; penned: boolean }[];
   pen: { x: number; y: number; radius: number };
   hayPiles: { x: number; y: number }[];
@@ -84,22 +79,19 @@ export interface ShepherdSceneState {
   };
   /** Seconds left in the current wave phase — preserved for test-helper use */
   timeLeft: number;
-  barkCooldownMs: number;
+  whistleCooldownMs: number;
   viewport: { width: number; height: number };
 }
 
 export class ShepherdScene extends Phaser.Scene {
-  private dog!: Phaser.GameObjects.Arc;
   private sheep: Sheep[] = [];
   private hayPiles: HayPile[] = [];
   private score = 0;
   private coins = 0;
   private accumulator = 0;
   private gameOver = false;
-  private targetX = 0;
-  private targetY = 0;
-  private barkCooldownMs = 0;
-  private barkRing!: Phaser.GameObjects.Arc;
+  private whistleCooldownMs = 0;
+  private whistleRing!: Phaser.GameObjects.Arc;
   private placing = false;
   private placePreview!: Phaser.GameObjects.Arc;
 
@@ -113,18 +105,6 @@ export class ShepherdScene extends Phaser.Scene {
   private lastShownSec = -1;
   private bannerText!: Phaser.GameObjects.Text;
   private bannerTween?: Phaser.Tweens.Tween;
-  private keys!: {
-    up: Phaser.Input.Keyboard.Key;
-    down: Phaser.Input.Keyboard.Key;
-    left: Phaser.Input.Keyboard.Key;
-    right: Phaser.Input.Keyboard.Key;
-  };
-  private arrowKeys!: {
-    up: Phaser.Input.Keyboard.Key;
-    down: Phaser.Input.Keyboard.Key;
-    left: Phaser.Input.Keyboard.Key;
-    right: Phaser.Input.Keyboard.Key;
-  };
 
   private penX = 0;
   private penY = 0;
@@ -133,7 +113,6 @@ export class ShepherdScene extends Phaser.Scene {
   private waveText!: Phaser.GameObjects.Text;
   private coinText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
-  private barkBtn!: Phaser.GameObjects.Text;
   private hayBtn!: Phaser.GameObjects.Text;
 
   private fieldTop = 0;
@@ -153,7 +132,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.coins = 0;
     this.accumulator = 0;
     this.gameOver = false;
-    this.barkCooldownMs = 0;
+    this.whistleCooldownMs = 0;
     this.sheep = [];
     this.hayPiles = [];
     this.placing = false;
@@ -188,19 +167,11 @@ export class ShepherdScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2);
 
-    // Dog starts next to the pen
-    this.dog = this.add
-      .circle(this.penX, this.penY + this.penR + 80, DOG_RADIUS, 0x222222)
-      .setDepth(10);
-    this.dog.setStrokeStyle(2, 0xffffff);
-    this.targetX = this.dog.x;
-    this.targetY = this.dog.y;
-
-    // Bark visualization (hidden by default)
-    this.barkRing = this.add
-      .circle(this.dog.x, this.dog.y, BARK_RADIUS, 0xffffff, 0.0)
+    // Whistle visualization (hidden by default, positioned on each whistle)
+    this.whistleRing = this.add
+      .circle(0, 0, WHISTLE_RADIUS, 0xffffff, 0.0)
       .setDepth(9);
-    this.barkRing.setStrokeStyle(3, 0xffff88, 0);
+    this.whistleRing.setStrokeStyle(3, 0xffff88, 0);
 
     // Hay placement preview (hidden until placing mode)
     this.placePreview = this.add
@@ -209,28 +180,10 @@ export class ShepherdScene extends Phaser.Scene {
     this.placePreview.setStrokeStyle(2, 0xffd966, 0.7);
     this.placePreview.setVisible(false);
 
-    // Spacebar triggers bark; WASD + arrows drive the dog
-    this.input.keyboard?.on("keydown-SPACE", () => this.bark());
     this.input.keyboard?.on("keydown-H", () => this.togglePlacing());
-    const kb = this.input.keyboard;
-    if (kb) {
-      const K = Phaser.Input.Keyboard.KeyCodes;
-      this.keys = {
-        up: kb.addKey(K.W),
-        down: kb.addKey(K.S),
-        left: kb.addKey(K.A),
-        right: kb.addKey(K.D),
-      };
-      this.arrowKeys = {
-        up: kb.addKey(K.UP),
-        down: kb.addKey(K.DOWN),
-        left: kb.addKey(K.LEFT),
-        right: kb.addKey(K.RIGHT),
-      };
-    }
 
-    // Input — dog auto-follows the cursor; click barks.
-    // In placing mode, click drops a hay pile and the dog holds position.
+    // Click in the field → whistle at the click location, scattering nearby
+    // sheep. In placing mode, clicks drop a hay pile instead.
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       if (this.gameOver) return;
       if (p.y < this.fieldTop || p.y > this.fieldBottom) return;
@@ -238,24 +191,23 @@ export class ShepherdScene extends Phaser.Scene {
         this.tryPlaceHay(p.x, p.y);
         return;
       }
-      this.bark();
+      this.whistle(p.x, p.y);
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
       if (this.gameOver) return;
+      if (!this.placing) {
+        this.placePreview.setVisible(false);
+        return;
+      }
       if (p.y < this.fieldTop || p.y > this.fieldBottom) {
         this.placePreview.setVisible(false);
         return;
       }
-      if (this.placing) {
-        this.placePreview.setVisible(true);
-        this.placePreview.setPosition(p.x, p.y);
-        const ok = this.canPlaceHay(p.x, p.y);
-        this.placePreview.setFillStyle(ok ? 0xffd966 : 0xff6666, 0.1);
-        this.placePreview.setStrokeStyle(2, ok ? 0xffd966 : 0xff6666, 0.7);
-        return;
-      }
-      this.targetX = p.x;
-      this.targetY = p.y;
+      this.placePreview.setVisible(true);
+      this.placePreview.setPosition(p.x, p.y);
+      const ok = this.canPlaceHay(p.x, p.y);
+      this.placePreview.setFillStyle(ok ? 0xffd966 : 0xff6666, 0.1);
+      this.placePreview.setStrokeStyle(2, ok ? 0xffd966 : 0xff6666, 0.7);
     });
 
     // --- Top HUD: timer | coins | wave ---
@@ -316,7 +268,7 @@ export class ShepherdScene extends Phaser.Scene {
 
     this.showBanner(`Wave ${this.waveNumber} — prep`);
 
-    // --- Bottom HUD: BARK | HAY | MENU ---
+    // --- Bottom HUD: HAY | MENU ---
     this.add
       .rectangle(width / 2, height, width, HUD_BOTTOM_H, 0x111122)
       .setOrigin(0.5, 1)
@@ -333,19 +285,8 @@ export class ShepherdScene extends Phaser.Scene {
       resolution: TEXT_RESOLUTION,
     };
 
-    this.barkBtn = this.add
-      .text(width * 0.2, btnY, "BARK", {
-        ...btnStyle,
-        backgroundColor: "#804020",
-        fontSize: 24,
-      })
-      .setOrigin(0.5)
-      .setDepth(101)
-      .setInteractive({ useHandCursor: true });
-    this.barkBtn.on("pointerdown", () => this.bark());
-
     this.hayBtn = this.add
-      .text(width * 0.5, btnY, `HAY $${HAY_COST}`, {
+      .text(width * 0.3, btnY, `HAY $${HAY_COST}`, {
         ...btnStyle,
         backgroundColor: "#8a6a1f",
         fontSize: 24,
@@ -356,7 +297,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.hayBtn.on("pointerdown", () => this.togglePlacing());
 
     const menuBtn = this.add
-      .text(width * 0.8, btnY, "MENU", btnStyle)
+      .text(width * 0.7, btnY, "MENU", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
@@ -455,37 +396,37 @@ export class ShepherdScene extends Phaser.Scene {
     });
   }
 
-  private bark(): void {
+  private whistle(wx: number, wy: number): void {
     if (this.gameOver) return;
-    if (this.barkCooldownMs > 0) return;
-    this.barkCooldownMs = BARK_COOLDOWN_MS;
+    if (this.whistleCooldownMs > 0) return;
+    this.whistleCooldownMs = WHISTLE_COOLDOWN_MS;
     this.sound.play("pop");
 
-    // Apply impulse to unpenned sheep within BARK_RADIUS
+    // Push unpenned sheep away from the whistle point.
     for (const s of this.sheep) {
       if (s.penned) continue;
-      const dx = s.sprite.x - this.dog.x;
-      const dy = s.sprite.y - this.dog.y;
+      const dx = s.sprite.x - wx;
+      const dy = s.sprite.y - wy;
       const d = Math.hypot(dx, dy);
-      if (d < BARK_RADIUS && d > 0.01) {
-        const k = (1 - d / BARK_RADIUS) * BARK_IMPULSE;
+      if (d < WHISTLE_RADIUS && d > 0.01) {
+        const k = (1 - d / WHISTLE_RADIUS) * WHISTLE_IMPULSE;
         s.vx += (dx / d) * k;
         s.vy += (dy / d) * k;
-        s.scaredMs = BARK_SCARED_MS;
+        s.scaredMs = WHISTLE_SCARED_MS;
       }
     }
 
-    // Visual ring
-    this.barkRing.setPosition(this.dog.x, this.dog.y);
-    this.barkRing.setRadius(10);
-    this.barkRing.setStrokeStyle(4, 0xffff88, 1);
+    // Visual ring at the whistle point.
+    this.whistleRing.setPosition(wx, wy);
+    this.whistleRing.setRadius(10);
+    this.whistleRing.setStrokeStyle(4, 0xffff88, 1);
     this.tweens.add({
-      targets: this.barkRing,
-      radius: BARK_RADIUS,
+      targets: this.whistleRing,
+      radius: WHISTLE_RADIUS,
       strokeAlpha: 0,
       duration: 400,
       onComplete: () => {
-        this.barkRing.setStrokeStyle(3, 0xffff88, 0);
+        this.whistleRing.setStrokeStyle(3, 0xffff88, 0);
       },
     });
   }
@@ -533,7 +474,6 @@ export class ShepherdScene extends Phaser.Scene {
     const phaseTimeLeft = Math.max(0, this.phaseTimeLeftMs / 1000);
     return {
       active: this.scene.isActive(),
-      dog: { x: this.dog.x, y: this.dog.y },
       sheep: this.sheep.map((s) => ({
         x: s.sprite.x,
         y: s.sprite.y,
@@ -552,7 +492,7 @@ export class ShepherdScene extends Phaser.Scene {
         remainingToSpawn: this.sheepToSpawn,
       },
       timeLeft: phaseTimeLeft,
-      barkCooldownMs: this.barkCooldownMs,
+      whistleCooldownMs: this.whistleCooldownMs,
       viewport: { width: this.scale.width, height: this.scale.height },
     };
   }
@@ -626,8 +566,8 @@ export class ShepherdScene extends Phaser.Scene {
     const dtMs = dt * 1000;
     const { width } = this.scale;
 
-    if (this.barkCooldownMs > 0) {
-      this.barkCooldownMs = Math.max(0, this.barkCooldownMs - dtMs);
+    if (this.whistleCooldownMs > 0) {
+      this.whistleCooldownMs = Math.max(0, this.whistleCooldownMs - dtMs);
     }
 
     // Wave state machine
@@ -660,34 +600,6 @@ export class ShepherdScene extends Phaser.Scene {
       }
     }
 
-    // Dog movement — keyboard overrides the tap target when any key is held
-    let kx = 0;
-    let ky = 0;
-    if (this.keys && this.arrowKeys) {
-      if (this.keys.left.isDown || this.arrowKeys.left.isDown) kx -= 1;
-      if (this.keys.right.isDown || this.arrowKeys.right.isDown) kx += 1;
-      if (this.keys.up.isDown || this.arrowKeys.up.isDown) ky -= 1;
-      if (this.keys.down.isDown || this.arrowKeys.down.isDown) ky += 1;
-    }
-
-    if (kx !== 0 || ky !== 0) {
-      const klen = Math.hypot(kx, ky);
-      const step = DOG_SPEED * dt;
-      this.dog.x += (kx / klen) * step;
-      this.dog.y += (ky / klen) * step;
-      this.targetX = this.dog.x;
-      this.targetY = this.dog.y;
-    } else {
-      const ddx = this.targetX - this.dog.x;
-      const ddy = this.targetY - this.dog.y;
-      const dDist = Math.hypot(ddx, ddy);
-      if (dDist > 2) {
-        const move = Math.min(dDist, DOG_SPEED * dt);
-        this.dog.x += (ddx / dDist) * move;
-        this.dog.y += (ddy / dDist) * move;
-      }
-    }
-
     // Sheep behavior
     for (let i = 0; i < this.sheep.length; i++) {
       const s = this.sheep[i];
@@ -695,16 +607,6 @@ export class ShepherdScene extends Phaser.Scene {
 
       let ax = 0;
       let ay = 0;
-
-      // Flee from dog
-      const fdx = s.sprite.x - this.dog.x;
-      const fdy = s.sprite.y - this.dog.y;
-      const fd = Math.hypot(fdx, fdy);
-      if (fd < FEAR_RADIUS && fd > 0.01) {
-        const strength = (1 - fd / FEAR_RADIUS) * FLEE_FORCE;
-        ax += (fdx / fd) * strength;
-        ay += (fdy / fd) * strength;
-      }
 
       // Hay pulls sheep in from the outer radius and holds them in a ring
       // just outside the pile.
@@ -768,7 +670,7 @@ export class ShepherdScene extends Phaser.Scene {
         }
       }
 
-      // Scared tick (set by bark)
+      // Scared tick (set by whistle)
       if (s.scaredMs > 0) s.scaredMs = Math.max(0, s.scaredMs - dtMs);
       const scared = s.scaredMs > 0;
       const damping = scared ? SHEEP_SCARED_DAMPING : SHEEP_DAMPING;
@@ -818,14 +720,5 @@ export class ShepherdScene extends Phaser.Scene {
         this.sound.play("score");
       }
     }
-
-    // Keep dog inside field
-    const w = this.scale.width;
-    if (this.dog.x < DOG_RADIUS) this.dog.x = DOG_RADIUS;
-    else if (this.dog.x > w - DOG_RADIUS) this.dog.x = w - DOG_RADIUS;
-    if (this.dog.y < this.fieldTop + DOG_RADIUS)
-      this.dog.y = this.fieldTop + DOG_RADIUS;
-    else if (this.dog.y > this.fieldBottom - DOG_RADIUS)
-      this.dog.y = this.fieldBottom - DOG_RADIUS;
   }
 }

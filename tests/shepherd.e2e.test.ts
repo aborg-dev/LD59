@@ -53,21 +53,17 @@ describe("shepherd wave-based herding", () => {
     expect(s.sheep.some((sh) => sh.penned)).toBe(true);
   });
 
-  it("bark pushes nearby sheep away from dog", async () => {
+  it("whistle pushes nearby sheep away from the click point", async () => {
     await game.startScene("Shepherd");
 
     await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Shepherd');
       for (const s of gs.sheep) s.sprite.destroy();
       gs.sheep = [];
-      gs.dog.x = 60;
-      gs.dog.y = 1100;
-      gs.targetX = gs.dog.x;
-      gs.targetY = gs.dog.y;
       gs.spawnSheep();
       const s = gs.sheep[gs.sheep.length - 1];
-      s.sprite.x = 100;
-      s.sprite.y = 1100;
+      s.sprite.x = 200;
+      s.sprite.y = 400;
       s.vx = 0;
       s.vy = 0;
       s.wanderAngle = 0;
@@ -78,8 +74,9 @@ describe("shepherd wave-based herding", () => {
     const before = (await shepherdState()).sheep.at(-1);
     if (!before) throw new Error("no sheep");
 
+    // Whistle at (150, 400) — sheep at 200 should be shoved further right.
     await game.eval_(`(() => {
-      window.game.scene.getScene('Shepherd').bark();
+      window.game.scene.getScene('Shepherd').whistle(150, 400);
     })()`);
     await game.advanceTime(50);
 
@@ -100,10 +97,6 @@ describe("shepherd wave-based herding", () => {
       const hx = gs.penX + gs.penR + 60;
       const hy = gs.penY;
       gs.tryPlaceHay(hx, hy);
-      gs.dog.x = 60;
-      gs.dog.y = 100;
-      gs.targetX = gs.dog.x;
-      gs.targetY = gs.dog.y;
       gs.spawnSheep();
       const s = gs.sheep[gs.sheep.length - 1];
       s.sprite.x = hx + 90;
@@ -116,7 +109,7 @@ describe("shepherd wave-based herding", () => {
 
     const st0 = await shepherdState();
     expect(st0.hayPiles.length).toBe(1);
-    expect(st0.coins).toBe(7);
+    expect(st0.coins).toBe(4);
 
     const sheepBefore = st0.sheep.at(-1);
     if (!sheepBefore) throw new Error("no sheep");

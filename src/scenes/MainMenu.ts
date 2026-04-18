@@ -14,7 +14,7 @@ export class MainMenu extends Scene {
     const { width, height } = this.scale;
 
     this.add
-      .text(width / 2, height / 2 - 120, "Shepherd Dog", {
+      .text(width / 2, height / 2 - 120, "Shepherd", {
         fontFamily: FONT_UI,
         fontSize: 56,
         color: "#ffe099",
