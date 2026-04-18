@@ -30,6 +30,7 @@ let ALIGNMENT_FORCE = 100;
 const SEPARATION_RADIUS = 42;
 const SEPARATION_FORCE = 240;
 let SHEEP_DAMPING = 0.97;
+let SHEEP_TURN_RATE = 4.5; // radians per second; limits how fast a sheep can change direction
 const PANIC_RADIUS = 90;
 let PANIC_INHERIT = 0.7;
 
@@ -56,9 +57,10 @@ const HAY_PUSH_FORCE = 1400;
 const HAY_VISUAL_R = 16;
 
 interface Sheep {
-  sprite: Phaser.GameObjects.Arc;
+  sprite: Phaser.GameObjects.Rectangle;
   vx: number;
   vy: number;
+  angle: number;
   penned: boolean;
   grazing: boolean;
   modeT: number;
@@ -499,17 +501,20 @@ export class ShepherdScene extends Phaser.Scene {
     const d = Math.hypot(dx, dy) || 1;
     const v0 = 60;
 
-    const s = this.add.circle(sx, sy, SHEEP_RADIUS, 0xfafafa).setDepth(5);
+    const initAngle = Math.atan2(dy, dx);
+    const s = this.add.rectangle(sx, sy, SHEEP_RADIUS * 2, SHEEP_RADIUS, 0xfafafa).setDepth(5);
     s.setStrokeStyle(2, 0x2b2b2b);
+    s.rotation = initAngle;
     this.hudCamera.ignore(s);
     this.sheep.push({
       sprite: s,
       vx: (dx / d) * v0,
       vy: (dy / d) * v0,
+      angle: initAngle,
       penned: false,
       grazing: false,
       modeT: SHEEP_WALK_MIN_SEC + Math.random() * SHEEP_WALK_MAX_SEC,
-      wanderAngle: Math.atan2(dy, dx),
+      wanderAngle: initAngle,
       scaredMs: 0,
     });
   }
@@ -881,19 +886,28 @@ export class ShepherdScene extends Phaser.Scene {
       const damping = scared ? SHEEP_SCARED_DAMPING : SHEEP_DAMPING;
       const maxSpeed = scared ? SHEEP_SCARED_MAX_SPEED : SHEEP_MAX_SPEED;
 
-      // Integrate velocity
-      s.vx = (s.vx + ax * dt) * damping;
-      s.vy = (s.vy + ay * dt) * damping;
+      // Desired velocity from forces
+      const desiredVx = (s.vx + ax * dt) * damping;
+      const desiredVy = (s.vy + ay * dt) * damping;
+      const desiredSpd = Math.hypot(desiredVx, desiredVy);
 
-      // Clamp speed
-      const sp = Math.hypot(s.vx, s.vy);
-      if (sp > maxSpeed) {
-        s.vx = (s.vx / sp) * maxSpeed;
-        s.vy = (s.vy / sp) * maxSpeed;
+      // Heading turns toward desired direction at a limited rate
+      if (desiredSpd > 2) {
+        let diff = Math.atan2(desiredVy, desiredVx) - s.angle;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        const maxTurn = (scared ? SHEEP_TURN_RATE * 1.5 : SHEEP_TURN_RATE) * dt;
+        s.angle += Math.max(-maxTurn, Math.min(maxTurn, diff));
       }
+
+      // Velocity strictly along heading
+      const clampedSpd = Math.min(desiredSpd, maxSpeed);
+      s.vx = Math.cos(s.angle) * clampedSpd;
+      s.vy = Math.sin(s.angle) * clampedSpd;
 
       s.sprite.x += s.vx * dt;
       s.sprite.y += s.vy * dt;
+      s.sprite.rotation = s.angle;
 
       // Cliff — sheep that cross the edge fall into the void
       if (this.isInCliff(s.sprite.x)) {
@@ -1001,6 +1015,7 @@ export class ShepherdScene extends Phaser.Scene {
       { label: "Fear Radius",      get: () => FEAR_RADIUS,            set: v => { FEAR_RADIUS = v; },            min: 0,    max: 500,   step: 5     },
       { label: "Panic Inherit",    get: () => PANIC_INHERIT,          set: v => { PANIC_INHERIT = v; },          min: 0,    max: 1,     step: 0.05  },
       { label: "Cliff Drift",      get: () => CLIFF_DRIFT_FORCE,      set: v => { CLIFF_DRIFT_FORCE = v; },      min: 0,    max: 200,   step: 5     },
+      { label: "Turn Rate",        get: () => SHEEP_TURN_RATE,        set: v => { SHEEP_TURN_RATE = v; },        min: 0.5,  max: 15,    step: 0.5   },
     ];
 
     for (const cfg of params) {
