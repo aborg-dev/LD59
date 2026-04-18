@@ -4,10 +4,6 @@ import { GameOver, type GameOverState } from "./scenes/GameOver.js";
 import { MainMenu, type MainMenuState } from "./scenes/MainMenu.js";
 import { Preloader, type PreloaderState } from "./scenes/Preloader.js";
 import {
-  ShepherdScene,
-  type ShepherdSceneState,
-} from "./scenes/ShepherdScene.js";
-import {
   TowerLevelSelectScene,
   type TowerLevelSelectState,
 } from "./scenes/TowerLevelSelectScene.js";
@@ -22,7 +18,6 @@ export interface StateDump {
   Boot: BootState | null;
   Preloader: PreloaderState | null;
   MainMenu: MainMenuState | null;
-  Shepherd: ShepherdSceneState | null;
   Tower: TowerSceneState | null;
   TowerLevelSelect: TowerLevelSelectState | null;
   GameOver: GameOverState | null;
@@ -51,7 +46,6 @@ const config: Phaser.Types.Core.GameConfig = {
     Boot,
     Preloader,
     MainMenu,
-    ShepherdScene,
     TowerLevelSelectScene,
     TowerScene,
     GameOver,
@@ -86,7 +80,6 @@ window.dumpState = () => ({
   Boot: tryDump(game.scene.getScene("Boot") as Boot),
   Preloader: tryDump(game.scene.getScene("Preloader") as Preloader),
   MainMenu: tryDump(game.scene.getScene("MainMenu") as MainMenu),
-  Shepherd: tryDump(game.scene.getScene("Shepherd") as ShepherdScene),
   Tower: tryDump(game.scene.getScene("Tower") as TowerScene),
   TowerLevelSelect: tryDump(
     game.scene.getScene("TowerLevelSelect") as TowerLevelSelectScene,

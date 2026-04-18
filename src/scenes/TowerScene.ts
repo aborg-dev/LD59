@@ -377,13 +377,16 @@ export class TowerScene extends Phaser.Scene {
       // --- Inhibitor levels ---
       {
         terminals: [
-          { x: left, y: top + h * 0.5 },
-          { x: right, y: top + h * 0.5 },
+          { x: left, y: top + h * 0.3 },
+          { x: right, y: top + h * 0.7 },
         ],
         obstacles: [],
-        inhibitors: [{ x: w / 2, y: top + h * 0.5, radius: 150 }],
-        range: 320,
-        hint: "Jammers block the signal.\nRoute above or below.",
+        inhibitors: [
+          { x: w / 2, y: top + h * 0.3, radius: 200 },
+          { x: w / 2, y: top + h * 0.7, radius: 200 },
+        ],
+        range: 280,
+        hint: "Two stacked jammers.\nThe slot between them is the only way.",
       },
       {
         terminals: [
@@ -392,22 +395,23 @@ export class TowerScene extends Phaser.Scene {
         ],
         obstacles: [],
         inhibitors: [
-          { x: w * 0.35, y: top + h * 0.32, radius: 130 },
-          { x: w * 0.65, y: top + h * 0.68, radius: 130 },
+          { x: w * 0.28, y: top + h * 0.45, radius: 80 },
+          { x: w * 0.5, y: top + h * 0.55, radius: 80 },
+          { x: w * 0.72, y: top + h * 0.45, radius: 80 },
         ],
-        range: 280,
-        hint: "Two jammers in a gauntlet.\nThread around each.",
+        range: 260,
+        hint: "Three jammers on the line.\nWeave over, under, over.",
       },
       {
         terminals: [
-          { x: left, y: top + h * 0.15 },
-          { x: right, y: top + h * 0.15 },
+          { x: left + 20, y: top + h * 0.18 },
+          { x: right - 20, y: top + h * 0.18 },
           { x: w / 2, y: top + h * 0.85 },
         ],
         obstacles: [],
-        inhibitors: [{ x: w / 2, y: top + h * 0.5, radius: 120 }],
-        range: 450,
-        hint: "Three signals, one dead-center jammer.\nRoute around to reach all three.",
+        inhibitors: [{ x: w / 2, y: top + h * 0.5, radius: 150 }],
+        range: 380,
+        hint: "Big central jammer.\nConnect the top pair, then detour down.",
       },
     ];
   }

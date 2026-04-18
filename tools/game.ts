@@ -10,16 +10,10 @@ let currentUrl = "";
 let pageErrors: string[] = [];
 
 import type { StateDump } from "../src/main.js";
-import type { ShepherdSceneState } from "../src/scenes/ShepherdScene.js";
 import type { TowerLevelSelectState } from "../src/scenes/TowerLevelSelectScene.js";
 import type { TowerSceneState } from "../src/scenes/TowerScene.js";
 
-export type {
-  ShepherdSceneState,
-  StateDump,
-  TowerLevelSelectState,
-  TowerSceneState,
-};
+export type { StateDump, TowerLevelSelectState, TowerSceneState };
 
 async function ensurePage(
   url: string,
