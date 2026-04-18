@@ -1,5 +1,13 @@
 import * as Phaser from "phaser";
 import { FONT_BODY, FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
+import mapData from "./shepherd-map.json";
+
+const GRID_COLS = 4;
+const GRID_ROWS = 4;
+const ROOM_W = 1600;
+const ROOM_H = 800;
+const WORLD_W = ROOM_W * GRID_COLS; // 6400
+const WORLD_H = ROOM_H * GRID_ROWS; // 3200
 
 const HUD_TOP_H = 70;
 const HUD_BOTTOM_H = 80;
@@ -94,6 +102,12 @@ interface Belt {
 
 type PlacingMode = null | BeltDir;
 
+interface MapTree {
+  x: number;
+  y: number;
+  r: number;
+}
+
 export interface ShepherdSceneState {
   active: boolean;
   dog: { x: number; y: number };
@@ -161,8 +175,13 @@ export class ShepherdScene extends Phaser.Scene {
   private fieldTop = 0;
   private fieldBottom = 0;
   private hudCamera!: Phaser.Cameras.Scene2D.Camera;
-  private currentZoom = 1;
   private debugPanel: HTMLDivElement | null = null;
+  private mapTrees: MapTree[] = [];
+  private mapSpawns: { x: number; y: number }[] = [];
+  private camX = 0;
+  private camY = 0;
+  private roomCol = 0;
+  private roomRow = 0;
 
   constructor() {
     super("Shepherd");
@@ -172,7 +191,6 @@ export class ShepherdScene extends Phaser.Scene {
     const { width, height } = this.scale;
     this.fieldTop = HUD_TOP_H;
     this.fieldBottom = height - HUD_BOTTOM_H;
-    const fieldH = this.fieldBottom - this.fieldTop;
 
     this.score = 0;
     this.coins = 0;
@@ -187,19 +205,26 @@ export class ShepherdScene extends Phaser.Scene {
     this.sheepToSpawn = 0;
     this.waveSize = 0;
     this.sheepLost = 0;
-    this.currentZoom = 1;
+
     this.hudCamera = this.cameras.add(0, 0, width, height);
     this.whistleCooldownMs = 0;
 
     // Grass background — large so it fills the view when zoomed out
     const bg = this.add
-      .rectangle(width / 2, this.fieldTop + fieldH / 2, 6000, 4000, 0x4a8c3a)
+      .rectangle(WORLD_W / 2, WORLD_H / 2, WORLD_W, WORLD_H, 0x4a8c3a)
       .setDepth(0);
     this.hudCamera.ignore(bg);
 
-    // Pen — circle in the middle
-    this.penX = width / 2;
-    this.penY = this.fieldTop + fieldH / 2;
+    // Pen in room (1,1) — second column, second row
+    this.penX = 1.5 * ROOM_W;
+    this.penY = 1.5 * ROOM_H;
+
+    // Camera starts on the pen room, locked; transitions on room crossing
+    this.roomCol = 1;
+    this.roomRow = 1;
+    this.camX = this.penX;
+    this.camY = this.penY;
+    this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H);
 
     const pen = this.add
       .circle(this.penX, this.penY, this.penR, 0x8b5a2b, 0.25)
@@ -217,6 +242,28 @@ export class ShepherdScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2);
     this.hudCamera.ignore(penLabel);
+
+    // Load map objects
+    this.mapTrees = mapData.trees as MapTree[];
+    this.mapSpawns = mapData.spawns;
+
+    // Render trees (one graphics object for all)
+    const treeColors = [0x3a8228, 0x4a9a30, 0x357020];
+    const treeGfx = this.add.graphics().setDepth(2);
+    for (let i = 0; i < this.mapTrees.length; i++) {
+      const t = this.mapTrees[i];
+      const col = treeColors[i % treeColors.length];
+      // Shadow
+      treeGfx.fillStyle(0x1e4a10, 0.5);
+      treeGfx.fillCircle(t.x + t.r * 0.25, t.y + t.r * 0.25, t.r);
+      // Canopy
+      treeGfx.fillStyle(col, 1);
+      treeGfx.fillCircle(t.x, t.y, t.r);
+      // Highlight
+      treeGfx.fillStyle(0x7acc50, 0.45);
+      treeGfx.fillCircle(t.x - t.r * 0.28, t.y - t.r * 0.28, t.r * 0.45);
+    }
+    this.hudCamera.ignore(treeGfx);
 
     // Dog starts next to the pen
     this.dog = this.add
@@ -424,10 +471,10 @@ export class ShepherdScene extends Phaser.Scene {
   private canPlaceBelt(x: number, y: number, dir: BeltDir): boolean {
     if (this.coins < BELT_COST) return false;
     const { w, h } = beltDims(dir);
-    if (y - h / 2 < this.fieldTop + 10) return false;
-    if (y + h / 2 > this.fieldBottom - 10) return false;
-    if (x - w / 2 < 10) return false;
-    if (x + w / 2 > this.scale.width - 10) return false;
+    if (x - w / 2 < 50) return false;
+    if (x + w / 2 > WORLD_W - 50) return false;
+    if (y - h / 2 < 50) return false;
+    if (y + h / 2 > WORLD_H - 50) return false;
     // Can't overlap the pen
     if (Math.hypot(x - this.penX, y - this.penY) < this.penR + 40) return false;
     // Stay clear of existing belts (distance between centers)
@@ -621,39 +668,26 @@ export class ShepherdScene extends Phaser.Scene {
   private static readonly stepSec = ShepherdScene.stepMs / 1000;
 
   private updateZoom(): void {
-    const fieldW = this.scale.width;
+    const { width } = this.scale;
     const fieldH = this.fieldBottom - this.fieldTop;
-    // Extra space beyond the farthest sheep so the player can whistle from behind
-    const MARGIN = WHISTLE_RADIUS + 40;
+    // Fit one full room on screen; a sliver of adjacent rooms may show at edges.
+    const zoom = Math.min(width / ROOM_W, fieldH / ROOM_H);
+    this.cameras.main.setZoom(zoom);
 
-    let reqHalfW = this.penR;
-    let reqHalfH = this.penR;
-
-    for (const s of this.sheep) {
-      if (s.penned) continue;
-      reqHalfW = Math.max(
-        reqHalfW,
-        Math.abs(s.sprite.x - this.penX) + SHEEP_RADIUS,
-      );
-      reqHalfH = Math.max(
-        reqHalfH,
-        Math.abs(s.sprite.y - this.penY) + SHEEP_RADIUS,
-      );
+    // Switch displayed room when the dog crosses a boundary
+    const dogCol = Phaser.Math.Clamp(Math.floor(this.dog.x / ROOM_W), 0, GRID_COLS - 1);
+    const dogRow = Phaser.Math.Clamp(Math.floor(this.dog.y / ROOM_H), 0, GRID_ROWS - 1);
+    if (dogCol !== this.roomCol || dogRow !== this.roomRow) {
+      this.roomCol = dogCol;
+      this.roomRow = dogRow;
     }
 
-    reqHalfW += MARGIN;
-    reqHalfH += MARGIN;
-
-    const targetZoom = Math.min(
-      1,
-      Math.min(fieldW / 2 / reqHalfW, fieldH / 2 / reqHalfH),
-    );
-    // Zoom out immediately when needed; only zoom back in between waves
-    if (targetZoom < this.currentZoom || this.wavePhase === "prep") {
-      this.currentZoom += (targetZoom - this.currentZoom) * 0.05;
-    }
-    this.cameras.main.setZoom(this.currentZoom);
-    this.cameras.main.centerOn(this.penX, this.penY);
+    // Slide camera toward current room center
+    const targetX = (this.roomCol + 0.5) * ROOM_W;
+    const targetY = (this.roomRow + 0.5) * ROOM_H;
+    this.camX += (targetX - this.camX) * 0.12;
+    this.camY += (targetY - this.camY) * 0.12;
+    this.cameras.main.centerOn(this.camX, this.camY);
   }
 
   update(_time: number, delta: number): void {
@@ -679,8 +713,8 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private pickSpawnOrigin(): { x: number; y: number } {
-    const fieldH = this.fieldBottom - this.fieldTop;
-    return { x: 20, y: this.fieldTop + Phaser.Math.Between(80, fieldH - 80) };
+    const idx = Phaser.Math.Between(0, this.mapSpawns.length - 1);
+    return { ...this.mapSpawns[idx] };
   }
 
   private completeWave(): void {
@@ -816,14 +850,22 @@ export class ShepherdScene extends Phaser.Scene {
         this.dog.y += (ddy / dDist) * move;
       }
     }
-    // Clamp dog to visible world area
-    const wv = this.cameras.main.worldView;
-    if (this.dog.x < wv.x + DOG_RADIUS) this.dog.x = wv.x + DOG_RADIUS;
-    else if (this.dog.x > wv.right - DOG_RADIUS)
-      this.dog.x = wv.right - DOG_RADIUS;
-    if (this.dog.y < wv.y + DOG_RADIUS) this.dog.y = wv.y + DOG_RADIUS;
-    else if (this.dog.y > wv.bottom - DOG_RADIUS)
-      this.dog.y = wv.bottom - DOG_RADIUS;
+    // Clamp dog to world bounds
+    this.dog.x = Phaser.Math.Clamp(this.dog.x, DOG_RADIUS, WORLD_W - DOG_RADIUS);
+    this.dog.y = Phaser.Math.Clamp(this.dog.y, DOG_RADIUS, WORLD_H - DOG_RADIUS);
+
+    // Push dog out of trees
+    for (const t of this.mapTrees) {
+      const tdx = this.dog.x - t.x;
+      const tdy = this.dog.y - t.y;
+      const td = Math.hypot(tdx, tdy);
+      const minDist = t.r + DOG_RADIUS;
+      if (td < minDist && td > 0.01) {
+        const push = minDist - td;
+        this.dog.x += (tdx / td) * push;
+        this.dog.y += (tdy / td) * push;
+      }
+    }
 
     // Sheep behavior
     for (let i = 0; i < this.sheep.length; i++) {
@@ -952,21 +994,50 @@ export class ShepherdScene extends Phaser.Scene {
       s.sprite.y += s.vy * dt;
       s.sprite.rotation = s.angle;
 
-      // Field bounds — reflect angle and velocity so the turn-rate model stays consistent
-      const fieldRight = this.scale.width - SHEEP_RADIUS;
+      // World bounds — reflect angle off edges
       if (s.sprite.x < SHEEP_RADIUS) {
         s.sprite.x = SHEEP_RADIUS;
         s.angle = Math.PI - s.angle;
-      } else if (s.sprite.x > fieldRight) {
-        s.sprite.x = fieldRight;
+      } else if (s.sprite.x > WORLD_W - SHEEP_RADIUS) {
+        s.sprite.x = WORLD_W - SHEEP_RADIUS;
         s.angle = Math.PI - s.angle;
       }
-      if (s.sprite.y < this.fieldTop + SHEEP_RADIUS) {
-        s.sprite.y = this.fieldTop + SHEEP_RADIUS;
+      if (s.sprite.y < SHEEP_RADIUS) {
+        s.sprite.y = SHEEP_RADIUS;
         s.angle = -s.angle;
-      } else if (s.sprite.y > this.fieldBottom - SHEEP_RADIUS) {
-        s.sprite.y = this.fieldBottom - SHEEP_RADIUS;
+      } else if (s.sprite.y > WORLD_H - SHEEP_RADIUS) {
+        s.sprite.y = WORLD_H - SHEEP_RADIUS;
         s.angle = -s.angle;
+      }
+      // Resync velocity to heading after any bounce
+      {
+        const spd = Math.hypot(s.vx, s.vy);
+        s.vx = Math.cos(s.angle) * spd;
+        s.vy = Math.sin(s.angle) * spd;
+      }
+
+      // Tree collisions — push out and reflect off canopy
+      for (const t of this.mapTrees) {
+        const tdx = s.sprite.x - t.x;
+        const tdy = s.sprite.y - t.y;
+        const td = Math.hypot(tdx, tdy);
+        const minDist = t.r + SHEEP_RADIUS;
+        if (td < minDist && td > 0.01) {
+          const nx = tdx / td;
+          const ny = tdy / td;
+          s.sprite.x = t.x + nx * minDist;
+          s.sprite.y = t.y + ny * minDist;
+          const dot = Math.cos(s.angle) * nx + Math.sin(s.angle) * ny;
+          if (dot < 0) {
+            s.angle = Math.atan2(
+              Math.sin(s.angle) - 2 * dot * ny,
+              Math.cos(s.angle) - 2 * dot * nx,
+            );
+            const spd = Math.hypot(s.vx, s.vy) * 0.6;
+            s.vx = Math.cos(s.angle) * spd;
+            s.vy = Math.sin(s.angle) * spd;
+          }
+        }
       }
 
       // Pen check — sheep center fully inside the pen circle
