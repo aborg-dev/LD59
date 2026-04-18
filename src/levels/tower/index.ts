@@ -16,10 +16,23 @@ export interface TowerInhibitor {
   radius: number;
 }
 
+export interface TowerLeverToggle {
+  index: number;
+  altX: number;
+  altY: number;
+}
+
+export interface TowerLever {
+  x: number;
+  y: number;
+  obstacleToggles?: TowerLeverToggle[];
+}
+
 export interface TowerLevel {
   terminals: TowerTerminal[];
   obstacles: TowerObstacle[];
   inhibitors?: TowerInhibitor[];
+  levers?: TowerLever[];
   range: number;
   name?: string;
 }

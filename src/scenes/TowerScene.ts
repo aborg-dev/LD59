@@ -5,6 +5,8 @@ import {
   TOWER_LEVELS,
   type TowerInhibitor,
   type TowerLevel,
+  type TowerLever,
+  type TowerLeverToggle,
   type TowerObstacle,
   type TowerTerminal,
 } from "../levels/tower/index.js";
@@ -108,8 +110,10 @@ export class TowerScene extends Phaser.Scene {
   private fieldGrid!: Phaser.GameObjects.Graphics;
   private obstacleGfx!: Phaser.GameObjects.Graphics;
   private inhibitorGfx!: Phaser.GameObjects.Graphics;
+  private leverGfx!: Phaser.GameObjects.Graphics;
   private linkGfx!: Phaser.GameObjects.Graphics;
   private terminalGfx!: Phaser.GameObjects.Graphics;
+  private leverState: boolean[] = [];
   private pulseT = 0;
 
   private levelText!: Phaser.GameObjects.Text;
@@ -171,6 +175,7 @@ export class TowerScene extends Phaser.Scene {
     this.obstacleGfx = this.add.graphics().setDepth(2);
     this.inhibitorGfx = this.add.graphics().setDepth(2);
     this.linkGfx = this.add.graphics().setDepth(3);
+    this.leverGfx = this.add.graphics().setDepth(5);
     this.terminalGfx = this.add.graphics().setDepth(6);
 
     // Top HUD
@@ -239,6 +244,12 @@ export class TowerScene extends Phaser.Scene {
     this.resetBtn.on("pointerdown", () => {
       this.sound.play("pop");
       this.clearTowers();
+      if (this.leverState.some((on) => on)) {
+        this.leverState.fill(false);
+        this.drawLevers();
+        this.drawObstacles();
+        this.drawTerminals();
+      }
       this.refresh();
     });
 
@@ -361,7 +372,29 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private currentLevel(): TowerLevel {
-    return this.draft ?? this.levels[this.levelIndex];
+    // Editor always sees the raw draft (no lever effects); gameplay applies
+    // toggled lever positions to the saved level on the fly so level data
+    // never gets mutated by the player.
+    if (this.draft) return this.draft;
+    return this.applyLeverState(this.levels[this.levelIndex]);
+  }
+
+  private applyLeverState(level: TowerLevel): TowerLevel {
+    const levers = level.levers;
+    if (!levers || levers.length === 0) return level;
+    let mutated = false;
+    const obstacles = level.obstacles.map((o) => ({ ...o }));
+    for (let i = 0; i < levers.length; i++) {
+      if (!this.leverState[i]) continue;
+      for (const tog of levers[i].obstacleToggles ?? []) {
+        const o = obstacles[tog.index];
+        if (!o) continue;
+        o.x = tog.altX;
+        o.y = tog.altY;
+        mutated = true;
+      }
+    }
+    return mutated ? { ...level, obstacles } : level;
   }
 
   private loadLevel(index: number): void {
@@ -376,14 +409,60 @@ export class TowerScene extends Phaser.Scene {
     }
     this.levelIndex = index;
     this.clearTowers();
+    // Reset lever state before reading the level so currentLevel() sees
+    // obstacles at their home positions.
+    this.leverState = (this.levels[index].levers ?? []).map(() => false);
     const level = this.currentLevel();
 
     this.drawObstacles();
     this.drawInhibitors();
     this.drawTerminals();
+    this.drawLevers();
 
     const suffix = level.name ? ` — ${level.name}` : "";
     this.levelText.setText(`Level ${index + 1}/${this.levels.length}${suffix}`);
+    this.refresh();
+  }
+
+  private drawLevers(): void {
+    this.leverGfx.clear();
+    const levers = this.currentLevel().levers ?? [];
+    for (let i = 0; i < levers.length; i++) {
+      const l = levers[i];
+      const on = !!this.leverState[i];
+      // Base plate
+      this.leverGfx.fillStyle(0x333355, 1);
+      this.leverGfx.fillRoundedRect(l.x - 26, l.y - 14, 52, 28, 6);
+      this.leverGfx.lineStyle(2, 0x000000, 1);
+      this.leverGfx.strokeRoundedRect(l.x - 26, l.y - 14, 52, 28, 6);
+      // Slot track
+      this.leverGfx.fillStyle(0x1a1a2c, 1);
+      this.leverGfx.fillRoundedRect(l.x - 22, l.y - 4, 44, 8, 3);
+      // Knob
+      const knobX = l.x + (on ? 14 : -14);
+      this.leverGfx.fillStyle(on ? 0x88ff99 : 0xff9955, 1);
+      this.leverGfx.fillCircle(knobX, l.y, 10);
+      this.leverGfx.lineStyle(2, 0xffffff, 0.9);
+      this.leverGfx.strokeCircle(knobX, l.y, 10);
+    }
+  }
+
+  private hitTestLever(x: number, y: number): number {
+    const levers = this.currentLevel().levers ?? [];
+    for (let i = 0; i < levers.length; i++) {
+      const l = levers[i];
+      if (Math.abs(x - l.x) <= 30 && Math.abs(y - l.y) <= 18) return i;
+    }
+    return -1;
+  }
+
+  private toggleLever(i: number): void {
+    this.leverState[i] = !this.leverState[i];
+    this.sound.play("pop");
+    this.drawLevers();
+    this.drawObstacles();
+    this.drawTerminals();
+    this.redrawTowerRanges();
     this.refresh();
   }
 
@@ -465,6 +544,12 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private onFieldTap(x: number, y: number): void {
+    const leverIdx = this.hitTestLever(x, y);
+    if (leverIdx >= 0) {
+      this.toggleLever(leverIdx);
+      return;
+    }
+
     for (let i = 0; i < this.towers.length; i++) {
       const t = this.towers[i];
       if (Phaser.Math.Distance.Between(x, y, t.x, t.y) <= TOWER_VISUAL_R + 10) {
@@ -491,6 +576,9 @@ export class TowerScene extends Phaser.Scene {
     for (const jam of level.inhibitors ?? []) {
       if (Phaser.Math.Distance.Between(x, y, jam.x, jam.y) <= jam.radius)
         return;
+    }
+    for (const lev of level.levers ?? []) {
+      if (Math.abs(x - lev.x) <= 40 && Math.abs(y - lev.y) <= 28) return;
     }
     for (const t of this.towers) {
       if (Phaser.Math.Distance.Between(x, y, t.x, t.y) < PLACE_MIN_DIST) return;
@@ -847,6 +935,15 @@ export class TowerScene extends Phaser.Scene {
       terminals: level.terminals.map((t) => ({ ...t })),
       obstacles: level.obstacles.map((o) => ({ ...o })),
       inhibitors: level.inhibitors?.map((j) => ({ ...j })) ?? [],
+      levers: level.levers?.map(
+        (l): TowerLever => ({
+          x: l.x,
+          y: l.y,
+          obstacleToggles: l.obstacleToggles?.map(
+            (t): TowerLeverToggle => ({ ...t }),
+          ),
+        }),
+      ),
       range: level.range,
       name: level.name,
     };
@@ -1324,6 +1421,15 @@ export class TowerScene extends Phaser.Scene {
         y: j.y,
         radius: j.radius,
       }));
+    }
+    if (this.draft.levers && this.draft.levers.length > 0) {
+      out.levers = this.draft.levers.map((l) => {
+        const serialized: TowerLever = { x: l.x, y: l.y };
+        if (l.obstacleToggles && l.obstacleToggles.length > 0) {
+          serialized.obstacleToggles = l.obstacleToggles.map((t) => ({ ...t }));
+        }
+        return serialized;
+      });
     }
     if (this.draft.name) out.name = this.draft.name;
     return cleanLevel(out);
