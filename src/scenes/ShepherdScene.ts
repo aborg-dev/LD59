@@ -820,6 +820,7 @@ export class ShepherdScene extends Phaser.Scene {
       for (let j = 0; j < this.sheep.length; j++) {
         if (i === j) continue;
         const o = this.sheep[j];
+        if (o.penned) continue;
         const odx = s.sprite.x - o.sprite.x;
         const ody = s.sprite.y - o.sprite.y;
         const od = Math.hypot(odx, ody);
