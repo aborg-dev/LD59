@@ -14,13 +14,6 @@ const HUD_BOTTOM_H = 80;
 
 const WAVE_CLEAR_BONUS = 3;
 
-function waveConfig(n: number): { size: number; timeSec: number } {
-  return {
-    size: 2 + n,
-    timeSec: Math.max(15, 28 - n),
-  };
-}
-
 const PEN_RADIUS = 120;
 const SHEEP_RADIUS = 18;
 
@@ -52,30 +45,6 @@ const DOG_RADIUS = 22;
 const DOG_SPEED = 950;
 let FEAR_RADIUS = 180;
 let FLEE_FORCE = 520;
-
-const BELT_COST = 5;
-const BELT_LONG = 180;
-const BELT_SHORT = 80;
-const BELT_FORCE = 600;
-
-const BELT_ARROWS: Record<"up" | "down" | "left" | "right", string> = {
-  up: "↑",
-  down: "↓",
-  left: "←",
-  right: "→",
-};
-
-function beltDims(dir: "up" | "down" | "left" | "right"): {
-  w: number;
-  h: number;
-} {
-  const horizontal = dir === "left" || dir === "right";
-  return {
-    w: horizontal ? BELT_LONG : BELT_SHORT,
-    h: horizontal ? BELT_SHORT : BELT_LONG,
-  };
-}
-
 interface Sheep {
   sprite: Phaser.GameObjects.Rectangle;
   vx: number;
@@ -87,21 +56,6 @@ interface Sheep {
   wanderAngle: number;
   scaredMs: number;
 }
-
-type BeltDir = "up" | "down" | "left" | "right";
-
-interface Belt {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  dir: BeltDir;
-  gfx: Phaser.GameObjects.Rectangle;
-  arrow: Phaser.GameObjects.Text;
-}
-
-type PlacingMode = null | BeltDir;
-
 interface MapTree {
   x: number;
   y: number;
@@ -113,10 +67,8 @@ export interface ShepherdSceneState {
   dog: { x: number; y: number };
   sheep: { x: number; y: number; penned: boolean }[];
   pen: { x: number; y: number; radius: number };
-  belts: { x: number; y: number; w: number; h: number; dir: BeltDir }[];
   score: number;
   coins: number;
-  placing: PlacingMode;
   wave: {
     number: number;
     phase: "prep" | "active";
@@ -144,22 +96,17 @@ export class ShepherdScene extends Phaser.Scene {
     right: Phaser.Input.Keyboard.Key;
   };
   private sheep: Sheep[] = [];
-  private belts: Belt[] = [];
   private score = 0;
   private coins = 0;
   private accumulator = 0;
   private gameOver = false;
   private whistleCooldownMs = 0;
   private whistleRing!: Phaser.GameObjects.Arc;
-  private placing: PlacingMode = null;
-  private placePreview!: Phaser.GameObjects.Rectangle;
-  private placePreviewArrow!: Phaser.GameObjects.Text;
 
   // Wave state
   private waveNumber = 1;
   private wavePhase: "prep" | "active" = "prep";
   private sheepToSpawn = 0;
-  private waveSpawnOrigin = { x: 0, y: 0 };
   private waveSize = 0;
   private sheepLost = 0;
   private bannerText!: Phaser.GameObjects.Text;
@@ -170,12 +117,12 @@ export class ShepherdScene extends Phaser.Scene {
   private penR = PEN_RADIUS;
 
   private coinText!: Phaser.GameObjects.Text;
-  private beltBtns: Partial<Record<BeltDir, Phaser.GameObjects.Text>> = {};
 
   private fieldTop = 0;
   private fieldBottom = 0;
   private hudCamera!: Phaser.Cameras.Scene2D.Camera;
   private debugPanel: HTMLDivElement | null = null;
+  private zoomedOut = false;
   private mapTrees: MapTree[] = [];
   private mapSpawns: { x: number; y: number }[] = [];
   private camX = 0;
@@ -198,8 +145,6 @@ export class ShepherdScene extends Phaser.Scene {
     this.gameOver = false;
     this.whistleCooldownMs = 0;
     this.sheep = [];
-    this.belts = [];
-    this.placing = null;
     this.waveNumber = 1;
     this.wavePhase = "prep";
     this.sheepToSpawn = 0;
@@ -224,7 +169,6 @@ export class ShepherdScene extends Phaser.Scene {
     this.roomRow = 1;
     this.camX = this.penX;
     this.camY = this.penY;
-    this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H);
 
     const pen = this.add
       .circle(this.penX, this.penY, this.penR, 0x8b5a2b, 0.25)
@@ -299,73 +243,25 @@ export class ShepherdScene extends Phaser.Scene {
     this.whistleRing.setStrokeStyle(3, 0xffff88, 0);
     this.hudCamera.ignore(this.whistleRing);
 
-    // Belt placement preview (hidden until placing mode)
-    this.placePreview = this.add
-      .rectangle(0, 0, BELT_LONG, BELT_SHORT, 0x4a4a55, 0.35)
-      .setDepth(4);
-    this.placePreview.setStrokeStyle(2, 0xaaaaff, 0.8);
-    this.placePreview.setVisible(false);
-    this.hudCamera.ignore(this.placePreview);
-
-    this.placePreviewArrow = this.add
-      .text(0, 0, "", {
-        fontFamily: FONT_UI,
-        fontSize: 40,
-        color: "#ffffff",
-        stroke: "#000000",
-        strokeThickness: 4,
-        resolution: TEXT_RESOLUTION,
-      })
-      .setOrigin(0.5)
-      .setDepth(5);
-    this.placePreviewArrow.setVisible(false);
-    this.hudCamera.ignore(this.placePreviewArrow);
-
     this.input.keyboard?.on("keydown-SPACE", () =>
       this.whistle(this.dog.x, this.dog.y),
     );
     this.input.keyboard?.on("keydown-ENTER", () => this.toggleDebugPanel());
 
     // Mouse movement steers the dog; click barks from the dog's position.
-    // In belt-placing mode, click drops a conveyor belt.
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       if (this.gameOver) return;
       if (p.y > this.fieldBottom) return;
-      const wp = this.cameras.main.getWorldPoint(p.x, p.y);
-      if (this.placing) {
-        this.tryPlaceBelt(wp.x, wp.y, this.placing);
-        return;
-      }
       this.whistle(this.dog.x, this.dog.y);
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
       if (this.gameOver) return;
-      if (!this.placing) {
-        if (p.y <= this.fieldBottom) {
-          const wp = this.cameras.main.getWorldPoint(p.x, p.y);
-          this.targetX = wp.x;
-          this.targetY = wp.y;
-        }
-        this.placePreview.setVisible(false);
-        this.placePreviewArrow.setVisible(false);
-        return;
+      if (p.y <= this.fieldBottom) {
+        const wp = this.cameras.main.getWorldPoint(p.x, p.y);
+        this.targetX = wp.x;
+        this.targetY = wp.y;
       }
-      if (p.y > this.fieldBottom) {
-        this.placePreview.setVisible(false);
-        this.placePreviewArrow.setVisible(false);
-        return;
-      }
-      const wp = this.cameras.main.getWorldPoint(p.x, p.y);
-      const { w, h } = beltDims(this.placing);
-      this.placePreview.setVisible(true);
-      this.placePreview.setSize(w, h);
-      this.placePreview.setPosition(wp.x, wp.y);
-      this.placePreviewArrow.setVisible(true);
-      this.placePreviewArrow.setPosition(wp.x, wp.y);
-      this.placePreviewArrow.setText(BELT_ARROWS[this.placing]);
-      const ok = this.canPlaceBelt(wp.x, wp.y, this.placing);
-      this.placePreview.setFillStyle(ok ? 0x4a4a55 : 0xaa4444, 0.35);
-      this.placePreview.setStrokeStyle(2, ok ? 0xaaaaff : 0xff8888, 0.8);
+      return;
     });
 
     // --- Top HUD: coins | wave ---
@@ -423,25 +319,6 @@ export class ShepherdScene extends Phaser.Scene {
       resolution: TEXT_RESOLUTION,
     };
 
-    const dirs: BeltDir[] = ["up", "down", "left", "right"];
-    const baseX = width * 0.12;
-    const spacing = width * 0.11;
-    for (let i = 0; i < dirs.length; i++) {
-      const dir = dirs[i];
-      const btn = this.add
-        .text(baseX + i * spacing, btnY, `${BELT_ARROWS[dir]} $${BELT_COST}`, {
-          ...btnStyle,
-          backgroundColor: "#3a3a55",
-          fontSize: 26,
-        })
-        .setOrigin(0.5)
-        .setDepth(101)
-        .setInteractive({ useHandCursor: true });
-      btn.on("pointerdown", () => this.togglePlacing(dir));
-      this.cameras.main.ignore(btn);
-      this.beltBtns[dir] = btn;
-    }
-
     const menuBtn = this.add
       .text(width * 0.85, btnY, "MENU", btnStyle)
       .setOrigin(0.5)
@@ -454,77 +331,14 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(menuBtn);
   }
 
-  private togglePlacing(dir: BeltDir): void {
-    if (this.gameOver) return;
-    this.placing = this.placing === dir ? null : dir;
-    if (!this.placing) {
-      this.placePreview.setVisible(false);
-      this.placePreviewArrow.setVisible(false);
-    }
-    for (const d of ["up", "down", "left", "right"] as BeltDir[]) {
-      const btn = this.beltBtns[d];
-      btn?.setBackgroundColor(this.placing === d ? "#7a7acc" : "#3a3a55");
-    }
-    this.sound.play("pop");
-  }
-
-  private canPlaceBelt(x: number, y: number, dir: BeltDir): boolean {
-    if (this.coins < BELT_COST) return false;
-    const { w, h } = beltDims(dir);
-    if (x - w / 2 < 50) return false;
-    if (x + w / 2 > WORLD_W - 50) return false;
-    if (y - h / 2 < 50) return false;
-    if (y + h / 2 > WORLD_H - 50) return false;
-    // Can't overlap the pen
-    if (Math.hypot(x - this.penX, y - this.penY) < this.penR + 40) return false;
-    // Stay clear of existing belts (distance between centers)
-    for (const b of this.belts) {
-      if (Math.abs(x - b.x) < (w + b.w) / 2 - 4) {
-        if (Math.abs(y - b.y) < (h + b.h) / 2 - 4) return false;
-      }
-    }
-    return true;
-  }
-
-  private tryPlaceBelt(x: number, y: number, dir: BeltDir): void {
-    if (!this.canPlaceBelt(x, y, dir)) {
-      this.sound.play("pop");
-      return;
-    }
-    this.coins -= BELT_COST;
-    this.updateCoinText();
-
-    const { w, h } = beltDims(dir);
-    const gfx = this.add.rectangle(x, y, w, h, 0x4a4a55, 0.7).setDepth(3);
-    gfx.setStrokeStyle(2, 0x222228);
-    this.hudCamera.ignore(gfx);
-
-    const arrow = this.add
-      .text(x, y, BELT_ARROWS[dir], {
-        fontFamily: FONT_UI,
-        fontSize: 44,
-        color: "#ffe099",
-        stroke: "#000000",
-        strokeThickness: 4,
-        resolution: TEXT_RESOLUTION,
-      })
-      .setOrigin(0.5)
-      .setDepth(4);
-    this.hudCamera.ignore(arrow);
-
-    this.belts.push({ x, y, w, h, dir, gfx, arrow });
-    this.sound.play("score");
-  }
-
   private updateCoinText(): void {
     this.coinText.setText(`$${this.coins}`);
   }
 
-  private spawnSheep(): void {
-    // Scatter around the wave's shared spawn origin so the flock arrives as a group
-    const jitter = 60;
-    const sx = this.waveSpawnOrigin.x + Phaser.Math.Between(-jitter, jitter);
-    const sy = this.waveSpawnOrigin.y + Phaser.Math.Between(-jitter, jitter);
+  private spawnSheep(ox: number, oy: number): void {
+    const jitter = 30;
+    const sx = ox + Phaser.Math.Between(-jitter, jitter);
+    const sy = oy + Phaser.Math.Between(-jitter, jitter);
 
     // Initial velocity pointing away from the pen
     const dx = sx - this.penX;
@@ -596,34 +410,6 @@ export class ShepherdScene extends Phaser.Scene {
     });
   }
 
-  /**
-   * Belt force — any sheep inside a belt's rectangle gets a constant push
-   * in the belt's direction.
-   */
-  private beltForce(sx: number, sy: number): { ax: number; ay: number } {
-    let ax = 0;
-    let ay = 0;
-    for (const b of this.belts) {
-      if (Math.abs(sx - b.x) > b.w / 2) continue;
-      if (Math.abs(sy - b.y) > b.h / 2) continue;
-      switch (b.dir) {
-        case "up":
-          ay -= BELT_FORCE;
-          break;
-        case "down":
-          ay += BELT_FORCE;
-          break;
-        case "left":
-          ax -= BELT_FORCE;
-          break;
-        case "right":
-          ax += BELT_FORCE;
-          break;
-      }
-    }
-    return { ax, ay };
-  }
-
   private endGame(): void {
     if (this.gameOver) return;
     this.gameOver = true;
@@ -643,16 +429,8 @@ export class ShepherdScene extends Phaser.Scene {
         penned: s.penned,
       })),
       pen: { x: this.penX, y: this.penY, radius: this.penR },
-      belts: this.belts.map((b) => ({
-        x: b.x,
-        y: b.y,
-        w: b.w,
-        h: b.h,
-        dir: b.dir,
-      })),
       score: this.score,
       coins: this.coins,
-      placing: this.placing,
       wave: {
         number: this.waveNumber,
         phase: this.wavePhase,
@@ -670,6 +448,19 @@ export class ShepherdScene extends Phaser.Scene {
   private updateZoom(): void {
     const { width } = this.scale;
     const fieldH = this.fieldBottom - this.fieldTop;
+    // Playfield center in screen coords — offset from screen center by HUD asymmetry
+    const playCenterY = this.fieldTop + fieldH / 2;
+
+    if (this.zoomedOut) {
+      const zoom = Math.min(width / WORLD_W, fieldH / WORLD_H);
+      this.cameras.main.setZoom(zoom);
+      this.cameras.main.setScroll(
+        WORLD_W / 2 - width / (2 * zoom),
+        WORLD_H / 2 - playCenterY / zoom,
+      );
+      return;
+    }
+
     // Fit one full room on screen; a sliver of adjacent rooms may show at edges.
     const zoom = Math.min(width / ROOM_W, fieldH / ROOM_H);
     this.cameras.main.setZoom(zoom);
@@ -682,12 +473,15 @@ export class ShepherdScene extends Phaser.Scene {
       this.roomRow = dogRow;
     }
 
-    // Slide camera toward current room center
+    // Slide camera toward current room center, aligned to playfield (not screen center)
     const targetX = (this.roomCol + 0.5) * ROOM_W;
     const targetY = (this.roomRow + 0.5) * ROOM_H;
     this.camX += (targetX - this.camX) * 0.12;
     this.camY += (targetY - this.camY) * 0.12;
-    this.cameras.main.centerOn(this.camX, this.camY);
+    this.cameras.main.setScroll(
+      this.camX - width / (2 * zoom),
+      this.camY - playCenterY / zoom,
+    );
   }
 
   update(_time: number, delta: number): void {
@@ -702,19 +496,12 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private startWave(): void {
-    const cfg = waveConfig(this.waveNumber);
-    this.waveSize = cfg.size;
+    this.waveSize = this.mapSpawns.length;
     this.sheepLost = 0;
     this.sheepToSpawn = 0;
     this.wavePhase = "active";
     this.showBanner(`Wave ${this.waveNumber}!`);
-    this.waveSpawnOrigin = this.pickSpawnOrigin();
-    for (let i = 0; i < cfg.size; i++) this.spawnSheep();
-  }
-
-  private pickSpawnOrigin(): { x: number; y: number } {
-    const idx = Phaser.Math.Between(0, this.mapSpawns.length - 1);
-    return { ...this.mapSpawns[idx] };
+    for (const sp of this.mapSpawns) this.spawnSheep(sp.x, sp.y);
   }
 
   private completeWave(): void {
@@ -844,7 +631,7 @@ export class ShepherdScene extends Phaser.Scene {
       const ddx = this.targetX - this.dog.x;
       const ddy = this.targetY - this.dog.y;
       const dDist = Math.hypot(ddx, ddy);
-      if (dDist > 2) {
+      if (dDist > 0.1) {
         const move = Math.min(dDist, DOG_SPEED * dt);
         this.dog.x += (ddx / dDist) * move;
         this.dog.y += (ddy / dDist) * move;
@@ -884,11 +671,6 @@ export class ShepherdScene extends Phaser.Scene {
         ax += (fdx / fd) * strength;
         ay += (fdy / fd) * strength;
       }
-
-      // Conveyor belts shove any sheep standing on them in the belt's direction.
-      const belt = this.beltForce(s.sprite.x, s.sprite.y);
-      ax += belt.ax;
-      ay += belt.ay;
 
       // Separation from other sheep
       for (let j = 0; j < this.sheep.length; j++) {
@@ -1102,6 +884,31 @@ export class ShepherdScene extends Phaser.Scene {
     title.style.cssText =
       "font-size:13px;font-weight:bold;color:#adf;margin-bottom:10px;";
     panel.appendChild(title);
+
+    const zoomBtn = document.createElement("button");
+    const updateZoomBtn = () => {
+      zoomBtn.textContent = this.zoomedOut ? "🔍 Room view" : "🗺 Full map";
+      zoomBtn.style.background = this.zoomedOut ? "#446" : "#264";
+    };
+    updateZoomBtn();
+    zoomBtn.style.cssText =
+      "width:100%;padding:6px;margin-bottom:10px;border:1px solid #668;" +
+      "color:#ddd;cursor:pointer;font:12px monospace;border-radius:3px;";
+    zoomBtn.addEventListener("click", () => {
+      this.zoomedOut = !this.zoomedOut;
+      updateZoomBtn();
+    });
+    panel.appendChild(zoomBtn);
+
+    const dogPos = document.createElement("div");
+    dogPos.style.cssText =
+      "margin-bottom:10px;padding:4px 6px;background:#1a1a2e;border-radius:3px;color:#fa8;";
+    const refreshDogPos = () => {
+      dogPos.textContent = `dog  x:${Math.round(this.dog.x)}  y:${Math.round(this.dog.y)}`;
+      if (this.debugPanel) requestAnimationFrame(refreshDogPos);
+    };
+    refreshDogPos();
+    panel.appendChild(dogPos);
 
     const params: Array<{
       label: string;
