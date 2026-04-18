@@ -411,10 +411,10 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private drawTerminals(): void {
-    const { terminals, range } = this.currentLevel();
+    const level = this.currentLevel();
+    const { terminals, range } = level;
     this.terminalGfx.clear();
 
-    const level = this.levels[this.levelIndex];
     for (let i = 0; i < terminals.length; i++) {
       const t = terminals[i];
       const color = TERMINAL_COLORS[i % TERMINAL_COLORS.length];
