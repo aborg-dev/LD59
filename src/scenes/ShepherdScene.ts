@@ -18,9 +18,12 @@ const SEPARATION_RADIUS = 42;
 const SEPARATION_FORCE = 240;
 const SHEEP_DAMPING = 0.9;
 
-const BARK_RADIUS = 280;
-const BARK_IMPULSE = 520;
+const BARK_RADIUS = 420;
+const BARK_IMPULSE = 1400;
 const BARK_COOLDOWN_MS = 700;
+const BARK_SCARED_MS = 700;
+const SHEEP_SCARED_MAX_SPEED = 560;
+const SHEEP_SCARED_DAMPING = 0.985;
 
 interface Sheep {
   sprite: Phaser.GameObjects.Arc;
@@ -29,6 +32,7 @@ interface Sheep {
   penned: boolean;
   wanderT: number;
   wanderAngle: number;
+  scaredMs: number;
 }
 
 export interface ShepherdSceneState {
@@ -133,6 +137,7 @@ export class ShepherdScene extends Phaser.Scene {
         penned: false,
         wanderT: Math.random() * 2,
         wanderAngle: Math.random() * Math.PI * 2,
+        scaredMs: 0,
       });
     }
 
@@ -275,6 +280,7 @@ export class ShepherdScene extends Phaser.Scene {
         const k = (1 - d / BARK_RADIUS) * BARK_IMPULSE;
         s.vx += (dx / d) * k;
         s.vy += (dy / d) * k;
+        s.scaredMs = BARK_SCARED_MS;
       }
     }
 
@@ -394,15 +400,21 @@ export class ShepherdScene extends Phaser.Scene {
       ax += Math.cos(s.wanderAngle) * SHEEP_WANDER_SPEED;
       ay += Math.sin(s.wanderAngle) * SHEEP_WANDER_SPEED;
 
+      // Scared tick (set by bark)
+      if (s.scaredMs > 0) s.scaredMs = Math.max(0, s.scaredMs - dt * 1000);
+      const scared = s.scaredMs > 0;
+      const damping = scared ? SHEEP_SCARED_DAMPING : SHEEP_DAMPING;
+      const maxSpeed = scared ? SHEEP_SCARED_MAX_SPEED : SHEEP_MAX_SPEED;
+
       // Integrate velocity
-      s.vx = (s.vx + ax * dt) * SHEEP_DAMPING;
-      s.vy = (s.vy + ay * dt) * SHEEP_DAMPING;
+      s.vx = (s.vx + ax * dt) * damping;
+      s.vy = (s.vy + ay * dt) * damping;
 
       // Clamp speed
       const sp = Math.hypot(s.vx, s.vy);
-      if (sp > SHEEP_MAX_SPEED) {
-        s.vx = (s.vx / sp) * SHEEP_MAX_SPEED;
-        s.vy = (s.vy / sp) * SHEEP_MAX_SPEED;
+      if (sp > maxSpeed) {
+        s.vx = (s.vx / sp) * maxSpeed;
+        s.vy = (s.vy / sp) * maxSpeed;
       }
 
       s.sprite.x += s.vx * dt;
