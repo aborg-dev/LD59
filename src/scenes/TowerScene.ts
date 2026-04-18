@@ -94,6 +94,9 @@ export interface TowerSceneState {
 
 export class TowerScene extends Phaser.Scene {
   private levels: TowerLevel[] = TOWER_LEVELS;
+  // Snapshot of each level's last-saved-to-disk state, used by the editor
+  // RESET button to revert unsaved edits back to what's committed.
+  private savedLevels: TowerLevel[] = [];
   private levelIndex = 0;
   private towers: Tower[] = [];
   private connected = false;
@@ -153,6 +156,9 @@ export class TowerScene extends Phaser.Scene {
     this.inhibitorHandles = [];
     this.paletteGroup = [];
     this.paletteButtons.clear();
+    // Snapshot current (= last-saved) level data so the editor RESET button
+    // can revert unsaved edits.
+    this.savedLevels = this.levels.map((l) => this.cloneLevel(l));
     this.input.mouse?.disableContextMenu();
 
     this.add
@@ -925,6 +931,7 @@ export class TowerScene extends Phaser.Scene {
     items.push(this.rangeLabel);
 
     makeBtn("Range +", () => this.adjustRange(RANGE_STEP));
+    makeBtn("RESET", () => this.resetDraft(), "reset", "#664422");
     makeBtn("SAVE", () => this.saveLevel(), "save", "#446633");
 
     // Palette sits just to the right of the PLAY button on the far left;
@@ -951,7 +958,7 @@ export class TowerScene extends Phaser.Scene {
 
   private updatePaletteVisuals(): void {
     for (const [key, btn] of this.paletteButtons) {
-      if (key === "save") continue;
+      if (key === "save" || key === "reset") continue;
       const active = this.placeMode === key;
       if (key === "delete") {
         btn.setStyle({
@@ -968,6 +975,23 @@ export class TowerScene extends Phaser.Scene {
     if (this.rangeLabel && this.draft) {
       this.rangeLabel.setText(`${this.draft.range}`);
     }
+  }
+
+  private resetDraft(): void {
+    const base = this.savedLevels[this.levelIndex];
+    if (!base) return;
+    if (this.dirty && !window.confirm("Discard all unsaved level changes?")) {
+      return;
+    }
+    this.draft = this.cloneLevel(base);
+    this.levels[this.levelIndex] = this.cloneLevel(base);
+    this.dirty = false;
+    this.placeMode = null;
+    this.sound.play("pop");
+    this.rebuildHandles();
+    this.redrawDraft();
+    this.updatePaletteVisuals();
+    this.refresh();
   }
 
   private setPlaceMode(mode: Exclude<PlaceMode, null>): void {
@@ -1321,6 +1345,7 @@ export class TowerScene extends Phaser.Scene {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       this.levels[this.levelIndex] = this.cloneLevel(payload.level);
+      this.savedLevels[this.levelIndex] = this.cloneLevel(payload.level);
       this.dirty = false;
       this.setSaveStatus("Saved", "#88ff99");
       this.sound.play("score");
