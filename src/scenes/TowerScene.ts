@@ -11,7 +11,6 @@ import {
 
 const HUD_TOP_H = 70;
 const HUD_BOTTOM_H = 80;
-const EDITOR_PALETTE_H = 56;
 
 const TOWER_VISUAL_R = 18;
 const TERMINAL_VISUAL_R = 28;
@@ -32,7 +31,6 @@ const TERMINAL_COLORS = [0x4ecdc4, 0xff6b6b, 0x3dd14a];
 
 const EDITOR_HANDLE_COLOR = 0xffff66;
 const EDITOR_HANDLE_ACTIVE = 0xffffff;
-const EDITOR_PALETTE_BG = 0x1b1b2c;
 const GRID_SNAP = 10;
 
 const RANGE_MIN = 120;
@@ -114,6 +112,7 @@ export class TowerScene extends Phaser.Scene {
   private nextBtn!: Phaser.GameObjects.Text;
   private muteText!: Phaser.GameObjects.Text;
   private resetBtn!: Phaser.GameObjects.Text;
+  private menuBtn!: Phaser.GameObjects.Text;
   private editBtn: Phaser.GameObjects.Text | null = null;
 
   private editorActive = false;
@@ -123,7 +122,6 @@ export class TowerScene extends Phaser.Scene {
   private paletteGroup: Phaser.GameObjects.GameObject[] = [];
   private paletteButtons: Map<string, Phaser.GameObjects.Text> = new Map();
   private rangeLabel: Phaser.GameObjects.Text | null = null;
-  private saveStatusText: Phaser.GameObjects.Text | null = null;
   private saveStatusTimer = 0;
   private terminalHandles: TerminalHandleSet[] = [];
   private obstacleHandles: ObstacleHandleSet[] = [];
@@ -234,8 +232,8 @@ export class TowerScene extends Phaser.Scene {
     };
 
     this.resetBtn = this.add
-      .text(width / 2 - 240, btnY, "RESET", btnStyle)
-      .setOrigin(0.5)
+      .text(0, btnY, "RESET", btnStyle)
+      .setOrigin(1, 0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
     this.resetBtn.on("pointerdown", () => {
@@ -245,8 +243,8 @@ export class TowerScene extends Phaser.Scene {
     });
 
     const menuBtn = this.add
-      .text(width / 2 - 80, btnY, "MENU", btnStyle)
-      .setOrigin(0.5)
+      .text(0, btnY, "MENU", btnStyle)
+      .setOrigin(1, 0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
     menuBtn.on("pointerdown", () => {
@@ -259,8 +257,8 @@ export class TowerScene extends Phaser.Scene {
 
     const muted = this.game.sound.mute;
     this.muteText = this.add
-      .text(width / 2 + 80, btnY, muted ? "UNMUTE" : "MUTE", btnStyle)
-      .setOrigin(0.5)
+      .text(0, btnY, muted ? "UNMUTE" : "MUTE", btnStyle)
+      .setOrigin(1, 0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
     this.muteText.on("pointerdown", () => {
@@ -269,11 +267,11 @@ export class TowerScene extends Phaser.Scene {
     });
 
     this.nextBtn = this.add
-      .text(width / 2 + 240, btnY, "NEXT", {
+      .text(0, btnY, "NEXT", {
         ...btnStyle,
         backgroundColor: "#446633",
       })
-      .setOrigin(0.5)
+      .setOrigin(1, 0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
     this.nextBtn.on("pointerdown", () => {
@@ -284,15 +282,18 @@ export class TowerScene extends Phaser.Scene {
 
     if (import.meta.env.DEV) {
       this.editBtn = this.add
-        .text(24, btnY, "EDIT", {
+        .text(0, btnY, "EDIT", {
           ...btnStyle,
           backgroundColor: "#663388",
         })
-        .setOrigin(0, 0.5)
+        .setOrigin(1, 0.5)
         .setDepth(101)
         .setInteractive({ useHandCursor: true });
       this.editBtn.on("pointerdown", () => this.toggleEditor());
     }
+
+    this.layoutBottomActions(width);
+    this.menuBtn = menuBtn;
 
     // Field input — tap to place, tap on tower to remove (gameplay)
     //                 editor: palette place, drag handles, right-click delete
@@ -335,8 +336,8 @@ export class TowerScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     if (this.saveStatusTimer > 0) {
       this.saveStatusTimer -= delta;
-      if (this.saveStatusTimer <= 0 && this.saveStatusText) {
-        this.saveStatusText.setText("");
+      if (this.saveStatusTimer <= 0) {
+        this.refresh();
       }
     }
     if (!this.connected) return;
@@ -626,11 +627,15 @@ export class TowerScene extends Phaser.Scene {
 
   private refresh(): void {
     if (this.editorActive) {
-      this.budgetText.setText(this.dirty ? "UNSAVED" : "SAVED");
+      if (this.saveStatusTimer <= 0) {
+        this.budgetText.setColor(this.dirty ? "#ffe099" : "#88ff99");
+        this.budgetText.setText(this.dirty ? "UNSAVED" : "SAVED");
+      }
       this.statusText.setText("");
       this.nextBtn.setVisible(false);
       return;
     }
+    this.budgetText.setColor("#ffffff");
     this.budgetText.setText(`Towers: ${this.towers.length}`);
     const { connected, edges } = this.computeConnectivity();
     const wasConnected = this.connected;
@@ -793,14 +798,13 @@ export class TowerScene extends Phaser.Scene {
     }
     this.editorActive = true;
     this.placeMode = null;
-    this.fieldTop = HUD_TOP_H + EDITOR_PALETTE_H;
-    this.drawFieldGrid();
     this.hintText.setText("");
     this.resetBtn.setVisible(false);
     this.nextBtn.setVisible(false);
     this.muteText.setVisible(false);
     if (this.editBtn) this.editBtn.setText("PLAY");
     this.buildPalette();
+    this.layoutBottomActions(this.scale.width);
     this.rebuildHandles();
     this.redrawDraft();
     this.refresh();
@@ -817,11 +821,11 @@ export class TowerScene extends Phaser.Scene {
     this.placeMode = null;
     this.destroyHandles();
     this.destroyPalette();
-    this.fieldTop = HUD_TOP_H;
-    this.drawFieldGrid();
     if (this.editBtn) this.editBtn.setText("EDIT");
     this.resetBtn.setVisible(true);
     this.muteText.setVisible(true);
+    // nextBtn visibility is set by refresh() based on connection state.
+    this.layoutBottomActions(this.scale.width);
     this.loadLevel(this.levelIndex);
   }
 
@@ -835,111 +839,99 @@ export class TowerScene extends Phaser.Scene {
     };
   }
 
-  private buildPalette(): void {
-    const { width } = this.scale;
-    const paletteY = HUD_TOP_H;
-    const centerY = paletteY + EDITOR_PALETTE_H / 2;
+  private layoutBottomActions(width: number): void {
+    const margin = 24;
+    const gap = 12;
+    let x = width - margin;
+    // In editor mode only MENU + PLAY/EDIT are visible; pack them tight on
+    // the right so the palette has the rest of the row. In gameplay all five
+    // buttons keep fixed slots — visibility toggles for NEXT don't shuffle
+    // the others.
+    const order: (Phaser.GameObjects.Text | null)[] = this.editorActive
+      ? [this.editBtn, this.menuBtn]
+      : [
+          this.nextBtn,
+          this.muteText,
+          this.menuBtn,
+          this.resetBtn,
+          this.editBtn,
+        ];
+    for (const btn of order) {
+      if (!btn) continue;
+      btn.setX(x);
+      x -= btn.width + gap;
+    }
+  }
 
-    const bg = this.add
-      .rectangle(
-        width / 2,
-        paletteY,
-        width,
-        EDITOR_PALETTE_H,
-        EDITOR_PALETTE_BG,
-      )
-      .setOrigin(0.5, 0)
-      .setDepth(95);
-    this.paletteGroup.push(bg);
+  private buildPalette(): void {
+    const btnY = this.fieldBottom + HUD_BOTTOM_H / 2;
 
     const btnStyle = {
       fontFamily: FONT_BODY,
       fontSize: 18,
       color: "#ffffff",
       backgroundColor: "#3a3a55",
-      padding: { left: 12, right: 12, top: 6, bottom: 6 },
+      padding: { left: 10, right: 10, top: 8, bottom: 8 },
       resolution: TEXT_RESOLUTION,
     };
 
+    const items: Phaser.GameObjects.Text[] = [];
     const makeBtn = (
-      x: number,
       label: string,
       onClick: () => void,
       key?: string,
+      bg?: string,
     ): Phaser.GameObjects.Text => {
       const t = this.add
-        .text(x, centerY, label, btnStyle)
+        .text(
+          0,
+          btnY,
+          label,
+          bg ? { ...btnStyle, backgroundColor: bg } : btnStyle,
+        )
         .setOrigin(0, 0.5)
-        .setDepth(96)
+        .setDepth(102)
         .setInteractive({ useHandCursor: true });
       t.on("pointerdown", (p: Phaser.Input.Pointer) => {
         if (p.rightButtonDown()) return;
         onClick();
       });
       this.paletteGroup.push(t);
+      items.push(t);
       if (key) this.paletteButtons.set(key, t);
       return t;
     };
 
-    let x = 16;
-    makeBtn(x, "+ Terminal", () => this.setPlaceMode("terminal"), "terminal");
-    x += 130;
-    makeBtn(x, "+ Obstacle", () => this.setPlaceMode("obstacle"), "obstacle");
-    x += 130;
-    makeBtn(
-      x,
-      "+ Inhibitor",
-      () => this.setPlaceMode("inhibitor"),
-      "inhibitor",
-    );
-    x += 140;
-    const deleteBtn = makeBtn(
-      x,
-      "× Delete",
-      () => this.setPlaceMode("delete"),
-      "delete",
-    );
-    deleteBtn.setStyle({ ...btnStyle, backgroundColor: "#883344" });
-    x += 110;
+    makeBtn("+ Terminal", () => this.setPlaceMode("terminal"), "terminal");
+    makeBtn("+ Obstacle", () => this.setPlaceMode("obstacle"), "obstacle");
+    makeBtn("+ Inhibitor", () => this.setPlaceMode("inhibitor"), "inhibitor");
+    makeBtn("× Delete", () => this.setPlaceMode("delete"), "delete", "#883344");
+    makeBtn("Range −", () => this.adjustRange(-RANGE_STEP));
 
-    // Range steppers
-    const rangeMinus = makeBtn(x, "Range −", () =>
-      this.adjustRange(-RANGE_STEP),
-    );
-    void rangeMinus;
-    x += 100;
     this.rangeLabel = this.add
-      .text(x, centerY, `${this.draft?.range ?? 0}`, {
+      .text(0, btnY, `${this.draft?.range ?? 0}`, {
         fontFamily: FONT_UI,
         fontSize: 22,
         color: "#ffe099",
         resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0, 0.5)
-      .setDepth(96);
+      .setDepth(102);
     this.paletteGroup.push(this.rangeLabel);
-    x += 70;
-    makeBtn(x, "Range +", () => this.adjustRange(RANGE_STEP));
-    x += 100;
+    items.push(this.rangeLabel);
 
-    // Save / Exit
-    const saveBtn = makeBtn(x, "SAVE", () => this.saveLevel(), "save");
-    saveBtn.setStyle({ ...btnStyle, backgroundColor: "#446633" });
-    x += 80;
-    const exitBtn = makeBtn(x, "PLAY", () => this.exitEditor());
-    exitBtn.setStyle({ ...btnStyle, backgroundColor: "#663344" });
-    x += 80;
+    makeBtn("Range +", () => this.adjustRange(RANGE_STEP));
+    makeBtn("SAVE", () => this.saveLevel(), "save", "#446633");
 
-    this.saveStatusText = this.add
-      .text(width - 16, centerY, "", {
-        fontFamily: FONT_BODY,
-        fontSize: 16,
-        color: "#88ff99",
-        resolution: TEXT_RESOLUTION,
-      })
-      .setOrigin(1, 0.5)
-      .setDepth(96);
-    this.paletteGroup.push(this.saveStatusText);
+    // Left-anchored layout starting at x=24. The bottom HUD's right side keeps
+    // the always-visible MENU button; in editor mode RESET/MUTE/NEXT/EDIT are
+    // hidden so the palette has the rest of the row to itself.
+    const gap = 6;
+    let x = 24;
+    for (const b of items) {
+      b.setX(x);
+      x += b.width + gap;
+    }
 
     this.updatePaletteVisuals();
   }
@@ -949,7 +941,6 @@ export class TowerScene extends Phaser.Scene {
     this.paletteGroup = [];
     this.paletteButtons.clear();
     this.rangeLabel = null;
-    this.saveStatusText = null;
   }
 
   private updatePaletteVisuals(): void {
@@ -1296,9 +1287,8 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private setSaveStatus(msg: string, color: string): void {
-    if (!this.saveStatusText) return;
-    this.saveStatusText.setColor(color);
-    this.saveStatusText.setText(msg);
+    this.budgetText.setColor(color);
+    this.budgetText.setText(msg);
     this.saveStatusTimer = 3000;
   }
 
