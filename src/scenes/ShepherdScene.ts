@@ -17,33 +17,33 @@ function waveConfig(n: number): { size: number; timeSec: number } {
 const PEN_RADIUS = 120;
 const SHEEP_RADIUS = 18;
 
-const SHEEP_MAX_SPEED = 220;
-const SHEEP_WANDER_FORCE = 140;
+let SHEEP_MAX_SPEED = 220;
+let SHEEP_WANDER_FORCE = 140;
 const SHEEP_GRAZE_MIN_SEC = 1.5;
 const SHEEP_GRAZE_MAX_SEC = 4.0;
 const SHEEP_WALK_MIN_SEC = 0.8;
 const SHEEP_WALK_MAX_SEC = 2.2;
 const SHEEP_COHESION_RADIUS = 160;
-const SHEEP_COHESION_FORCE = 55;
+let SHEEP_COHESION_FORCE = 55;
 const ALIGNMENT_RADIUS = 130;
-const ALIGNMENT_FORCE = 100;
+let ALIGNMENT_FORCE = 100;
 const SEPARATION_RADIUS = 42;
 const SEPARATION_FORCE = 240;
-const SHEEP_DAMPING = 0.9;
+let SHEEP_DAMPING = 0.97;
 const PANIC_RADIUS = 90;
-const PANIC_INHERIT = 0.7;
+let PANIC_INHERIT = 0.7;
 
 const WHISTLE_RADIUS = 260;
-const WHISTLE_IMPULSE = 750;
+let WHISTLE_IMPULSE = 750;
 const WHISTLE_COOLDOWN_MS = 700;
 const WHISTLE_SCARED_MS = 700;
-const SHEEP_SCARED_MAX_SPEED = 300;
-const SHEEP_SCARED_DAMPING = 0.975;
+let SHEEP_SCARED_MAX_SPEED = 300;
+let SHEEP_SCARED_DAMPING = 0.975;
 
 const DOG_RADIUS = 22;
 const DOG_SPEED = 950;
-const FEAR_RADIUS = 180;
-const FLEE_FORCE = 520;
+let FEAR_RADIUS = 180;
+let FLEE_FORCE = 520;
 
 const HAY_COST = 6;
 const HAY_RADIUS = 130;
@@ -143,6 +143,7 @@ export class ShepherdScene extends Phaser.Scene {
   private fieldBottom = 0;
   private hudCamera!: Phaser.Cameras.Scene2D.Camera;
   private currentZoom = 1;
+  private debugPanel: HTMLDivElement | null = null;
 
   constructor() {
     super("Shepherd");
@@ -245,6 +246,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown-SPACE", () =>
       this.whistle(this.dog.x, this.dog.y),
     );
+    this.input.keyboard?.on("keydown-ENTER", () => this.toggleDebugPanel());
 
     // Click: place hay / move dog. Double-tap: whistle at that spot.
     let lastTapTime = 0;
@@ -825,7 +827,7 @@ export class ShepherdScene extends Phaser.Scene {
         if (!s.grazing) s.wanderAngle = Math.random() * Math.PI * 2;
       }
       if (!s.grazing && alignN === 0) {
-        s.wanderAngle += (Math.random() - 0.5) * 0.4;
+        s.wanderAngle += (Math.random() - 0.5) * 0.15;
         ax += Math.cos(s.wanderAngle) * SHEEP_WANDER_FORCE;
         ay += Math.sin(s.wanderAngle) * SHEEP_WANDER_FORCE;
       }
@@ -883,6 +885,7 @@ export class ShepherdScene extends Phaser.Scene {
 
     // Positional overlap resolution — push overlapping sheep apart directly
     const minSep = SHEEP_RADIUS * 2;
+
     for (let i = 0; i < this.sheep.length; i++) {
       const a = this.sheep[i];
       if (a.penned) continue;
@@ -903,5 +906,86 @@ export class ShepherdScene extends Phaser.Scene {
         }
       }
     }
+  }
+
+  private toggleDebugPanel(): void {
+    if (this.debugPanel) {
+      this.debugPanel.remove();
+      this.debugPanel = null;
+    } else {
+      this.buildDebugPanel();
+    }
+  }
+
+  private buildDebugPanel(): void {
+    const panel = document.createElement("div");
+    this.debugPanel = panel;
+    panel.style.cssText =
+      "position:fixed;top:70px;right:0;width:280px;max-height:calc(100vh - 90px);" +
+      "overflow-y:auto;background:rgba(10,10,20,0.93);color:#ddd;font:12px monospace;" +
+      "padding:10px;border-left:2px solid #446;z-index:9999;box-sizing:border-box;";
+
+    const title = document.createElement("div");
+    title.textContent = "Sheep Debug  [` to close]";
+    title.style.cssText = "font-size:13px;font-weight:bold;color:#adf;margin-bottom:10px;";
+    panel.appendChild(title);
+
+    const params: Array<{
+      label: string;
+      get: () => number;
+      set: (v: number) => void;
+      min: number; max: number; step: number;
+    }> = [
+      { label: "Max Speed",        get: () => SHEEP_MAX_SPEED,        set: v => { SHEEP_MAX_SPEED = v; },        min: 0,    max: 800,   step: 5     },
+      { label: "Scared Max Speed", get: () => SHEEP_SCARED_MAX_SPEED, set: v => { SHEEP_SCARED_MAX_SPEED = v; }, min: 0,    max: 800,   step: 5     },
+      { label: "Damping",          get: () => SHEEP_DAMPING,          set: v => { SHEEP_DAMPING = v; },          min: 0.80, max: 0.999, step: 0.001 },
+      { label: "Scared Damping",   get: () => SHEEP_SCARED_DAMPING,   set: v => { SHEEP_SCARED_DAMPING = v; },   min: 0.80, max: 0.999, step: 0.001 },
+      { label: "Wander Force",     get: () => SHEEP_WANDER_FORCE,     set: v => { SHEEP_WANDER_FORCE = v; },     min: 0,    max: 400,   step: 5     },
+      { label: "Cohesion Force",   get: () => SHEEP_COHESION_FORCE,   set: v => { SHEEP_COHESION_FORCE = v; },   min: 0,    max: 200,   step: 2     },
+      { label: "Alignment Force",  get: () => ALIGNMENT_FORCE,        set: v => { ALIGNMENT_FORCE = v; },        min: 0,    max: 300,   step: 5     },
+      { label: "Whistle Impulse",  get: () => WHISTLE_IMPULSE,        set: v => { WHISTLE_IMPULSE = v; },        min: 0,    max: 2000,  step: 25    },
+      { label: "Flee Force",       get: () => FLEE_FORCE,             set: v => { FLEE_FORCE = v; },             min: 0,    max: 1000,  step: 10    },
+      { label: "Fear Radius",      get: () => FEAR_RADIUS,            set: v => { FEAR_RADIUS = v; },            min: 0,    max: 500,   step: 5     },
+      { label: "Panic Inherit",    get: () => PANIC_INHERIT,          set: v => { PANIC_INHERIT = v; },          min: 0,    max: 1,     step: 0.05  },
+    ];
+
+    for (const cfg of params) {
+      const row = document.createElement("div");
+      row.style.marginBottom = "7px";
+
+      const labelRow = document.createElement("div");
+      labelRow.style.cssText = "display:flex;justify-content:space-between;margin-bottom:2px;";
+      const lbl = document.createElement("span");
+      lbl.textContent = cfg.label;
+      const val = document.createElement("span");
+      val.style.color = "#fa8";
+      val.textContent = cfg.step < 0.01 ? cfg.get().toFixed(3) : String(cfg.get());
+      labelRow.appendChild(lbl);
+      labelRow.appendChild(val);
+
+      const slider = document.createElement("input");
+      slider.type = "range";
+      slider.min = String(cfg.min);
+      slider.max = String(cfg.max);
+      slider.step = String(cfg.step);
+      slider.value = String(cfg.get());
+      slider.style.cssText = "width:100%;cursor:pointer;accent-color:#6af;";
+      slider.addEventListener("input", () => {
+        const v = parseFloat(slider.value);
+        cfg.set(v);
+        val.textContent = cfg.step < 0.01 ? v.toFixed(3) : String(v);
+      });
+
+      row.appendChild(labelRow);
+      row.appendChild(slider);
+      panel.appendChild(row);
+    }
+
+    document.body.appendChild(panel);
+  }
+
+  shutdown(): void {
+    this.debugPanel?.remove();
+    this.debugPanel = null;
   }
 }
