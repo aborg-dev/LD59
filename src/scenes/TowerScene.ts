@@ -282,18 +282,18 @@ export class TowerScene extends Phaser.Scene {
 
     if (import.meta.env.DEV) {
       this.editBtn = this.add
-        .text(0, btnY, "EDIT", {
+        .text(24, btnY, "EDIT", {
           ...btnStyle,
           backgroundColor: "#663388",
         })
-        .setOrigin(1, 0.5)
+        .setOrigin(0, 0.5)
         .setDepth(101)
         .setInteractive({ useHandCursor: true });
       this.editBtn.on("pointerdown", () => this.toggleEditor());
     }
 
-    this.layoutBottomActions(width);
     this.menuBtn = menuBtn;
+    this.layoutBottomActions(width);
 
     // Field input — tap to place, tap on tower to remove (gameplay)
     //                 editor: palette place, drag handles, right-click delete
@@ -801,7 +801,6 @@ export class TowerScene extends Phaser.Scene {
     this.hintText.setText("");
     this.resetBtn.setVisible(false);
     this.nextBtn.setVisible(false);
-    this.muteText.setVisible(false);
     if (this.editBtn) this.editBtn.setText("PLAY");
     this.buildPalette();
     this.layoutBottomActions(this.scale.width);
@@ -823,7 +822,6 @@ export class TowerScene extends Phaser.Scene {
     this.destroyPalette();
     if (this.editBtn) this.editBtn.setText("EDIT");
     this.resetBtn.setVisible(true);
-    this.muteText.setVisible(true);
     // nextBtn visibility is set by refresh() based on connection state.
     this.layoutBottomActions(this.scale.width);
     this.loadLevel(this.levelIndex);
@@ -840,24 +838,21 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private layoutBottomActions(width: number): void {
+    // EDIT / PLAY lives at the far left (origin 0, fixed at x=24) — it's
+    // positioned in create() and doesn't move with the right group.
+    // Right group, laid out right-to-left: MENU (always, rightmost), MUTE
+    // (always), RESET and NEXT (gameplay only, hidden in editor mode).
     const margin = 24;
     const gap = 12;
     let x = width - margin;
-    // In editor mode only MENU + PLAY/EDIT are visible; pack them tight on
-    // the right so the palette has the rest of the row. In gameplay all five
-    // buttons keep fixed slots — visibility toggles for NEXT don't shuffle
-    // the others.
-    const order: (Phaser.GameObjects.Text | null)[] = this.editorActive
-      ? [this.editBtn, this.menuBtn]
-      : [
-          this.nextBtn,
-          this.muteText,
-          this.menuBtn,
-          this.resetBtn,
-          this.editBtn,
-        ];
+    const order: (Phaser.GameObjects.Text | null)[] = [
+      this.menuBtn,
+      this.muteText,
+      this.nextBtn,
+      this.resetBtn,
+    ];
     for (const btn of order) {
-      if (!btn) continue;
+      if (!btn || !btn.visible) continue;
       btn.setX(x);
       x -= btn.width + gap;
     }
@@ -923,11 +918,13 @@ export class TowerScene extends Phaser.Scene {
     makeBtn("Range +", () => this.adjustRange(RANGE_STEP));
     makeBtn("SAVE", () => this.saveLevel(), "save", "#446633");
 
-    // Left-anchored layout starting at x=24. The bottom HUD's right side keeps
-    // the always-visible MENU button; in editor mode RESET/MUTE/NEXT/EDIT are
-    // hidden so the palette has the rest of the row to itself.
+    // Palette sits just to the right of the PLAY button on the far left;
+    // MENU + MUTE stay anchored on the far right of the bottom HUD.
     const gap = 6;
-    let x = 24;
+    const leftEdge = this.editBtn
+      ? this.editBtn.x + this.editBtn.width + 12
+      : 24;
+    let x = leftEdge;
     for (const b of items) {
       b.setX(x);
       x += b.width + gap;
