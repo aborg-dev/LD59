@@ -51,7 +51,10 @@ async function waitForGame(pg: Page): Promise<void> {
   await pg.waitForFunction(
     () => {
       try {
-        return window.dumpState().MainMenu?.active === true;
+        const s = window.dumpState();
+        return (
+          s.MainMenu?.active === true || s.TowerLevelSelect?.active === true
+        );
       } catch {
         return false;
       }

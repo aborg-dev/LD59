@@ -1,10 +1,5 @@
 import { Scene } from "phaser";
-import { FONT_BODY, FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
-
-/** Register each prototype here: [scene key, display label] */
-export const GAMES: [string, string][] = [
-  ["TowerLevelSelect", "Signal Towers"],
-];
+import { FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
 
 export interface MainMenuState {
   active: boolean;
@@ -19,10 +14,10 @@ export class MainMenu extends Scene {
     const { width, height } = this.scale;
 
     this.add
-      .text(width / 2, 160, "Game Jam Prototypes", {
+      .text(width / 2, height / 2 - 120, "Signal Towers", {
         fontFamily: FONT_UI,
-        fontSize: 42,
-        color: "#4ecdc4",
+        fontSize: 56,
+        color: "#ffe099",
         stroke: "#000000",
         strokeThickness: 6,
         align: "center",
@@ -30,28 +25,23 @@ export class MainMenu extends Scene {
       })
       .setOrigin(0.5);
 
-    const startY = height / 2 - ((GAMES.length - 1) * 80) / 2;
+    const playBtn = this.add
+      .text(width / 2, height / 2 + 40, "PLAY", {
+        fontFamily: FONT_UI,
+        fontSize: 48,
+        color: "#ffffff",
+        backgroundColor: "#2a6b3a",
+        padding: { left: 60, right: 60, top: 20, bottom: 20 },
+        align: "center",
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
 
-    for (let i = 0; i < GAMES.length; i++) {
-      const [key, label] = GAMES[i];
-      const btn = this.add
-        .text(width / 2, startY + i * 80, label, {
-          fontFamily: FONT_BODY,
-          fontSize: 28,
-          color: "#ffffff",
-          backgroundColor: "#333344",
-          padding: { left: 30, right: 30, top: 14, bottom: 14 },
-          align: "center",
-          resolution: TEXT_RESOLUTION,
-        })
-        .setOrigin(0.5)
-        .setInteractive({ useHandCursor: true });
-
-      btn.on("pointerdown", () => {
-        this.sound.play("pop");
-        this.scene.start(key);
-      });
-    }
+    playBtn.on("pointerdown", () => {
+      this.sound.play("pop");
+      this.scene.start("TowerLevelSelect");
+    });
   }
 
   dumpState(): MainMenuState {

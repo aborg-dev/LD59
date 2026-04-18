@@ -11,10 +11,10 @@ afterAll(async () => {
   await game.close();
 });
 
-describe("main menu e2e", () => {
-  it("loads without errors", async () => {
+describe("boot e2e", () => {
+  it("dev mode loads straight into the level select", async () => {
     expect(game.errors()).toEqual([]);
     const dump = await game.dumpState();
-    expect(dump.MainMenu?.active).toBe(true);
+    expect(dump.TowerLevelSelect?.active).toBe(true);
   });
 });
