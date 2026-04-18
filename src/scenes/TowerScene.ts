@@ -17,8 +17,7 @@ const COLOR_LINK = 0x66ff88;
 const COLOR_PATH = 0xffe066;
 const COLOR_TOWER = 0xd8d8e0;
 const COLOR_TOWER_EDGE = 0x333344;
-const COLOR_SOURCE = 0x4ecdc4;
-const COLOR_DEST = 0xff6b6b;
+const TERMINAL_COLORS = [0x4ecdc4, 0xff6b6b, 0x3dd14a];
 
 interface Obstacle {
   x: number;
@@ -27,9 +26,13 @@ interface Obstacle {
   h: number;
 }
 
+interface Terminal {
+  x: number;
+  y: number;
+}
+
 interface Level {
-  source: { x: number; y: number };
-  dest: { x: number; y: number };
+  terminals: Terminal[];
   obstacles: Obstacle[];
   range: number;
   hint?: string;
@@ -46,9 +49,9 @@ export interface TowerSceneState {
   active: boolean;
   levelIndex: number;
   levelCount: number;
+  terminalCount: number;
   towers: { x: number; y: number }[];
   connected: boolean;
-  path: number[];
   viewport: { width: number; height: number };
 }
 
@@ -57,7 +60,7 @@ export class TowerScene extends Phaser.Scene {
   private levelIndex = 0;
   private towers: Tower[] = [];
   private connected = false;
-  private pathIndices: number[] = [];
+  private pathEdges: [number, number][] = [];
 
   private fieldTop = HUD_TOP_H;
   private fieldBottom = 0;
@@ -86,7 +89,7 @@ export class TowerScene extends Phaser.Scene {
 
     this.towers = [];
     this.connected = false;
-    this.pathIndices = [];
+    this.pathEdges = [];
     this.levelIndex = 0;
 
     this.levels = this.buildLevels(width, this.fieldTop, this.fieldBottom);
@@ -253,22 +256,28 @@ export class TowerScene extends Phaser.Scene {
     const right = w - 80;
     return [
       {
-        source: { x: left, y: top + h * 0.5 },
-        dest: { x: right, y: top + h * 0.5 },
+        terminals: [
+          { x: left, y: top + h * 0.5 },
+          { x: right, y: top + h * 0.5 },
+        ],
         obstacles: [],
         range: 320,
         hint: "Tap to place a relay tower.\nChain the signal across the field.",
       },
       {
-        source: { x: left, y: top + h * 0.2 },
-        dest: { x: right, y: top + h * 0.8 },
+        terminals: [
+          { x: left, y: top + h * 0.2 },
+          { x: right, y: top + h * 0.8 },
+        ],
         obstacles: [{ x: w * 0.3, y: top + h * 0.35, w: 280, h: 200 }],
         range: 280,
         hint: "Stone blocks the signal. Route around.",
       },
       {
-        source: { x: left, y: top + h * 0.5 },
-        dest: { x: right, y: top + h * 0.5 },
+        terminals: [
+          { x: left, y: top + h * 0.5 },
+          { x: right, y: top + h * 0.5 },
+        ],
         obstacles: [
           { x: w * 0.2, y: top + h * 0.1, w: 120, h: h * 0.55 },
           { x: w * 0.55, y: top + h * 0.35, w: 120, h: h * 0.55 },
@@ -277,8 +286,10 @@ export class TowerScene extends Phaser.Scene {
         hint: "Zig-zag through the gaps.",
       },
       {
-        source: { x: left, y: top + h * 0.15 },
-        dest: { x: right, y: top + h * 0.85 },
+        terminals: [
+          { x: left, y: top + h * 0.15 },
+          { x: right, y: top + h * 0.85 },
+        ],
         obstacles: [
           { x: 0, y: top + h * 0.3, w: w * 0.6, h: 80 },
           { x: w * 0.4, y: top + h * 0.55, w: w * 0.6, h: 80 },
@@ -288,8 +299,10 @@ export class TowerScene extends Phaser.Scene {
         hint: "A winding corridor. Pick line-of-sight carefully.",
       },
       {
-        source: { x: left, y: top + h * 0.5 },
-        dest: { x: right, y: top + h * 0.5 },
+        terminals: [
+          { x: left, y: top + h * 0.5 },
+          { x: right, y: top + h * 0.5 },
+        ],
         obstacles: [
           { x: w * 0.15, y: top + h * 0.05, w: 90, h: h * 0.35 },
           { x: w * 0.15, y: top + h * 0.6, w: 90, h: h * 0.35 },
@@ -299,6 +312,56 @@ export class TowerScene extends Phaser.Scene {
         ],
         range: 240,
         hint: "Tight slots. Plan before you place.",
+      },
+      // --- 3-terminal levels ---
+      {
+        terminals: [
+          { x: left, y: top + h * 0.35 },
+          { x: right, y: top + h * 0.35 },
+          { x: w / 2, y: top + h * 0.8 },
+        ],
+        obstacles: [],
+        range: 400,
+        hint: "Three outposts.\nConnect them all into one network.",
+      },
+      {
+        terminals: [
+          { x: left, y: top + h * 0.15 },
+          { x: right, y: top + h * 0.15 },
+          { x: w / 2, y: top + h * 0.85 },
+        ],
+        obstacles: [{ x: w * 0.25, y: top + h * 0.35, w: w * 0.5, h: 180 }],
+        range: 320,
+        hint: "A wall in the middle.\nRoute around and still link all three.",
+      },
+      {
+        terminals: [
+          { x: left, y: top + h * 0.1 },
+          { x: right, y: top + h * 0.5 },
+          { x: left + 40, y: top + h * 0.9 },
+        ],
+        obstacles: [
+          { x: w * 0.3, y: top + h * 0.2, w: 120, h: h * 0.25 },
+          { x: w * 0.3, y: top + h * 0.55, w: 120, h: h * 0.25 },
+          { x: w * 0.55, y: top + h * 0.3, w: 100, h: h * 0.4 },
+        ],
+        range: 300,
+        hint: "Three signals, obstacles between them.",
+      },
+      {
+        terminals: [
+          { x: left, y: top + h * 0.15 },
+          { x: right, y: top + h * 0.5 },
+          { x: w / 2, y: top + h * 0.92 },
+        ],
+        obstacles: [
+          { x: 0, y: top + h * 0.28, w: w * 0.55, h: 70 },
+          { x: w * 0.45, y: top + h * 0.42, w: w * 0.55, h: 70 },
+          { x: 0, y: top + h * 0.6, w: w * 0.45, h: 70 },
+          { x: w * 0.55, y: top + h * 0.75, w: w * 0.45, h: 70 },
+        ],
+        range: 260,
+        hint: "Weave a tree through the slats.",
       },
     ];
   }
@@ -337,24 +400,22 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private drawTerminals(): void {
-    const { source, dest, range } = this.levels[this.levelIndex];
+    const { terminals, range } = this.levels[this.levelIndex];
     this.terminalGfx.clear();
 
-    // Range aura for source
-    this.terminalGfx.fillStyle(COLOR_SOURCE, 0.08);
-    this.terminalGfx.fillCircle(source.x, source.y, range);
-    this.terminalGfx.lineStyle(2, COLOR_SOURCE, 0.25);
-    this.terminalGfx.strokeCircle(source.x, source.y, range);
-
-    // Range aura for dest
-    this.terminalGfx.fillStyle(COLOR_DEST, 0.08);
-    this.terminalGfx.fillCircle(dest.x, dest.y, range);
-    this.terminalGfx.lineStyle(2, COLOR_DEST, 0.25);
-    this.terminalGfx.strokeCircle(dest.x, dest.y, range);
-
-    // Source tower — stylized beacon
-    this.drawBeacon(this.terminalGfx, source.x, source.y, COLOR_SOURCE, "S");
-    this.drawBeacon(this.terminalGfx, dest.x, dest.y, COLOR_DEST, "D");
+    for (let i = 0; i < terminals.length; i++) {
+      const t = terminals[i];
+      const color = TERMINAL_COLORS[i % TERMINAL_COLORS.length];
+      this.terminalGfx.fillStyle(color, 0.07);
+      this.terminalGfx.fillCircle(t.x, t.y, range);
+      this.terminalGfx.lineStyle(2, color, 0.22);
+      this.terminalGfx.strokeCircle(t.x, t.y, range);
+    }
+    for (let i = 0; i < terminals.length; i++) {
+      const t = terminals[i];
+      const color = TERMINAL_COLORS[i % TERMINAL_COLORS.length];
+      this.drawBeacon(this.terminalGfx, t.x, t.y, color);
+    }
   }
 
   private drawBeacon(
@@ -362,7 +423,6 @@ export class TowerScene extends Phaser.Scene {
     x: number,
     y: number,
     color: number,
-    _tag: string,
   ): void {
     // Base
     g.fillStyle(COLOR_TOWER_EDGE, 1);
@@ -399,17 +459,14 @@ export class TowerScene extends Phaser.Scene {
 
     const level = this.levels[this.levelIndex];
 
-    // Don't place on a terminal
-    if (
-      Phaser.Math.Distance.Between(x, y, level.source.x, level.source.y) <
-      TERMINAL_VISUAL_R + 12
-    )
-      return;
-    if (
-      Phaser.Math.Distance.Between(x, y, level.dest.x, level.dest.y) <
-      TERMINAL_VISUAL_R + 12
-    )
-      return;
+    // Don't place on any terminal
+    for (const term of level.terminals) {
+      if (
+        Phaser.Math.Distance.Between(x, y, term.x, term.y) <
+        TERMINAL_VISUAL_R + 12
+      )
+        return;
+    }
 
     // Don't place inside obstacle
     for (const o of level.obstacles) {
@@ -464,16 +521,19 @@ export class TowerScene extends Phaser.Scene {
 
   private refresh(): void {
     this.budgetText.setText(`Towers: ${this.towers.length}`);
-    const { connected, path } = this.computeConnectivity();
+    const { connected, edges } = this.computeConnectivity();
     const wasConnected = this.connected;
     this.connected = connected;
-    this.pathIndices = path;
+    this.pathEdges = edges;
     this.drawLinks();
 
     if (connected && !wasConnected) this.sound.play("score");
 
     if (connected) {
-      this.statusText.setText("SIGNAL THROUGH — tap NEXT");
+      const n = this.levels[this.levelIndex].terminals.length;
+      this.statusText.setText(
+        n > 2 ? "ALL TOWERS LINKED — tap NEXT" : "SIGNAL THROUGH — tap NEXT",
+      );
       this.statusText.setColor("#88ff99");
       this.nextBtn.setVisible(true);
     } else {
@@ -484,11 +544,11 @@ export class TowerScene extends Phaser.Scene {
 
   private nodes(): { x: number; y: number }[] {
     const level = this.levels[this.levelIndex];
-    return [
-      level.source,
-      level.dest,
-      ...this.towers.map((t) => ({ x: t.x, y: t.y })),
-    ];
+    return [...level.terminals, ...this.towers.map((t) => ({ x: t.x, y: t.y }))];
+  }
+
+  private terminalCount(): number {
+    return this.levels[this.levelIndex].terminals.length;
   }
 
   private canLink(
@@ -506,16 +566,19 @@ export class TowerScene extends Phaser.Scene {
     return true;
   }
 
-  private computeConnectivity(): { connected: boolean; path: number[] } {
+  private computeConnectivity(): {
+    connected: boolean;
+    edges: [number, number][];
+  } {
     const nodes = this.nodes();
-    const from = 0;
-    const to = 1;
+    const termCount = this.terminalCount();
+
+    // BFS from terminal 0
     const prev = new Map<number, number>();
-    prev.set(from, -1);
-    const queue: number[] = [from];
+    prev.set(0, -1);
+    const queue: number[] = [0];
     while (queue.length) {
       const cur = queue.shift() as number;
-      if (cur === to) break;
       for (let i = 0; i < nodes.length; i++) {
         if (i === cur || prev.has(i)) continue;
         if (this.canLink(nodes[cur], nodes[i])) {
@@ -524,14 +587,31 @@ export class TowerScene extends Phaser.Scene {
         }
       }
     }
-    if (!prev.has(to)) return { connected: false, path: [] };
-    const path: number[] = [];
-    let c: number | undefined = to;
-    while (c !== undefined && c !== -1) {
-      path.push(c);
-      c = prev.get(c);
+
+    // All terminals must be reachable
+    for (let t = 0; t < termCount; t++) {
+      if (!prev.has(t)) return { connected: false, edges: [] };
     }
-    return { connected: true, path: path.reverse() };
+
+    // Build tree: union of shortest paths from each terminal back to 0
+    const seen = new Set<string>();
+    const edges: [number, number][] = [];
+    for (let t = 1; t < termCount; t++) {
+      let c: number | undefined = t;
+      while (c !== undefined && c !== -1) {
+        const p = prev.get(c);
+        if (p === undefined || p === -1) break;
+        const lo = Math.min(c, p);
+        const hi = Math.max(c, p);
+        const key = `${lo}-${hi}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          edges.push([c, p]);
+        }
+        c = p;
+      }
+    }
+    return { connected: true, edges };
   }
 
   private drawLinks(): void {
@@ -553,21 +633,16 @@ export class TowerScene extends Phaser.Scene {
       }
     }
 
-    // Connected path — bright, pulsing
-    if (this.connected && this.pathIndices.length > 1) {
+    // Spanning tree edges — bright, pulsing
+    if (this.connected && this.pathEdges.length > 0) {
       const pulse = 0.55 + 0.45 * Math.sin(this.pulseT);
       this.linkGfx.lineStyle(6, COLOR_PATH, 0.9);
-      for (let i = 0; i < this.pathIndices.length - 1; i++) {
-        const a = nodes[this.pathIndices[i]];
-        const b = nodes[this.pathIndices[i + 1]];
-        this.linkGfx.lineBetween(a.x, a.y, b.x, b.y);
+      for (const [i, j] of this.pathEdges) {
+        this.linkGfx.lineBetween(nodes[i].x, nodes[i].y, nodes[j].x, nodes[j].y);
       }
-      // Pulsing overlay
       this.linkGfx.lineStyle(2 + 4 * pulse, 0xffffff, 0.3 * pulse);
-      for (let i = 0; i < this.pathIndices.length - 1; i++) {
-        const a = nodes[this.pathIndices[i]];
-        const b = nodes[this.pathIndices[i + 1]];
-        this.linkGfx.lineBetween(a.x, a.y, b.x, b.y);
+      for (const [i, j] of this.pathEdges) {
+        this.linkGfx.lineBetween(nodes[i].x, nodes[i].y, nodes[j].x, nodes[j].y);
       }
     }
   }
@@ -577,9 +652,9 @@ export class TowerScene extends Phaser.Scene {
       active: this.scene.isActive(),
       levelIndex: this.levelIndex,
       levelCount: this.levels.length,
+      terminalCount: this.levels[this.levelIndex]?.terminals.length ?? 0,
       towers: this.towers.map((t) => ({ x: t.x, y: t.y })),
       connected: this.connected,
-      path: [...this.pathIndices],
       viewport: { width: this.scale.width, height: this.scale.height },
     };
   }
