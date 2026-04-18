@@ -32,7 +32,6 @@ interface Level {
   dest: { x: number; y: number };
   obstacles: Obstacle[];
   range: number;
-  budget: number;
   hint?: string;
 }
 
@@ -47,7 +46,6 @@ export interface TowerSceneState {
   active: boolean;
   levelIndex: number;
   levelCount: number;
-  budget: number;
   towers: { x: number; y: number }[];
   connected: boolean;
   path: number[];
@@ -259,7 +257,6 @@ export class TowerScene extends Phaser.Scene {
         dest: { x: right, y: top + h * 0.5 },
         obstacles: [],
         range: 320,
-        budget: 2,
         hint: "Tap to place a relay tower.\nChain the signal across the field.",
       },
       {
@@ -267,7 +264,6 @@ export class TowerScene extends Phaser.Scene {
         dest: { x: right, y: top + h * 0.8 },
         obstacles: [{ x: w * 0.3, y: top + h * 0.35, w: 280, h: 200 }],
         range: 280,
-        budget: 3,
         hint: "Stone blocks the signal. Route around.",
       },
       {
@@ -278,7 +274,6 @@ export class TowerScene extends Phaser.Scene {
           { x: w * 0.55, y: top + h * 0.35, w: 120, h: h * 0.55 },
         ],
         range: 300,
-        budget: 3,
         hint: "Zig-zag through the gaps.",
       },
       {
@@ -290,7 +285,6 @@ export class TowerScene extends Phaser.Scene {
           { x: w * 0.15, y: top + h * 0.78, w: 140, h: h * 0.18 },
         ],
         range: 260,
-        budget: 4,
         hint: "A winding corridor. Pick line-of-sight carefully.",
       },
       {
@@ -304,7 +298,6 @@ export class TowerScene extends Phaser.Scene {
           { x: w * 0.72, y: top + h * 0.6, w: 90, h: h * 0.35 },
         ],
         range: 240,
-        budget: 4,
         hint: "Tight slots. Plan before you place.",
       },
     ];
@@ -423,9 +416,6 @@ export class TowerScene extends Phaser.Scene {
       if (x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.h) return;
     }
 
-    // Enforce budget
-    if (this.towers.length >= level.budget) return;
-
     // Enforce minimum spacing
     for (const t of this.towers) {
       if (Phaser.Math.Distance.Between(x, y, t.x, t.y) < PLACE_MIN_DIST) return;
@@ -473,8 +463,7 @@ export class TowerScene extends Phaser.Scene {
   }
 
   private refresh(): void {
-    const level = this.levels[this.levelIndex];
-    this.budgetText.setText(`Towers ${this.towers.length}/${level.budget}`);
+    this.budgetText.setText(`Towers: ${this.towers.length}`);
     const { connected, path } = this.computeConnectivity();
     const wasConnected = this.connected;
     this.connected = connected;
@@ -588,7 +577,6 @@ export class TowerScene extends Phaser.Scene {
       active: this.scene.isActive(),
       levelIndex: this.levelIndex,
       levelCount: this.levels.length,
-      budget: this.levels[this.levelIndex]?.budget ?? 0,
       towers: this.towers.map((t) => ({ x: t.x, y: t.y })),
       connected: this.connected,
       path: [...this.pathIndices],

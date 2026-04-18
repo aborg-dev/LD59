@@ -28,7 +28,6 @@ describe("tower puzzle placement and connectivity", () => {
     expect(s.levelCount).toBeGreaterThanOrEqual(1);
     expect(s.towers.length).toBe(0);
     expect(s.connected).toBe(false);
-    expect(s.budget).toBeGreaterThanOrEqual(1);
   });
 
   it("places a relay tower via field tap handler", async () => {
@@ -118,21 +117,19 @@ describe("tower puzzle placement and connectivity", () => {
     expect(s.connected).toBe(false);
   });
 
-  it("enforces tower budget", async () => {
+  it("allows placing many towers (unbounded budget)", async () => {
     await game.startScene("Tower");
     await game.advanceTime(50);
 
     await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Tower');
-      const lvl = gs.levels[gs.levelIndex];
-      // Attempt to place budget+2 towers in a vertical column
-      for (let i = 0; i < lvl.budget + 2; i++) {
-        gs.onFieldTap(200 + i * 60, 300 + i * 10);
+      for (let i = 0; i < 8; i++) {
+        gs.onFieldTap(200 + i * 50, 300 + i * 40);
       }
     })()`);
     await game.advanceTime(50);
 
     const s = await towerState();
-    expect(s.towers.length).toBeLessThanOrEqual(s.budget);
+    expect(s.towers.length).toBe(8);
   });
 });
