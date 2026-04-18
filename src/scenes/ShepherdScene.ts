@@ -37,6 +37,11 @@ const WHISTLE_SCARED_MS = 700;
 const SHEEP_SCARED_MAX_SPEED = 560;
 const SHEEP_SCARED_DAMPING = 0.985;
 
+const DOG_RADIUS = 22;
+const DOG_SPEED = 950;
+const FEAR_RADIUS = 180;
+const FLEE_FORCE = 520;
+
 const HAY_COST = 6;
 const HAY_RADIUS = 130;
 const HAY_EAT_DIST = 45;
@@ -64,6 +69,7 @@ interface HayPile {
 
 export interface ShepherdSceneState {
   active: boolean;
+  dog: { x: number; y: number };
   sheep: { x: number; y: number; penned: boolean }[];
   pen: { x: number; y: number; radius: number };
   hayPiles: { x: number; y: number }[];
@@ -84,6 +90,21 @@ export interface ShepherdSceneState {
 }
 
 export class ShepherdScene extends Phaser.Scene {
+  private dog!: Phaser.GameObjects.Arc;
+  private targetX = 0;
+  private targetY = 0;
+  private keys!: {
+    up: Phaser.Input.Keyboard.Key;
+    down: Phaser.Input.Keyboard.Key;
+    left: Phaser.Input.Keyboard.Key;
+    right: Phaser.Input.Keyboard.Key;
+  };
+  private arrowKeys!: {
+    up: Phaser.Input.Keyboard.Key;
+    down: Phaser.Input.Keyboard.Key;
+    left: Phaser.Input.Keyboard.Key;
+    right: Phaser.Input.Keyboard.Key;
+  };
   private sheep: Sheep[] = [];
   private hayPiles: HayPile[] = [];
   private score = 0;
@@ -147,6 +168,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.lastShownSec = -1;
     this.currentZoom = 1;
     this.hudCamera = this.cameras.add(0, 0, width, height);
+    this.whistleCooldownMs = 0;
 
     // Grass background — large so it fills the view when zoomed out
     const bg = this.add
@@ -175,6 +197,33 @@ export class ShepherdScene extends Phaser.Scene {
       .setDepth(2);
     this.hudCamera.ignore(penLabel);
 
+    // Dog starts next to the pen
+    this.dog = this.add
+      .circle(this.penX, this.penY + this.penR + 80, DOG_RADIUS, 0x222222)
+      .setDepth(10);
+    this.dog.setStrokeStyle(2, 0xffffff);
+    this.hudCamera.ignore(this.dog);
+    this.targetX = this.dog.x;
+    this.targetY = this.dog.y;
+
+    // WASD + arrow keys to drive the dog
+    const kb = this.input.keyboard;
+    if (kb) {
+      const K = Phaser.Input.Keyboard.KeyCodes;
+      this.keys = {
+        up: kb.addKey(K.W),
+        down: kb.addKey(K.S),
+        left: kb.addKey(K.A),
+        right: kb.addKey(K.D),
+      };
+      this.arrowKeys = {
+        up: kb.addKey(K.UP),
+        down: kb.addKey(K.DOWN),
+        left: kb.addKey(K.LEFT),
+        right: kb.addKey(K.RIGHT),
+      };
+    }
+
     // Whistle visualization (hidden by default, positioned on each whistle)
     this.whistleRing = this.add
       .circle(0, 0, WHISTLE_RADIUS, 0xffffff, 0.0)
@@ -191,9 +240,14 @@ export class ShepherdScene extends Phaser.Scene {
     this.hudCamera.ignore(this.placePreview);
 
     this.input.keyboard?.on("keydown-H", () => this.togglePlacing());
+    this.input.keyboard?.on("keydown-SPACE", () =>
+      this.whistle(this.dog.x, this.dog.y),
+    );
 
-    // Click in the field → whistle at the click location, scattering nearby
-    // sheep. In placing mode, clicks drop a hay pile instead.
+    // Click: place hay / move dog. Double-tap: whistle at that spot.
+    let lastTapTime = 0;
+    let lastTapX = 0;
+    let lastTapY = 0;
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       if (this.gameOver) return;
       if (p.y > this.fieldBottom) return;
@@ -202,11 +256,26 @@ export class ShepherdScene extends Phaser.Scene {
         this.tryPlaceHay(wp.x, wp.y);
         return;
       }
-      this.whistle(wp.x, wp.y);
+      const now = this.time.now;
+      if (now - lastTapTime < 300 && Math.hypot(p.x - lastTapX, p.y - lastTapY) < 80) {
+        this.whistle(wp.x, wp.y);
+        lastTapTime = 0;
+        return;
+      }
+      lastTapTime = now;
+      lastTapX = p.x;
+      lastTapY = p.y;
+      this.targetX = wp.x;
+      this.targetY = wp.y;
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
       if (this.gameOver) return;
       if (!this.placing) {
+        if (p.isDown) {
+          const wp = this.cameras.main.getWorldPoint(p.x, p.y);
+          this.targetX = wp.x;
+          this.targetY = wp.y;
+        }
         this.placePreview.setVisible(false);
         return;
       }
@@ -482,6 +551,7 @@ export class ShepherdScene extends Phaser.Scene {
     const phaseTimeLeft = Math.max(0, this.phaseTimeLeftMs / 1000);
     return {
       active: this.scene.isActive(),
+      dog: { x: this.dog.x, y: this.dog.y },
       sheep: this.sheep.map((s) => ({
         x: s.sprite.x,
         y: s.sprite.y,
@@ -650,6 +720,39 @@ export class ShepherdScene extends Phaser.Scene {
       }
     }
 
+    // Dog movement — keyboard overrides tap target when held
+    let kx = 0;
+    let ky = 0;
+    if (this.keys && this.arrowKeys) {
+      if (this.keys.left.isDown || this.arrowKeys.left.isDown) kx -= 1;
+      if (this.keys.right.isDown || this.arrowKeys.right.isDown) kx += 1;
+      if (this.keys.up.isDown || this.arrowKeys.up.isDown) ky -= 1;
+      if (this.keys.down.isDown || this.arrowKeys.down.isDown) ky += 1;
+    }
+    if (kx !== 0 || ky !== 0) {
+      const klen = Math.hypot(kx, ky);
+      const step = DOG_SPEED * dt;
+      this.dog.x += (kx / klen) * step;
+      this.dog.y += (ky / klen) * step;
+      this.targetX = this.dog.x;
+      this.targetY = this.dog.y;
+    } else {
+      const ddx = this.targetX - this.dog.x;
+      const ddy = this.targetY - this.dog.y;
+      const dDist = Math.hypot(ddx, ddy);
+      if (dDist > 2) {
+        const move = Math.min(dDist, DOG_SPEED * dt);
+        this.dog.x += (ddx / dDist) * move;
+        this.dog.y += (ddy / dDist) * move;
+      }
+    }
+    // Clamp dog to visible world area
+    const wv = this.cameras.main.worldView;
+    if (this.dog.x < wv.x + DOG_RADIUS) this.dog.x = wv.x + DOG_RADIUS;
+    else if (this.dog.x > wv.right - DOG_RADIUS) this.dog.x = wv.right - DOG_RADIUS;
+    if (this.dog.y < wv.y + DOG_RADIUS) this.dog.y = wv.y + DOG_RADIUS;
+    else if (this.dog.y > wv.bottom - DOG_RADIUS) this.dog.y = wv.bottom - DOG_RADIUS;
+
     // Sheep behavior
     for (let i = 0; i < this.sheep.length; i++) {
       const s = this.sheep[i];
@@ -657,6 +760,16 @@ export class ShepherdScene extends Phaser.Scene {
 
       let ax = 0;
       let ay = 0;
+
+      // Flee from dog
+      const fdx = s.sprite.x - this.dog.x;
+      const fdy = s.sprite.y - this.dog.y;
+      const fd = Math.hypot(fdx, fdy);
+      if (fd < FEAR_RADIUS && fd > 0.01) {
+        const strength = (1 - fd / FEAR_RADIUS) * FLEE_FORCE;
+        ax += (fdx / fd) * strength;
+        ay += (fdy / fd) * strength;
+      }
 
       // Hay pulls sheep in from the outer radius and holds them in a ring
       // just outside the pile.
