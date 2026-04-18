@@ -594,9 +594,18 @@ export class ShepherdScene extends Phaser.Scene {
       const dy = s.sprite.y - wy;
       const d = Math.hypot(dx, dy);
       if (d < WHISTLE_RADIUS && d > 0.01) {
+        const fleeAngle = Math.atan2(dy, dx);
+        const dot = Math.cos(s.angle - fleeAngle); // 1 = facing away, -1 = facing toward
         const k = (1 - d / WHISTLE_RADIUS) * WHISTLE_IMPULSE;
-        s.vx += (dx / d) * k;
-        s.vy += (dy / d) * k;
+        if (dot > 0) {
+          // Already facing roughly away — accelerate along current heading
+          s.vx += Math.cos(s.angle) * k;
+          s.vy += Math.sin(s.angle) * k;
+        } else {
+          // Facing toward the bark — brake hard, nudge flee dir so turn model can pivot
+          s.vx = s.vx * 0.15 + Math.cos(fleeAngle) * k * 0.2;
+          s.vy = s.vy * 0.15 + Math.sin(fleeAngle) * k * 0.2;
+        }
         s.scaredMs = WHISTLE_SCARED_MS;
       }
     }
@@ -1048,7 +1057,7 @@ export class ShepherdScene extends Phaser.Scene {
         let diff = Math.atan2(desiredVy, desiredVx) - s.angle;
         while (diff > Math.PI) diff -= Math.PI * 2;
         while (diff < -Math.PI) diff += Math.PI * 2;
-        const maxTurn = (scared ? SHEEP_TURN_RATE * 1.5 : SHEEP_TURN_RATE) * dt;
+        const maxTurn = (scared ? SHEEP_TURN_RATE * 5 : SHEEP_TURN_RATE) * dt;
         s.angle += Math.max(-maxTurn, Math.min(maxTurn, diff));
       }
 
