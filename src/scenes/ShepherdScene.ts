@@ -49,12 +49,28 @@ let FLEE_FORCE = 520;
 const CLIFF_WIDTH = 120; // width of the void strip on the right edge
 let CLIFF_DRIFT_FORCE = 50; // rightward pull toward the cliff
 
-const HAY_COST = 6;
-const HAY_RADIUS = 130;
-const HAY_EAT_DIST = 45;
-const HAY_FORCE = 900;
-const HAY_PUSH_FORCE = 1400;
-const HAY_VISUAL_R = 16;
+const BELT_COST = 5;
+const BELT_LONG = 180;
+const BELT_SHORT = 80;
+const BELT_FORCE = 600;
+
+const BELT_ARROWS: Record<"up" | "down" | "left" | "right", string> = {
+  up: "↑",
+  down: "↓",
+  left: "←",
+  right: "→",
+};
+
+function beltDims(dir: "up" | "down" | "left" | "right"): {
+  w: number;
+  h: number;
+} {
+  const horizontal = dir === "left" || dir === "right";
+  return {
+    w: horizontal ? BELT_LONG : BELT_SHORT,
+    h: horizontal ? BELT_SHORT : BELT_LONG,
+  };
+}
 
 interface Sheep {
   sprite: Phaser.GameObjects.Rectangle;
@@ -68,22 +84,29 @@ interface Sheep {
   scaredMs: number;
 }
 
-interface HayPile {
+type BeltDir = "up" | "down" | "left" | "right";
+
+interface Belt {
   x: number;
   y: number;
-  gfx: Phaser.GameObjects.Arc;
-  ring: Phaser.GameObjects.Arc;
+  w: number;
+  h: number;
+  dir: BeltDir;
+  gfx: Phaser.GameObjects.Rectangle;
+  arrow: Phaser.GameObjects.Text;
 }
+
+type PlacingMode = null | BeltDir;
 
 export interface ShepherdSceneState {
   active: boolean;
   dog: { x: number; y: number };
   sheep: { x: number; y: number; penned: boolean }[];
   pen: { x: number; y: number; radius: number };
-  hayPiles: { x: number; y: number }[];
+  belts: { x: number; y: number; w: number; h: number; dir: BeltDir }[];
   score: number;
   coins: number;
-  placing: boolean;
+  placing: PlacingMode;
   wave: {
     number: number;
     phase: "prep" | "active";
@@ -114,15 +137,16 @@ export class ShepherdScene extends Phaser.Scene {
     right: Phaser.Input.Keyboard.Key;
   };
   private sheep: Sheep[] = [];
-  private hayPiles: HayPile[] = [];
+  private belts: Belt[] = [];
   private score = 0;
   private coins = 0;
   private accumulator = 0;
   private gameOver = false;
   private whistleCooldownMs = 0;
   private whistleRing!: Phaser.GameObjects.Arc;
-  private placing = false;
-  private placePreview!: Phaser.GameObjects.Arc;
+  private placing: PlacingMode = null;
+  private placePreview!: Phaser.GameObjects.Rectangle;
+  private placePreviewArrow!: Phaser.GameObjects.Text;
 
   // Wave state
   private waveNumber = 1;
@@ -143,7 +167,7 @@ export class ShepherdScene extends Phaser.Scene {
   private waveText!: Phaser.GameObjects.Text;
   private coinText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
-  private hayBtn!: Phaser.GameObjects.Text;
+  private beltBtns: Partial<Record<BeltDir, Phaser.GameObjects.Text>> = {};
 
   private fieldTop = 0;
   private fieldBottom = 0;
@@ -168,8 +192,8 @@ export class ShepherdScene extends Phaser.Scene {
     this.gameOver = false;
     this.whistleCooldownMs = 0;
     this.sheep = [];
-    this.hayPiles = [];
-    this.placing = false;
+    this.belts = [];
+    this.placing = null;
     this.waveNumber = 1;
     this.wavePhase = "prep";
     this.phaseTimeLeftMs = WAVE_PREP_SEC * 1000;
@@ -278,28 +302,41 @@ export class ShepherdScene extends Phaser.Scene {
     this.whistleRing.setStrokeStyle(3, 0xffff88, 0);
     this.hudCamera.ignore(this.whistleRing);
 
-    // Hay placement preview (hidden until placing mode)
+    // Belt placement preview (hidden until placing mode)
     this.placePreview = this.add
-      .circle(0, 0, HAY_RADIUS, 0xffd966, 0.1)
+      .rectangle(0, 0, BELT_LONG, BELT_SHORT, 0x4a4a55, 0.35)
       .setDepth(4);
-    this.placePreview.setStrokeStyle(2, 0xffd966, 0.7);
+    this.placePreview.setStrokeStyle(2, 0xaaaaff, 0.8);
     this.placePreview.setVisible(false);
     this.hudCamera.ignore(this.placePreview);
 
-    this.input.keyboard?.on("keydown-H", () => this.togglePlacing());
+    this.placePreviewArrow = this.add
+      .text(0, 0, "", {
+        fontFamily: FONT_UI,
+        fontSize: 40,
+        color: "#ffffff",
+        stroke: "#000000",
+        strokeThickness: 4,
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5)
+      .setDepth(5);
+    this.placePreviewArrow.setVisible(false);
+    this.hudCamera.ignore(this.placePreviewArrow);
+
     this.input.keyboard?.on("keydown-SPACE", () =>
       this.whistle(this.dog.x, this.dog.y),
     );
     this.input.keyboard?.on("keydown-ENTER", () => this.toggleDebugPanel());
 
     // Mouse movement steers the dog; click barks from the dog's position.
-    // In placing mode, click drops a hay pile and the dog holds position.
+    // In belt-placing mode, click drops a conveyor belt.
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       if (this.gameOver) return;
       if (p.y > this.fieldBottom) return;
       const wp = this.cameras.main.getWorldPoint(p.x, p.y);
       if (this.placing) {
-        this.tryPlaceHay(wp.x, wp.y);
+        this.tryPlaceBelt(wp.x, wp.y, this.placing);
         return;
       }
       this.whistle(this.dog.x, this.dog.y);
@@ -313,18 +350,25 @@ export class ShepherdScene extends Phaser.Scene {
           this.targetY = wp.y;
         }
         this.placePreview.setVisible(false);
+        this.placePreviewArrow.setVisible(false);
         return;
       }
       if (p.y > this.fieldBottom) {
         this.placePreview.setVisible(false);
+        this.placePreviewArrow.setVisible(false);
         return;
       }
       const wp = this.cameras.main.getWorldPoint(p.x, p.y);
+      const { w, h } = beltDims(this.placing);
       this.placePreview.setVisible(true);
+      this.placePreview.setSize(w, h);
       this.placePreview.setPosition(wp.x, wp.y);
-      const ok = this.canPlaceHay(wp.x, wp.y);
-      this.placePreview.setFillStyle(ok ? 0xffd966 : 0xff6666, 0.1);
-      this.placePreview.setStrokeStyle(2, ok ? 0xffd966 : 0xff6666, 0.7);
+      this.placePreviewArrow.setVisible(true);
+      this.placePreviewArrow.setPosition(wp.x, wp.y);
+      this.placePreviewArrow.setText(BELT_ARROWS[this.placing]);
+      const ok = this.canPlaceBelt(wp.x, wp.y, this.placing);
+      this.placePreview.setFillStyle(ok ? 0x4a4a55 : 0xaa4444, 0.35);
+      this.placePreview.setStrokeStyle(2, ok ? 0xaaaaff : 0xff8888, 0.8);
     });
 
     // --- Top HUD: timer | coins | wave ---
@@ -408,20 +452,27 @@ export class ShepherdScene extends Phaser.Scene {
       resolution: TEXT_RESOLUTION,
     };
 
-    this.hayBtn = this.add
-      .text(width * 0.3, btnY, `HAY $${HAY_COST}`, {
-        ...btnStyle,
-        backgroundColor: "#8a6a1f",
-        fontSize: 24,
-      })
-      .setOrigin(0.5)
-      .setDepth(101)
-      .setInteractive({ useHandCursor: true });
-    this.hayBtn.on("pointerdown", () => this.togglePlacing());
-    this.cameras.main.ignore(this.hayBtn);
+    const dirs: BeltDir[] = ["up", "down", "left", "right"];
+    const baseX = width * 0.12;
+    const spacing = width * 0.11;
+    for (let i = 0; i < dirs.length; i++) {
+      const dir = dirs[i];
+      const btn = this.add
+        .text(baseX + i * spacing, btnY, `${BELT_ARROWS[dir]} $${BELT_COST}`, {
+          ...btnStyle,
+          backgroundColor: "#3a3a55",
+          fontSize: 26,
+        })
+        .setOrigin(0.5)
+        .setDepth(101)
+        .setInteractive({ useHandCursor: true });
+      btn.on("pointerdown", () => this.togglePlacing(dir));
+      this.cameras.main.ignore(btn);
+      this.beltBtns[dir] = btn;
+    }
 
     const menuBtn = this.add
-      .text(width * 0.7, btnY, "MENU", btnStyle)
+      .text(width * 0.85, btnY, "MENU", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
@@ -432,51 +483,65 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(menuBtn);
   }
 
-  private togglePlacing(): void {
+  private togglePlacing(dir: BeltDir): void {
     if (this.gameOver) return;
-    this.placing = !this.placing;
-    this.placePreview.setVisible(false);
-    this.hayBtn.setBackgroundColor(this.placing ? "#d4a84a" : "#8a6a1f");
+    this.placing = this.placing === dir ? null : dir;
+    if (!this.placing) {
+      this.placePreview.setVisible(false);
+      this.placePreviewArrow.setVisible(false);
+    }
+    for (const d of ["up", "down", "left", "right"] as BeltDir[]) {
+      const btn = this.beltBtns[d];
+      btn?.setBackgroundColor(this.placing === d ? "#7a7acc" : "#3a3a55");
+    }
     this.sound.play("pop");
   }
 
-  private canPlaceHay(x: number, y: number): boolean {
-    if (this.coins < HAY_COST) return false;
-    // Can't place in HUD
-    if (y < this.fieldTop + 20 || y > this.fieldBottom - 20) return false;
-    if (x < 20 || x > this.scale.width - 20) return false;
-    // Can't place inside pen
-    if (Math.hypot(x - this.penX, y - this.penY) < this.penR + 30) return false;
-    // Spacing
-    for (const h of this.hayPiles) {
-      if (Math.hypot(x - h.x, y - h.y) < 50) return false;
+  private canPlaceBelt(x: number, y: number, dir: BeltDir): boolean {
+    if (this.coins < BELT_COST) return false;
+    const { w, h } = beltDims(dir);
+    if (y - h / 2 < this.fieldTop + 10) return false;
+    if (y + h / 2 > this.fieldBottom - 10) return false;
+    if (x - w / 2 < 10) return false;
+    if (x + w / 2 > this.scale.width - 10) return false;
+    // Can't overlap the pen
+    if (Math.hypot(x - this.penX, y - this.penY) < this.penR + 40) return false;
+    // Stay clear of existing belts (distance between centers)
+    for (const b of this.belts) {
+      if (Math.abs(x - b.x) < (w + b.w) / 2 - 4) {
+        if (Math.abs(y - b.y) < (h + b.h) / 2 - 4) return false;
+      }
     }
     return true;
   }
 
-  private tryPlaceHay(x: number, y: number): void {
-    if (!this.canPlaceHay(x, y)) {
+  private tryPlaceBelt(x: number, y: number, dir: BeltDir): void {
+    if (!this.canPlaceBelt(x, y, dir)) {
       this.sound.play("pop");
       return;
     }
-    this.coins -= HAY_COST;
+    this.coins -= BELT_COST;
     this.updateCoinText();
 
-    const ring = this.add.circle(x, y, HAY_RADIUS, 0xffd966, 0.06).setDepth(3);
-    ring.setStrokeStyle(1, 0xffd966, 0.4);
-    this.hudCamera.ignore(ring);
-
-    const gfx = this.add.circle(x, y, HAY_VISUAL_R, 0xe6c85a).setDepth(8);
-    gfx.setStrokeStyle(3, 0x6b4a1f);
+    const { w, h } = beltDims(dir);
+    const gfx = this.add.rectangle(x, y, w, h, 0x4a4a55, 0.7).setDepth(3);
+    gfx.setStrokeStyle(2, 0x222228);
     this.hudCamera.ignore(gfx);
 
-    // Darker tuft on top for a pile-of-hay feel
-    const tuft = this.add
-      .circle(x, y - 4, HAY_VISUAL_R * 0.5, 0xb8964a)
-      .setDepth(9);
-    this.hudCamera.ignore(tuft);
+    const arrow = this.add
+      .text(x, y, BELT_ARROWS[dir], {
+        fontFamily: FONT_UI,
+        fontSize: 44,
+        color: "#ffe099",
+        stroke: "#000000",
+        strokeThickness: 4,
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5)
+      .setDepth(4);
+    this.hudCamera.ignore(arrow);
 
-    this.hayPiles.push({ x, y, gfx, ring });
+    this.belts.push({ x, y, w, h, dir, gfx, arrow });
     this.sound.play("score");
   }
 
@@ -552,30 +617,28 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   /**
-   * Hay pull/push combined into one step. Sheep are drawn in from HAY_RADIUS
-   * toward HAY_EAT_DIST, then pushed back out if they get closer than that,
-   * so they cluster in a ring around the pile instead of sitting on it.
+   * Belt force — any sheep inside a belt's rectangle gets a constant push
+   * in the belt's direction.
    */
-  private hayForce(sx: number, sy: number): { ax: number; ay: number } {
+  private beltForce(sx: number, sy: number): { ax: number; ay: number } {
     let ax = 0;
     let ay = 0;
-    for (const h of this.hayPiles) {
-      const dx = h.x - sx;
-      const dy = h.y - sy;
-      const d = Math.hypot(dx, dy);
-      if (d > HAY_RADIUS || d < 0.01) continue;
-      const nx = dx / d;
-      const ny = dy / d;
-      if (d > HAY_EAT_DIST) {
-        const t = (d - HAY_EAT_DIST) / (HAY_RADIUS - HAY_EAT_DIST);
-        const k = t * HAY_FORCE;
-        ax += nx * k;
-        ay += ny * k;
-      } else {
-        const t = 1 - d / HAY_EAT_DIST;
-        const k = t * HAY_PUSH_FORCE;
-        ax -= nx * k;
-        ay -= ny * k;
+    for (const b of this.belts) {
+      if (Math.abs(sx - b.x) > b.w / 2) continue;
+      if (Math.abs(sy - b.y) > b.h / 2) continue;
+      switch (b.dir) {
+        case "up":
+          ay -= BELT_FORCE;
+          break;
+        case "down":
+          ay += BELT_FORCE;
+          break;
+        case "left":
+          ax -= BELT_FORCE;
+          break;
+        case "right":
+          ax += BELT_FORCE;
+          break;
       }
     }
     return { ax, ay };
@@ -601,7 +664,13 @@ export class ShepherdScene extends Phaser.Scene {
         penned: s.penned,
       })),
       pen: { x: this.penX, y: this.penY, radius: this.penR },
-      hayPiles: this.hayPiles.map((h) => ({ x: h.x, y: h.y })),
+      belts: this.belts.map((b) => ({
+        x: b.x,
+        y: b.y,
+        w: b.w,
+        h: b.h,
+        dir: b.dir,
+      })),
       score: this.score,
       coins: this.coins,
       placing: this.placing,
@@ -883,11 +952,10 @@ export class ShepherdScene extends Phaser.Scene {
       // Rightward pull toward the cliff
       ax += CLIFF_DRIFT_FORCE;
 
-      // Hay pulls sheep in from the outer radius and holds them in a ring
-      // just outside the pile.
-      const hay = this.hayForce(s.sprite.x, s.sprite.y);
-      ax += hay.ax;
-      ay += hay.ay;
+      // Conveyor belts shove any sheep standing on them in the belt's direction.
+      const belt = this.beltForce(s.sprite.x, s.sprite.y);
+      ax += belt.ax;
+      ay += belt.ay;
 
       // Separation from other sheep
       for (let j = 0; j < this.sheep.length; j++) {

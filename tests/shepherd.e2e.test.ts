@@ -86,7 +86,7 @@ describe("shepherd wave-based herding", () => {
     expect(after.x).toBeGreaterThan(before.x);
   });
 
-  it("places a hay pile and lures sheep toward it", async () => {
+  it("places a belt and pushes sheep in the belt's direction", async () => {
     await game.startScene("Shepherd");
 
     await game.eval_(`(() => {
@@ -94,24 +94,25 @@ describe("shepherd wave-based herding", () => {
       for (const s of gs.sheep) s.sprite.destroy();
       gs.sheep = [];
       gs.coins = 10;
-      gs.placing = true;
-      const hx = gs.penX + gs.penR + 60;
-      const hy = gs.penY;
-      gs.tryPlaceHay(hx, hy);
+      gs.placing = 'right';
+      const bx = 250;
+      const by = 400;
+      gs.tryPlaceBelt(bx, by, 'right');
       gs.spawnSheep();
       const s = gs.sheep[gs.sheep.length - 1];
-      s.sprite.x = hx + 90;
-      s.sprite.y = hy;
+      s.sprite.x = bx;
+      s.sprite.y = by;
       s.vx = 0;
       s.vy = 0;
-      s.angle = Math.PI; // facing -x so hay can pull it in without the turn-rate delay
+      s.angle = 0; // already facing +x so the belt can push without a turn delay
       s.modeT = 999;
       s.grazing = true;
     })()`);
 
     const st0 = await shepherdState();
-    expect(st0.hayPiles.length).toBe(1);
-    expect(st0.coins).toBe(4);
+    expect(st0.belts.length).toBe(1);
+    expect(st0.belts[0].dir).toBe("right");
+    expect(st0.coins).toBe(5);
 
     const sheepBefore = st0.sheep.at(-1);
     if (!sheepBefore) throw new Error("no sheep");
@@ -120,7 +121,7 @@ describe("shepherd wave-based herding", () => {
 
     const sheepAfter = (await shepherdState()).sheep.at(-1);
     if (!sheepAfter) throw new Error("no sheep");
-    expect(sheepAfter.x).toBeLessThan(sheepBefore.x);
+    expect(sheepAfter.x).toBeGreaterThan(sheepBefore.x);
   });
 
   it("clearing a wave advances wave number and awards coin bonus", async () => {
