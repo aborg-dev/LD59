@@ -1,32 +1,32 @@
 {
   "terminals": [
     {
-      "x": 80,
-      "y": 710
+      "x": 160,
+      "y": 400
     },
     {
-      "x": 640,
-      "y": 710
+      "x": 1120,
+      "y": 400
     }
   ],
   "obstacles": [],
   "inhibitors": [
     {
-      "x": 201.6,
-      "y": 646,
-      "radius": 80
+      "x": 380,
+      "y": 340,
+      "radius": 90
     },
     {
-      "x": 360,
-      "y": 774,
-      "radius": 80
+      "x": 640,
+      "y": 460,
+      "radius": 90
     },
     {
-      "x": 518.4,
-      "y": 646,
-      "radius": 80
+      "x": 900,
+      "y": 340,
+      "radius": 90
     }
   ],
-  "range": 260,
+  "range": 280,
   "hint": "Three jammers on the line.\nWeave over, under, over."
 }

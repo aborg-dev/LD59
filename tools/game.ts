@@ -17,8 +17,8 @@ export type { StateDump, TowerLevelSelectState, TowerSceneState };
 
 async function ensurePage(
   url: string,
-  width = 480,
-  height = 720,
+  width = 720,
+  height = 480,
 ): Promise<Page> {
   if (!browser?.isConnected()) {
     browser = await chromium.launch({ headless: true });
@@ -65,8 +65,8 @@ async function waitForGame(pg: Page): Promise<void> {
 
 export async function launch(
   url: string,
-  width = 480,
-  height = 720,
+  width = 720,
+  height = 480,
 ): Promise<void> {
   const pg = await ensurePage(url, width, height);
   await waitForGame(pg);

@@ -1,19 +1,19 @@
 {
   "terminals": [
     {
-      "x": 80,
-      "y": 518
+      "x": 220,
+      "y": 200
+    },
+    {
+      "x": 1060,
+      "y": 200
     },
     {
       "x": 640,
-      "y": 518
-    },
-    {
-      "x": 360,
-      "y": 1094
+      "y": 660
     }
   ],
   "obstacles": [],
-  "range": 400,
+  "range": 380,
   "hint": "Three outposts.\nConnect them all into one network."
 }

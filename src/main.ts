@@ -9,8 +9,8 @@ import {
 } from "./scenes/TowerLevelSelectScene.js";
 import { TowerScene, type TowerSceneState } from "./scenes/TowerScene.js";
 
-const FIELD_W = 720;
-const FIELD_H = 1280;
+const FIELD_W = 1280;
+const FIELD_H = 720;
 const HUD_TOP_H = 70;
 const HUD_BOTTOM_H = 80;
 

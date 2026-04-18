@@ -53,7 +53,7 @@ export class TowerLevelSelectScene extends Phaser.Scene {
       .setDepth(50);
 
     // Tile grid
-    const cols = 3;
+    const cols = 6;
     const tileSize = 170;
     const gap = 28;
     const rows = Math.ceil(TOWER_LEVEL_COUNT / cols);

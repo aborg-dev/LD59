@@ -1,15 +1,15 @@
 {
   "terminals": [
     {
-      "x": 80,
-      "y": 710
+      "x": 240,
+      "y": 400
     },
     {
-      "x": 640,
-      "y": 710
+      "x": 1040,
+      "y": 400
     }
   ],
   "obstacles": [],
-  "range": 320,
+  "range": 460,
   "hint": "Tap to place a relay tower.\nChain the signal across the field."
 }
