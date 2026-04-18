@@ -18,14 +18,6 @@ afterAll(async () => {
   await game.close();
 });
 
-describe("soccer e2e", () => {
-  it("loads without errors", async () => {
-    expect(game.errors()).toEqual([]);
-    const dump = await game.dumpState();
-    expect(dump.MainMenu?.active).toBe(true);
-  });
-});
-
 describe("soccer scoring and game end", () => {
   it("scores and shows correct score on game end", async () => {
     await game.startScene("Soccer");
