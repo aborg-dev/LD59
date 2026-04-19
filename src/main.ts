@@ -9,8 +9,8 @@ import {
   type ShepherdSceneState,
 } from "./scenes/ShepherdScene.js";
 
-const FIELD_W = 1280;
-const FIELD_H = 720;
+const FIELD_W = 1600;
+const FIELD_H = 900;
 const HUD_TOP_H = 70;
 const HUD_BOTTOM_H = 80;
 
@@ -35,6 +35,7 @@ declare global {
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   backgroundColor: "#1a1a2e",
+  pixelArt: true,
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,

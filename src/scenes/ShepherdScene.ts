@@ -1,16 +1,11 @@
 import * as Phaser from "phaser";
 import { FONT_BODY, FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
 import mapData from "./shepherd-map.json";
-
-const GRID_COLS = 4;
-const GRID_ROWS = 4;
-const ROOM_W = 800;
-const ROOM_H = 450;
-const WORLD_W = ROOM_W * GRID_COLS;
-const WORLD_H = ROOM_H * GRID_ROWS;
-
 const HUD_TOP_H = 70;
 const HUD_BOTTOM_H = 80;
+
+const WORLD_W = 3200;
+const WORLD_H = 1800;
 
 const SHEEP_RADIUS = 18;
 const MAX_SHEEP = 30;
@@ -1515,7 +1510,7 @@ export class ShepherdScene extends Phaser.Scene {
           d.mode === "herding" &&
           d.targetSheep &&
           Math.hypot(d.targetSheep.sprite.x - sx, d.targetSheep.sprite.y - sy) <
-            HIGHLIGHT_CLUSTER_R,
+          HIGHLIGHT_CLUSTER_R,
       );
       const myIdx = clusterDogs.indexOf(dog);
       const count = clusterDogs.length;
@@ -1848,9 +1843,9 @@ export class ShepherdScene extends Phaser.Scene {
         s.grazing = alignN === 0 ? !s.grazing : false;
         s.modeT = s.grazing
           ? SHEEP_GRAZE_MIN_SEC +
-            Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
+          Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
           : SHEEP_WALK_MIN_SEC +
-            Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
+          Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
         if (!s.grazing) s.wanderAngle = Math.random() * Math.PI * 2;
       }
       if (!s.grazing && alignN === 0) {
@@ -2271,97 +2266,97 @@ export class ShepherdScene extends Phaser.Scene {
       max: number;
       step: number;
     }> = [
-      {
-        label: "Max Speed",
-        get: () => SHEEP_MAX_SPEED,
-        set: (v) => {
-          SHEEP_MAX_SPEED = v;
+        {
+          label: "Max Speed",
+          get: () => SHEEP_MAX_SPEED,
+          set: (v) => {
+            SHEEP_MAX_SPEED = v;
+          },
+          min: 0,
+          max: 800,
+          step: 5,
         },
-        min: 0,
-        max: 800,
-        step: 5,
-      },
-      {
-        label: "Damping",
-        get: () => SHEEP_DAMPING,
-        set: (v) => {
-          SHEEP_DAMPING = v;
+        {
+          label: "Damping",
+          get: () => SHEEP_DAMPING,
+          set: (v) => {
+            SHEEP_DAMPING = v;
+          },
+          min: 0.8,
+          max: 0.999,
+          step: 0.001,
         },
-        min: 0.8,
-        max: 0.999,
-        step: 0.001,
-      },
-      {
-        label: "Wander Force",
-        get: () => SHEEP_WANDER_FORCE,
-        set: (v) => {
-          SHEEP_WANDER_FORCE = v;
+        {
+          label: "Wander Force",
+          get: () => SHEEP_WANDER_FORCE,
+          set: (v) => {
+            SHEEP_WANDER_FORCE = v;
+          },
+          min: 0,
+          max: 400,
+          step: 5,
         },
-        min: 0,
-        max: 400,
-        step: 5,
-      },
-      {
-        label: "Cohesion Force",
-        get: () => SHEEP_COHESION_FORCE,
-        set: (v) => {
-          SHEEP_COHESION_FORCE = v;
+        {
+          label: "Cohesion Force",
+          get: () => SHEEP_COHESION_FORCE,
+          set: (v) => {
+            SHEEP_COHESION_FORCE = v;
+          },
+          min: 0,
+          max: 200,
+          step: 2,
         },
-        min: 0,
-        max: 200,
-        step: 2,
-      },
-      {
-        label: "Alignment Force",
-        get: () => ALIGNMENT_FORCE,
-        set: (v) => {
-          ALIGNMENT_FORCE = v;
+        {
+          label: "Alignment Force",
+          get: () => ALIGNMENT_FORCE,
+          set: (v) => {
+            ALIGNMENT_FORCE = v;
+          },
+          min: 0,
+          max: 300,
+          step: 5,
         },
-        min: 0,
-        max: 300,
-        step: 5,
-      },
-      {
-        label: "Flee Force",
-        get: () => FLEE_FORCE,
-        set: (v) => {
-          FLEE_FORCE = v;
+        {
+          label: "Flee Force",
+          get: () => FLEE_FORCE,
+          set: (v) => {
+            FLEE_FORCE = v;
+          },
+          min: 0,
+          max: 1000,
+          step: 10,
         },
-        min: 0,
-        max: 1000,
-        step: 10,
-      },
-      {
-        label: "Fear Radius",
-        get: () => FEAR_RADIUS,
-        set: (v) => {
-          FEAR_RADIUS = v;
+        {
+          label: "Fear Radius",
+          get: () => FEAR_RADIUS,
+          set: (v) => {
+            FEAR_RADIUS = v;
+          },
+          min: 0,
+          max: 500,
+          step: 5,
         },
-        min: 0,
-        max: 500,
-        step: 5,
-      },
-      {
-        label: "Panic Inherit",
-        get: () => PANIC_INHERIT,
-        set: (v) => {
-          PANIC_INHERIT = v;
+        {
+          label: "Panic Inherit",
+          get: () => PANIC_INHERIT,
+          set: (v) => {
+            PANIC_INHERIT = v;
+          },
+          min: 0,
+          max: 1,
+          step: 0.05,
         },
-        min: 0,
-        max: 1,
-        step: 0.05,
-      },
-      {
-        label: "Turn Rate",
-        get: () => SHEEP_TURN_RATE,
-        set: (v) => {
-          SHEEP_TURN_RATE = v;
+        {
+          label: "Turn Rate",
+          get: () => SHEEP_TURN_RATE,
+          set: (v) => {
+            SHEEP_TURN_RATE = v;
+          },
+          min: 0.5,
+          max: 15,
+          step: 0.5,
         },
-        min: 0.5,
-        max: 15,
-        step: 0.5,
-      },
-    ];
+      ];
 
     for (const cfg of params) {
       const row = document.createElement("div");
