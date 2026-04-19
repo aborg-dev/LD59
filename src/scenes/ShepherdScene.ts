@@ -15,7 +15,7 @@ const HUD_BOTTOM_H = 80;
 const WAVE_CLEAR_BONUS = 3;
 
 const PEN_RADIUS = 120;
-const SHEEP_RADIUS = 18;
+const SHEEP_RADIUS = 36;
 
 let SHEEP_MAX_SPEED = 220;
 let SHEEP_WANDER_FORCE = 140;
@@ -354,7 +354,7 @@ export class ShepherdScene extends Phaser.Scene {
     const v0 = 60;
 
     const initAngle = Math.atan2(dy, dx);
-    const s = this.add.sprite(sx, sy, "sheep").setDepth(5);
+    const s = this.add.sprite(sx, sy, "sheep").setDepth(5).setScale(0.5);
     s.rotation = initAngle + Math.PI / 2;
     s.play("sheep-walk");
     this.hudCamera.ignore(s);
