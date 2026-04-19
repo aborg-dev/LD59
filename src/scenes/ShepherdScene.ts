@@ -40,8 +40,7 @@ const HERD_OFFSET = 120;
 let FEAR_RADIUS = 180;
 let FLEE_FORCE = 520;
 
-const WHISTLE_RADIUS = 280;
-const WHISTLE_IMPULSE = 480;
+const DRAG_SCALE = 1.4;
 
 interface Sheep {
   sprite: Phaser.GameObjects.Sprite;
@@ -53,12 +52,18 @@ interface Sheep {
   modeT: number;
   wanderAngle: number;
   scaredMs: number;
+  dragged: boolean;
 }
 
 interface Dog {
   sprite: Phaser.GameObjects.Arc;
   targetSheep: Sheep | null;
+  dragged: boolean;
 }
+
+type Drag =
+  | { kind: "sheep"; ref: Sheep; shadow: Phaser.GameObjects.Ellipse }
+  | { kind: "dog"; ref: Dog; shadow: Phaser.GameObjects.Ellipse };
 
 interface Pen {
   x: number;
@@ -76,11 +81,11 @@ interface MapTree {
 
 export interface ShepherdSceneState {
   active: boolean;
-  dogs: { x: number; y: number }[];
-  lastWhistle: { x: number; y: number } | null;
-  sheep: { x: number; y: number; penned: boolean }[];
+  dogs: { x: number; y: number; dragged: boolean }[];
+  sheep: { x: number; y: number; penned: boolean; dragged: boolean }[];
   pens: { x: number; y: number; radius: number }[];
   placingPen: boolean;
+  dragging: "sheep" | "dog" | null;
   score: number;
   coins: number;
   viewport: { width: number; height: number };
@@ -88,8 +93,8 @@ export interface ShepherdSceneState {
 
 export class ShepherdScene extends Phaser.Scene {
   private dogs: Dog[] = [];
-  private lastWhistle: { x: number; y: number } | null = null;
   private sheep: Sheep[] = [];
+  private drag: Drag | null = null;
   private score = 0;
   private coins = 0;
   private accumulator = 0;
@@ -138,7 +143,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.dogs = [];
     this.sheep = [];
     this.pens = [];
-    this.lastWhistle = null;
+    this.drag = null;
     this.placingPen = false;
     this.dogBuyCost = 5;
     this.penBuyCost = 25;
@@ -196,7 +201,7 @@ export class ShepherdScene extends Phaser.Scene {
       repeat: -1,
     });
 
-    // Click to whistle (pushes sheep outward), or place a pen if in placement mode
+    // Pointer handlers: pen placement, drag-to-move sheep/dogs
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       if (this.editorActive) {
         this.editorHandlePointerDown(p);
@@ -206,19 +211,23 @@ export class ShepherdScene extends Phaser.Scene {
       if (p.y < this.fieldTop) return;
       const wp = this.cameras.main.getWorldPoint(p.x, p.y);
       if (this.placingPen) {
-        if (p.button === 2) {
-          this.cancelPenPlacement();
-        } else {
-          this.placePenAt(wp.x, wp.y);
-        }
+        if (p.button === 2) this.cancelPenPlacement();
+        else this.placePenAt(wp.x, wp.y);
         return;
       }
-      this.whistle(wp.x, wp.y);
+      this.tryStartDrag(wp.x, wp.y);
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
       const wp = this.cameras.main.getWorldPoint(p.x, p.y);
       if (this.editorActive) this.editorPointerWorld = { x: wp.x, y: wp.y };
       if (this.placingPen) this.penGhost.setPosition(wp.x, wp.y);
+      if (this.drag) this.updateDragPosition(wp.x, wp.y);
+    });
+    this.input.on("pointerup", () => {
+      if (this.drag) this.endDrag();
+    });
+    this.input.on("pointerupoutside", () => {
+      if (this.drag) this.endDrag();
     });
 
     this.input.keyboard?.on("keydown-ENTER", () => this.toggleDebugPanel());
@@ -345,7 +354,7 @@ export class ShepherdScene extends Phaser.Scene {
     // Set camera zoomed out to fit entire world
     this.updateCamera();
 
-    this.showBanner("Click to whistle!");
+    this.showBanner("Drag sheep and dogs to move them!");
   }
 
   private spawnDog(x: number, y: number): void {
@@ -356,39 +365,94 @@ export class ShepherdScene extends Phaser.Scene {
     this.dogs.push({
       sprite,
       targetSheep: null,
+      dragged: false,
     });
     this.updateDogCountText();
   }
 
-  private whistle(x: number, y: number): void {
-    this.lastWhistle = { x, y };
+  private tryStartDrag(x: number, y: number): void {
+    let best:
+      | { kind: "sheep"; ref: Sheep; dist: number }
+      | { kind: "dog"; ref: Dog; dist: number }
+      | null = null;
 
     for (const s of this.sheep) {
       if (s.penned) continue;
-      const dx = s.sprite.x - x;
-      const dy = s.sprite.y - y;
-      const d = Math.hypot(dx, dy);
-      if (d >= WHISTLE_RADIUS || d < 0.01) continue;
-      const falloff = 1 - d / WHISTLE_RADIUS;
-      const kick = WHISTLE_IMPULSE * falloff;
-      s.vx += (dx / d) * kick;
-      s.vy += (dy / d) * kick;
-      s.angle = Math.atan2(dy, dx);
-      s.scaredMs = Math.max(s.scaredMs, 500 + 500 * falloff);
+      const d = Math.hypot(s.sprite.x - x, s.sprite.y - y);
+      if (d <= SHEEP_RADIUS && (!best || d < best.dist)) {
+        best = { kind: "sheep", ref: s, dist: d };
+      }
     }
+    for (const dog of this.dogs) {
+      const d = Math.hypot(dog.sprite.x - x, dog.sprite.y - y);
+      if (d <= DOG_RADIUS && (!best || d < best.dist)) {
+        best = { kind: "dog", ref: dog, dist: d };
+      }
+    }
+    if (!best) return;
 
-    const ring = this.add.circle(x, y, 10, 0xffffff, 0).setDepth(6);
-    ring.setStrokeStyle(4, 0xffffff, 1);
-    this.hudCamera.ignore(ring);
-    this.tweens.add({
-      targets: ring,
-      radius: WHISTLE_RADIUS,
-      strokeAlpha: 0,
-      duration: 420,
-      ease: "Quad.easeOut",
-      onComplete: () => ring.destroy(),
-    });
-    this.sound.play("pop");
+    const sprite = best.ref.sprite;
+    const shadow = this.add
+      .ellipse(
+        sprite.x,
+        sprite.y + 10,
+        sprite.displayWidth * 0.7,
+        10,
+        0x000000,
+        0.35,
+      )
+      .setDepth(sprite.depth - 0.5);
+    this.hudCamera.ignore(shadow);
+
+    if (best.kind === "sheep") {
+      best.ref.dragged = true;
+      best.ref.vx = 0;
+      best.ref.vy = 0;
+      best.ref.sprite.setScale(best.ref.sprite.scaleX * DRAG_SCALE);
+      best.ref.sprite.setDepth(20);
+      this.drag = { kind: "sheep", ref: best.ref, shadow };
+    } else {
+      best.ref.dragged = true;
+      best.ref.sprite.setScale(DRAG_SCALE);
+      best.ref.sprite.setDepth(20);
+      this.drag = { kind: "dog", ref: best.ref, shadow };
+    }
+    this.updateDragPosition(x, y);
+  }
+
+  private updateDragPosition(x: number, y: number): void {
+    if (!this.drag) return;
+    const cx = Phaser.Math.Clamp(x, 0, WORLD_W);
+    const cy = Phaser.Math.Clamp(y, 0, WORLD_H);
+    const sprite = this.drag.ref.sprite;
+    sprite.x = cx;
+    sprite.y = cy - 12;
+    this.drag.shadow.setPosition(cx, cy + 6);
+  }
+
+  private endDrag(): void {
+    if (!this.drag) return;
+    const sprite = this.drag.ref.sprite;
+    const shadow = this.drag.shadow;
+    const dropX = shadow.x;
+    const dropY = shadow.y - 6;
+    sprite.x = dropX;
+    sprite.y = dropY;
+    shadow.destroy();
+    if (this.drag.kind === "sheep") {
+      const s = this.drag.ref;
+      s.dragged = false;
+      s.sprite.setScale(s.sprite.scaleX / DRAG_SCALE);
+      s.sprite.setDepth(5);
+      s.scaredMs = 0;
+    } else {
+      const d = this.drag.ref;
+      d.dragged = false;
+      d.sprite.setScale(1);
+      d.sprite.setDepth(10);
+      d.targetSheep = null;
+    }
+    this.drag = null;
   }
 
   private updateCoinText(): void {
@@ -530,6 +594,7 @@ export class ShepherdScene extends Phaser.Scene {
       modeT: SHEEP_WALK_MIN_SEC + Math.random() * SHEEP_WALK_MAX_SEC,
       wanderAngle: initAngle,
       scaredMs: 0,
+      dragged: false,
     });
   }
 
@@ -595,15 +660,17 @@ export class ShepherdScene extends Phaser.Scene {
       dogs: this.dogs.map((d) => ({
         x: d.sprite.x,
         y: d.sprite.y,
+        dragged: d.dragged,
       })),
-      lastWhistle: this.lastWhistle,
       sheep: this.sheep.map((s) => ({
         x: s.sprite.x,
         y: s.sprite.y,
         penned: s.penned,
+        dragged: s.dragged,
       })),
       pens: this.pens.map((p) => ({ x: p.x, y: p.y, radius: p.r })),
       placingPen: this.placingPen,
+      dragging: this.drag ? this.drag.kind : null,
       score: this.score,
       coins: this.coins,
       viewport: { width: this.scale.width, height: this.scale.height },
@@ -633,7 +700,12 @@ export class ShepherdScene extends Phaser.Scene {
 
     // --- Dog AI ---
     for (const dog of this.dogs) {
-      if (!dog.targetSheep || dog.targetSheep.penned) {
+      if (dog.dragged) continue;
+      if (
+        !dog.targetSheep ||
+        dog.targetSheep.penned ||
+        dog.targetSheep.dragged
+      ) {
         dog.targetSheep = this.findTargetSheep(dog);
       }
 
@@ -674,7 +746,7 @@ export class ShepherdScene extends Phaser.Scene {
     // --- Sheep behavior ---
     for (let i = 0; i < this.sheep.length; i++) {
       const s = this.sheep[i];
-      if (s.penned) continue;
+      if (s.penned || s.dragged) continue;
 
       let ax = 0;
       let ay = 0;
@@ -858,10 +930,10 @@ export class ShepherdScene extends Phaser.Scene {
     const minSep = SHEEP_RADIUS * 2;
     for (let i = 0; i < this.sheep.length; i++) {
       const a = this.sheep[i];
-      if (a.penned) continue;
+      if (a.penned || a.dragged) continue;
       for (let j = i + 1; j < this.sheep.length; j++) {
         const b = this.sheep[j];
-        if (b.penned) continue;
+        if (b.penned || b.dragged) continue;
         const dx = b.sprite.x - a.sprite.x;
         const dy = b.sprite.y - a.sprite.y;
         const dist = Math.hypot(dx, dy);
