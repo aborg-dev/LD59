@@ -305,12 +305,12 @@ export class ShepherdScene extends Phaser.Scene {
     this.fenceGfx = this.add.graphics().setDepth(1.2).setVisible(false);
     this.hudCamera.ignore(this.fenceGfx);
     this.fieldLabel = this.add
-      .text(FIELD_CX, FIELD_CY - FIELD_H_PX / 2 - 26, "FIELD", {
+      .text(FIELD_CX, FIELD_CY - FIELD_H_PX / 2 - 44, "FIELD", {
         fontFamily: FONT_UI,
-        fontSize: 30,
+        fontSize: 64,
         color: "#fff1c1",
         stroke: "#000000",
-        strokeThickness: 4,
+        strokeThickness: 8,
         resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5)
@@ -335,12 +335,12 @@ export class ShepherdScene extends Phaser.Scene {
     roofGfx.strokeTriangle(roofLeftX, roofTopY, roofRightX, roofTopY, MARKET_CX, roofPeakY);
     this.hudCamera.ignore(roofGfx);
     const marketLabel = this.add
-      .text(MARKET_CX, MARKET_CY - MARKET_H_PX / 2 - 90, "MARKET", {
+      .text(MARKET_CX, MARKET_CY - MARKET_H_PX / 2 - 110, "MARKET", {
         fontFamily: FONT_UI,
-        fontSize: 30,
+        fontSize: 64,
         color: "#fff1c1",
         stroke: "#000000",
-        strokeThickness: 4,
+        strokeThickness: 8,
         resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5)
@@ -378,12 +378,12 @@ export class ShepherdScene extends Phaser.Scene {
     );
     this.hudCamera.ignore(shearRoofGfx);
     const shearLabel = this.add
-      .text(SHEAR_CX, SHEAR_CY - SHEAR_H_PX / 2 - 82, "SHEAR", {
+      .text(SHEAR_CX, SHEAR_CY - SHEAR_H_PX / 2 - 100, "SHEAR", {
         fontFamily: FONT_UI,
-        fontSize: 28,
+        fontSize: 64,
         color: "#fff1c1",
         stroke: "#000000",
-        strokeThickness: 4,
+        strokeThickness: 8,
         resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5)
