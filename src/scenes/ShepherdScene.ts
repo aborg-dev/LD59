@@ -52,6 +52,16 @@ const HIGHLIGHT_CLUSTER_R = 110;
 let FEAR_RADIUS = 180;
 let FLEE_FORCE = 520;
 
+const WOLF_W = 42;
+const WOLF_H = 22;
+const WOLF_ACCEL = 550;
+const WOLF_MAX_SPEED = 600;
+const WOLF_NORMAL_SPEED = 190;
+const WOLF_EAT_RANGE = 32;
+const WOLF_PUSH_RANGE = 110;
+const WOLF_PUSH_FORCE = 900;
+const WOLF_SPAWN_INTERVAL_MS = 12000;
+
 
 
 interface Sheep {
@@ -66,13 +76,22 @@ interface Sheep {
   scaredMs: number;
 }
 
-interface Dog {
+interface Wolf {
   sprite: Phaser.GameObjects.Rectangle;
   targetSheep: Sheep | null;
   vx: number;
   vy: number;
   angle: number;
-  mode: "following" | "herding";
+}
+
+interface Dog {
+  sprite: Phaser.GameObjects.Rectangle;
+  targetSheep: Sheep | null;
+  targetWolf: Wolf | null;
+  vx: number;
+  vy: number;
+  angle: number;
+  mode: "following" | "herding" | "defending";
 }
 
 interface Pen {
@@ -118,7 +137,9 @@ export class ShepherdScene extends Phaser.Scene {
     right: Phaser.Input.Keyboard.Key;
   };
   private dogs: Dog[] = [];
+  private wolves: Wolf[] = [];
   private facingSheep: Sheep | null = null;
+  private facingWolf: Wolf | null = null;
   private highlightGfx!: Phaser.GameObjects.Graphics;
   private sheep: Sheep[] = [];
   private score = 0;
@@ -167,6 +188,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.coins = 5;
     this.accumulator = 0;
     this.dogs = [];
+    this.wolves = [];
     this.sheep = [];
     this.pens = [];
     this.placingPen = false;
@@ -226,7 +248,7 @@ export class ShepherdScene extends Phaser.Scene {
       .setDepth(11);
     alphaSprite.setStrokeStyle(3, 0xffffff);
     this.hudCamera.ignore(alphaSprite);
-    this.alphaDog = { sprite: alphaSprite, targetSheep: null, vx: 0, vy: 0, angle: 0, mode: "following" };
+    this.alphaDog = { sprite: alphaSprite, targetSheep: null, targetWolf: null, vx: 0, vy: 0, angle: 0, mode: "following" };
     this.alphaDogTargetX = alphaSprite.x;
     this.alphaDogTargetY = alphaSprite.y;
 
@@ -400,6 +422,13 @@ export class ShepherdScene extends Phaser.Scene {
       },
     });
 
+    // Wolf spawning
+    this.time.addEvent({
+      delay: WOLF_SPAWN_INTERVAL_MS,
+      loop: true,
+      callback: () => this.spawnWolf(),
+    });
+
     // Spawn a few sheep initially
     for (let i = 0; i < 5 && i < this.mapSpawns.length; i++) {
       const sp = this.mapSpawns[i];
@@ -425,11 +454,27 @@ export class ShepherdScene extends Phaser.Scene {
       vx: 0,
       vy: 0,
       angle: 0,
+      targetWolf: null,
       mode: "following",
     });
     this.updateDogCountText();
   }
 
+
+  private spawnWolf(): void {
+    const edge = Math.floor(Math.random() * 4);
+    let x: number;
+    let y: number;
+    if (edge === 0) { x = Math.random() * WORLD_W; y = -40; }
+    else if (edge === 1) { x = WORLD_W + 40; y = Math.random() * WORLD_H; }
+    else if (edge === 2) { x = Math.random() * WORLD_W; y = WORLD_H + 40; }
+    else { x = -40; y = Math.random() * WORLD_H; }
+
+    const sprite = this.add.rectangle(x, y, WOLF_W, WOLF_H, 0x7a1a1a).setDepth(9);
+    sprite.setStrokeStyle(2, 0xff5555);
+    this.hudCamera.ignore(sprite);
+    this.wolves.push({ sprite, targetSheep: null, vx: 0, vy: 0, angle: 0 });
+  }
 
   private updateCoinText(): void {
     this.coinText.setText(`$${this.coins}`);
@@ -734,14 +779,19 @@ export class ShepherdScene extends Phaser.Scene {
       }
     }
 
-    // Update facing sheep once per step
-    this.facingSheep = this.findFacingSheep();
+    // Update facing targets once per step
+    this.facingWolf = this.findFacingWolf();
+    this.facingSheep = this.facingWolf ? null : this.findFacingSheep();
 
-    // Return herding dogs whose target is done back to following
+    // Return herding/defending dogs whose target is gone back to following
     for (const dog of this.dogs) {
       if (dog.mode === "herding" && (!dog.targetSheep || dog.targetSheep.penned)) {
         dog.mode = "following";
         dog.targetSheep = null;
+      }
+      if (dog.mode === "defending" && (!dog.targetWolf || !this.wolves.includes(dog.targetWolf))) {
+        dog.mode = "following";
+        dog.targetWolf = null;
       }
     }
 
@@ -813,6 +863,98 @@ export class ShepherdScene extends Phaser.Scene {
         desiredVy = (toHerdY / toHerdD) * approachSpeed;
       }
       this.moveDog(dog, desiredVx, desiredVy, dt);
+    }
+
+    // --- Defending dogs ---
+    for (const dog of this.dogs) {
+      if (dog.mode !== "defending" || !dog.targetWolf) continue;
+      const wx = dog.targetWolf.sprite.x;
+      const wy = dog.targetWolf.sprite.y;
+      const toWolfX = wx - dog.sprite.x;
+      const toWolfY = wy - dog.sprite.y;
+      const toWolfD = Math.hypot(toWolfX, toWolfY);
+      let desiredVx = 0;
+      let desiredVy = 0;
+      if (toWolfD > 5) {
+        const approachSpeed = Math.min(toWolfD * 3.5, DOG_SPEED);
+        desiredVx = (toWolfX / toWolfD) * approachSpeed;
+        desiredVy = (toWolfY / toWolfD) * approachSpeed;
+      }
+      this.moveDog(dog, desiredVx, desiredVy, dt);
+    }
+
+    // --- Wolf AI ---
+    for (let i = this.wolves.length - 1; i >= 0; i--) {
+      const wolf = this.wolves[i];
+
+      // Remove if out of world bounds
+      if (wolf.sprite.x < -60 || wolf.sprite.x > WORLD_W + 60 ||
+          wolf.sprite.y < -60 || wolf.sprite.y > WORLD_H + 60) {
+        wolf.sprite.destroy();
+        this.wolves.splice(i, 1);
+        continue;
+      }
+
+      // Pick target sheep
+      if (!wolf.targetSheep || wolf.targetSheep.penned) {
+        let best: Sheep | null = null;
+        let bestDist = Infinity;
+        for (const s of this.sheep) {
+          if (s.penned) continue;
+          const d = Math.hypot(s.sprite.x - wolf.sprite.x, s.sprite.y - wolf.sprite.y);
+          if (d < bestDist) { bestDist = d; best = s; }
+        }
+        wolf.targetSheep = best;
+      }
+
+      let ax = 0;
+      let ay = 0;
+
+      // Move toward target sheep
+      if (wolf.targetSheep) {
+        const dx = wolf.targetSheep.sprite.x - wolf.sprite.x;
+        const dy = wolf.targetSheep.sprite.y - wolf.sprite.y;
+        const d = Math.hypot(dx, dy);
+        if (d < WOLF_EAT_RANGE) {
+          // Eat the sheep
+          const idx = this.sheep.indexOf(wolf.targetSheep);
+          if (idx !== -1) {
+            this.sheep[idx].sprite.destroy();
+            this.sheep.splice(idx, 1);
+          }
+          wolf.targetSheep = null;
+        } else {
+          ax += (dx / d) * WOLF_ACCEL;
+          ay += (dy / d) * WOLF_ACCEL;
+        }
+      }
+
+      // Push from defending dogs
+      for (const dog of this.dogs) {
+        if (dog.mode !== "defending" || dog.targetWolf !== wolf) continue;
+        const ddx = wolf.sprite.x - dog.sprite.x;
+        const ddy = wolf.sprite.y - dog.sprite.y;
+        const dd = Math.hypot(ddx, ddy);
+        if (dd < WOLF_PUSH_RANGE && dd > 0.01) {
+          const strength = (1 - dd / WOLF_PUSH_RANGE) * WOLF_PUSH_FORCE;
+          ax += (ddx / dd) * strength;
+          ay += (ddy / dd) * strength;
+        }
+      }
+
+      wolf.vx = (wolf.vx + ax * dt) * 0.92;
+      wolf.vy = (wolf.vy + ay * dt) * 0.92;
+      const spd = Math.hypot(wolf.vx, wolf.vy);
+      if (spd > WOLF_MAX_SPEED) {
+        wolf.vx = (wolf.vx / spd) * WOLF_MAX_SPEED;
+        wolf.vy = (wolf.vy / spd) * WOLF_MAX_SPEED;
+      }
+      wolf.sprite.x += wolf.vx * dt;
+      wolf.sprite.y += wolf.vy * dt;
+      if (spd > 5) {
+        wolf.angle = Math.atan2(wolf.vy, wolf.vx);
+        wolf.sprite.rotation = wolf.angle;
+      }
     }
 
     // --- Sheep behavior ---
@@ -1063,6 +1205,22 @@ export class ShepherdScene extends Phaser.Scene {
     }
   }
 
+  private findFacingWolf(): Wolf | null {
+    const fwdX = Math.cos(this.alphaDog.angle);
+    const fwdY = Math.sin(this.alphaDog.angle);
+    let best: Wolf | null = null;
+    let bestDot = Math.cos(FACING_CONE);
+    for (const w of this.wolves) {
+      const dx = w.sprite.x - this.alphaDog.sprite.x;
+      const dy = w.sprite.y - this.alphaDog.sprite.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > FACING_RANGE || dist < 0.01) continue;
+      const dot = (dx / dist) * fwdX + (dy / dist) * fwdY;
+      if (dot > bestDot) { bestDot = dot; best = w; }
+    }
+    return best;
+  }
+
   private findFacingSheep(): Sheep | null {
     const fwdX = Math.cos(this.alphaDog.angle);
     const fwdY = Math.sin(this.alphaDog.angle);
@@ -1086,9 +1244,15 @@ export class ShepherdScene extends Phaser.Scene {
   private dispatchFollower(): void {
     const follower = this.dogs.find((d) => d.mode === "following");
     if (!follower) return;
-    if (!this.facingSheep) return;
-    follower.mode = "herding";
-    follower.targetSheep = this.facingSheep;
+    if (this.facingWolf) {
+      follower.mode = "defending";
+      follower.targetWolf = this.facingWolf;
+    } else if (this.facingSheep) {
+      follower.mode = "herding";
+      follower.targetSheep = this.facingSheep;
+    } else {
+      return;
+    }
     this.sound.play("pop");
     const ring = this.add
       .circle(this.alphaDog.sprite.x, this.alphaDog.sprite.y, 10, 0xffffff, 0)
@@ -1107,17 +1271,22 @@ export class ShepherdScene extends Phaser.Scene {
 
   private updateHighlight(): void {
     this.highlightGfx.clear();
-    const target = this.facingSheep;
-    if (!target) return;
-    // Highlight all sheep in the same cluster
-    for (const s of this.sheep) {
-      if (s.penned) continue;
-      const dist = Math.hypot(s.sprite.x - target.sprite.x, s.sprite.y - target.sprite.y);
-      if (dist > HIGHLIGHT_CLUSTER_R) continue;
-      const t = (Date.now() % 800) / 800;
-      const pulse = 0.55 + 0.45 * Math.sin(t * Math.PI * 2);
-      this.highlightGfx.lineStyle(3, 0xffd700, pulse);
-      this.highlightGfx.strokeCircle(s.sprite.x, s.sprite.y, SHEEP_RADIUS + 7);
+    const pulse = 0.55 + 0.45 * Math.sin(((Date.now() % 800) / 800) * Math.PI * 2);
+    if (this.facingWolf) {
+      this.highlightGfx.lineStyle(3, 0xff4444, pulse);
+      this.highlightGfx.strokeRect(
+        this.facingWolf.sprite.x - WOLF_W / 2 - 8,
+        this.facingWolf.sprite.y - WOLF_H / 2 - 8,
+        WOLF_W + 16,
+        WOLF_H + 16,
+      );
+    } else if (this.facingSheep) {
+      for (const s of this.sheep) {
+        if (s.penned) continue;
+        if (Math.hypot(s.sprite.x - this.facingSheep.sprite.x, s.sprite.y - this.facingSheep.sprite.y) > HIGHLIGHT_CLUSTER_R) continue;
+        this.highlightGfx.lineStyle(3, 0xffd700, pulse);
+        this.highlightGfx.strokeCircle(s.sprite.x, s.sprite.y, SHEEP_RADIUS + 7);
+      }
     }
   }
 
