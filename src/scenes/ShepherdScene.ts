@@ -218,6 +218,7 @@ export class ShepherdScene extends Phaser.Scene {
   private gameOverTriggered = false;
   private bgMusic?: Phaser.Sound.BaseSound;
   private truckSfx?: Phaser.Sound.BaseSound;
+  private truckSfxFade?: Phaser.Tweens.Tween;
   private shearSfx?: Phaser.Sound.BaseSound;
   private grazingSfx?: Phaser.Sound.BaseSound;
   private paused = false;
@@ -285,7 +286,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.sheep = [];
     this.trucks = [];
     this.gameOverTriggered = false;
-    this.bgMusic?.stop();
+    this.sound.removeByKey("background");
     this.bgMusic = this.sound.add("background", { loop: true, volume: 0.1 });
     this.bgMusic.play();
     this.dogBuyCost = 5;
@@ -1202,8 +1203,16 @@ export class ShepherdScene extends Phaser.Scene {
       dropTimer: 0,
       hasDropped: false,
     });
-    if (!this.truckSfx?.isPlaying) {
-      this.truckSfx = this.sound.add("truck", { loop: true, volume: 0.45 });
+    if (this.truckSfxFade) {
+      this.truckSfxFade.stop();
+      this.truckSfxFade = undefined;
+    }
+    if (this.truckSfx?.isPlaying) {
+      // Cancel any mid-fade and restore volume — another truck is on the road
+      (this.truckSfx as Phaser.Sound.BaseSound & { volume: number }).volume = 0.7;
+    } else {
+      this.sound.removeByKey("truck");
+      this.truckSfx = this.sound.add("truck", { loop: true, volume: 0.7 });
       this.truckSfx.play();
     }
   }
@@ -1247,7 +1256,7 @@ export class ShepherdScene extends Phaser.Scene {
         t.dropTimer += dt;
         if (!t.hasDropped && t.dropTimer >= 0.2) {
           this.spawnSheep(t.sprite.x - TRUCK_W / 2 - 40, t.sprite.y);
-          this.sound.play("bounce");
+          this.sound.play("sheep", { volume: 0.25 });
           t.hasDropped = true;
         }
         if (t.dropTimer >= 1.0) {
@@ -1261,8 +1270,23 @@ export class ShepherdScene extends Phaser.Scene {
         }
       }
     }
-    if (this.trucks.length === 0 && this.truckSfx?.isPlaying) {
-      this.truckSfx.stop();
+    if (
+      this.trucks.length === 0 &&
+      this.truckSfx?.isPlaying &&
+      !this.truckSfxFade
+    ) {
+      const sfx = this.truckSfx;
+      this.truckSfxFade = this.tweens.add({
+        targets: sfx,
+        volume: 0,
+        duration: 1500,
+        ease: "Quad.easeIn",
+        onComplete: () => {
+          sfx.stop();
+          if (this.truckSfx === sfx) this.truckSfx = undefined;
+          this.truckSfxFade = undefined;
+        },
+      });
     }
     const anyShearing = this.sheep.some(
       (s) => s.stage === "adult" && s.shearT > 0 && !s.sold,
@@ -2863,6 +2887,8 @@ export class ShepherdScene extends Phaser.Scene {
     this.editorPanel = null;
     this.bgMusic?.stop();
     this.bgMusic = undefined;
+    this.truckSfxFade?.stop();
+    this.truckSfxFade = undefined;
     this.truckSfx?.stop();
     this.truckSfx = undefined;
     this.shearSfx?.stop();

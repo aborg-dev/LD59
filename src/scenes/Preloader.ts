@@ -37,6 +37,7 @@ export class Preloader extends Scene {
     this.load.audio("truck", "truck.mp3");
     this.load.audio("grazing", "grazing.mp3");
     this.load.audio("money", "money.mp3");
+    this.load.audio("sheep", "sheep.wav");
     this.load.spritesheet("sheep", "Sheeple.png", {
       frameWidth: 36,
       frameHeight: 62,
