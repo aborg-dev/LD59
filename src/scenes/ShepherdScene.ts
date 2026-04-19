@@ -42,6 +42,7 @@ const SHEAR_VALUE = 3;
 const SHEAR_SEC = 4;
 const MARKET_W_PX = 236;
 const MARKET_H_PX = 216;
+const BUILDING_ENTRY_PADDING = SHEEP_RADIUS * 2; // extra margin around buildings for entry detection
 
 // Country road — top-left → turns → center → bottom-right
 const ROAD_W_PX = 140;
@@ -451,6 +452,30 @@ export class ShepherdScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2);
     this.hudCamera.ignore(shearPriceLabel);
+
+    // Entry-area outlines (padded building bounds)
+    const entryGfx = this.add.graphics().setDepth(2);
+    this.hudCamera.ignore(entryGfx);
+    const p = BUILDING_ENTRY_PADDING;
+    entryGfx.lineStyle(3, 0x272e25, 0.6);
+    entryGfx.strokeRect(
+      MARKET_CX - MARKET_W_PX / 2 - p,
+      MARKET_CY - MARKET_H_PX / 2 - p,
+      MARKET_W_PX + p * 2,
+      MARKET_H_PX + p * 2,
+    );
+    entryGfx.strokeRect(
+      SHEAR_CX - SHEAR_W_PX / 2 - p,
+      SHEAR_CY - SHEAR_H_PX / 2 - p,
+      SHEAR_W_PX + p * 2,
+      SHEAR_H_PX + p * 2,
+    );
+    entryGfx.strokeRect(
+      FIELD_CX - FIELD_W_PX / 2 - p,
+      FIELD_CY - FIELD_H_PX / 2 - p,
+      FIELD_W_PX + p * 2,
+      FIELD_H_PX + p * 2,
+    );
 
     // Render trees
     for (const t of this.mapTrees) {
@@ -1077,11 +1102,12 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private shearContains(x: number, y: number): boolean {
+    const p = BUILDING_ENTRY_PADDING;
     return (
-      x > SHEAR_CX - SHEAR_W_PX / 2 &&
-      x < SHEAR_CX + SHEAR_W_PX / 2 &&
-      y > SHEAR_CY - SHEAR_H_PX / 2 &&
-      y < SHEAR_CY + SHEAR_H_PX / 2
+      x > SHEAR_CX - SHEAR_W_PX / 2 - p &&
+      x < SHEAR_CX + SHEAR_W_PX / 2 + p &&
+      y > SHEAR_CY - SHEAR_H_PX / 2 - p &&
+      y < SHEAR_CY + SHEAR_H_PX / 2 + p
     );
   }
 
@@ -1132,11 +1158,12 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private marketContains(x: number, y: number): boolean {
+    const p = BUILDING_ENTRY_PADDING;
     return (
-      x > MARKET_CX - MARKET_W_PX / 2 &&
-      x < MARKET_CX + MARKET_W_PX / 2 &&
-      y > MARKET_CY - MARKET_H_PX / 2 &&
-      y < MARKET_CY + MARKET_H_PX / 2
+      x > MARKET_CX - MARKET_W_PX / 2 - p &&
+      x < MARKET_CX + MARKET_W_PX / 2 + p &&
+      y > MARKET_CY - MARKET_H_PX / 2 - p &&
+      y < MARKET_CY + MARKET_H_PX / 2 + p
     );
   }
 
@@ -1158,6 +1185,36 @@ export class ShepherdScene extends Phaser.Scene {
     const rightX = FIELD_CX + FIELD_W_PX / 2;
     const topY = FIELD_CY - FIELD_H_PX / 2;
     const bottomY = FIELD_CY + FIELD_H_PX / 2;
+    const leftD = sprite.x - leftX;
+    const rightD = rightX - sprite.x;
+    const topD = sprite.y - topY;
+    const bottomD = bottomY - sprite.y;
+    const minD = Math.min(leftD, rightD, topD, bottomD);
+    if (minD === leftD) {
+      sprite.x = leftX - 1;
+      if (mover) mover.vx = -Math.abs(mover.vx);
+    } else if (minD === rightD) {
+      sprite.x = rightX + 1;
+      if (mover) mover.vx = Math.abs(mover.vx);
+    } else if (minD === topD) {
+      sprite.y = topY - 1;
+      if (mover) mover.vy = -Math.abs(mover.vy);
+    } else {
+      sprite.y = bottomY + 1;
+      if (mover) mover.vy = Math.abs(mover.vy);
+    }
+  }
+
+  private pushOutOfRect(
+    cx: number, cy: number, w: number, h: number,
+    sprite: { x: number; y: number },
+    mover?: { vx: number; vy: number },
+  ): void {
+    const leftX = cx - w / 2;
+    const rightX = cx + w / 2;
+    const topY = cy - h / 2;
+    const bottomY = cy + h / 2;
+    if (sprite.x <= leftX || sprite.x >= rightX || sprite.y <= topY || sprite.y >= bottomY) return;
     const leftD = sprite.x - leftX;
     const rightD = rightX - sprite.x;
     const topD = sprite.y - topY;
@@ -2347,6 +2404,15 @@ export class ShepherdScene extends Phaser.Scene {
           }
         }
 
+      // Building collision — push sheep out of building footprints unless they
+      // legitimately belong inside (waiting to sell, shearing, growing)
+      if (!s.waiting)
+        this.pushOutOfRect(MARKET_CX, MARKET_CY, MARKET_W_PX, MARKET_H_PX, s.sprite, s);
+      if (s.shearT === 0)
+        this.pushOutOfRect(SHEAR_CX, SHEAR_CY, SHEAR_W_PX, SHEAR_H_PX, s.sprite, s);
+      if (s.stage === "adult")
+        this.pushOutOfRect(FIELD_CX, FIELD_CY, FIELD_W_PX, FIELD_H_PX, s.sprite, s);
+
       // Babies that have started growing can't leave the field until adult
       if (s.stage === "baby" && s.growthT > 0) {
         const minX = FIELD_CX - FIELD_W_PX / 2 + SHEEP_RADIUS;
@@ -2473,6 +2539,13 @@ export class ShepherdScene extends Phaser.Scene {
         this.updateMarketCountText();
         this.scheduleSheepSale(s);
       }
+
+      // Fade sheep when inside a building footprint
+      const insideBuilding =
+        this.marketContains(s.sprite.x, s.sprite.y) ||
+        this.shearContains(s.sprite.x, s.sprite.y) ||
+        this.fieldContains(s.sprite.x, s.sprite.y);
+      s.sprite.setAlpha(insideBuilding ? 0.25 : 1);
     }
 
     // Positional overlap resolution
