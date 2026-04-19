@@ -194,20 +194,20 @@ describe("shepherd core loop", () => {
     expect(adults.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("grow upgrade reduces grow time", async () => {
+  it("speed upgrade increases the alpha dog's max speed", async () => {
     await game.startScene("Shepherd");
 
-    const before = (await shepherdState()).growSec;
+    const before = (await shepherdState()).alphaDogSpeed;
     await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Shepherd');
       gs.coins = 1000;
       gs.updateCoinText();
-      gs.buyGrowUpgrade();
+      gs.buySpeedUpgrade();
     })()`);
 
     const after = await shepherdState();
-    expect(after.growSec).toBeLessThan(before);
-    expect(after.growUpgradeLevel).toBe(1);
+    expect(after.alphaDogSpeed).toBeGreaterThan(before);
+    expect(after.speedUpgradeLevel).toBe(1);
   });
 
   it("capacity upgrade raises the field's max simultaneously growing sheep", async () => {

@@ -20,9 +20,8 @@ const CAPACITY_UPGRADE_STEP = 1;
 const FENCE_COST = 100;
 const GUARD_RANGE = 320;
 const GUARD_BUY_BASE_COST = 30;
-const GROW_SEC_BASE = 12;
-const GROW_SEC_MIN = 4;
-const GROW_UPGRADE_STEP = 2;
+const GROW_SEC = 12;
+const SPEED_UPGRADE_STEP = 60;
 const UPGRADE_MAX_LEVEL = 4;
 
 // Market — adults are sold here for coins
@@ -181,9 +180,9 @@ export interface ShepherdSceneState {
   score: number;
   coins: number;
   buySheepCost: number;
-  growSec: number;
+  alphaDogSpeed: number;
   fieldCapacity: number;
-  growUpgradeLevel: number;
+  speedUpgradeLevel: number;
   capacityUpgradeLevel: number;
   viewport: { width: number; height: number };
 }
@@ -227,16 +226,16 @@ export class ShepherdScene extends Phaser.Scene {
   private dogBuyCost = 5;
   private guardBuyCost = GUARD_BUY_BASE_COST;
   private buySheepCost = BUY_SHEEP_BASE_COST;
-  private growSec = GROW_SEC_BASE;
+  private alphaDogSpeed = DOG_SPEED;
   private fieldCapacity = FIELD_CAPACITY_BASE;
-  private growUpgradeLevel = 0;
+  private speedUpgradeLevel = 0;
   private capacityUpgradeLevel = 0;
-  private growUpgradeCost = 10;
+  private speedUpgradeCost = 10;
   private capacityUpgradeCost = 10;
   private wolfSpawnStartMs = 0;
   private dogBuyBtn!: Phaser.GameObjects.Text;
   private sheepBuyBtn!: Phaser.GameObjects.Text;
-  private growBuyBtn!: Phaser.GameObjects.Text;
+  private speedBuyBtn!: Phaser.GameObjects.Text;
   private capacityBuyBtn!: Phaser.GameObjects.Text;
   private fenceBuyBtn!: Phaser.GameObjects.Text;
   private guardBuyBtn!: Phaser.GameObjects.Text;
@@ -283,11 +282,11 @@ export class ShepherdScene extends Phaser.Scene {
     this.dogBuyCost = 5;
     this.guardBuyCost = GUARD_BUY_BASE_COST;
     this.buySheepCost = BUY_SHEEP_BASE_COST;
-    this.growSec = GROW_SEC_BASE;
+    this.alphaDogSpeed = DOG_SPEED;
     this.fieldCapacity = FIELD_CAPACITY_BASE;
-    this.growUpgradeLevel = 0;
+    this.speedUpgradeLevel = 0;
     this.capacityUpgradeLevel = 0;
-    this.growUpgradeCost = 10;
+    this.speedUpgradeCost = 10;
     this.capacityUpgradeCost = 10;
     this.fenceBuilt = false;
 
@@ -651,13 +650,13 @@ export class ShepherdScene extends Phaser.Scene {
     this.sheepBuyBtn.on("pointerdown", () => this.buySheep());
     this.cameras.main.ignore(this.sheepBuyBtn);
 
-    this.growBuyBtn = this.add
+    this.speedBuyBtn = this.add
       .text(width * 0.42, btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
-    this.growBuyBtn.on("pointerdown", () => this.buyGrowUpgrade());
-    this.cameras.main.ignore(this.growBuyBtn);
+    this.speedBuyBtn.on("pointerdown", () => this.buySpeedUpgrade());
+    this.cameras.main.ignore(this.speedBuyBtn);
 
     this.capacityBuyBtn = this.add
       .text(width * 0.54, btnY, "", btnStyle)
@@ -743,16 +742,13 @@ export class ShepherdScene extends Phaser.Scene {
     this.updateShopButtons();
   }
 
-  buyGrowUpgrade(): void {
-    if (this.growUpgradeLevel >= UPGRADE_MAX_LEVEL) return;
-    if (this.coins < this.growUpgradeCost) return;
-    this.coins -= this.growUpgradeCost;
-    this.growUpgradeLevel++;
-    this.growSec = Math.max(
-      GROW_SEC_MIN,
-      GROW_SEC_BASE - this.growUpgradeLevel * GROW_UPGRADE_STEP,
-    );
-    this.growUpgradeCost = Math.ceil(this.growUpgradeCost * 2);
+  buySpeedUpgrade(): void {
+    if (this.speedUpgradeLevel >= UPGRADE_MAX_LEVEL) return;
+    if (this.coins < this.speedUpgradeCost) return;
+    this.coins -= this.speedUpgradeCost;
+    this.speedUpgradeLevel++;
+    this.alphaDogSpeed = DOG_SPEED + this.speedUpgradeLevel * SPEED_UPGRADE_STEP;
+    this.speedUpgradeCost = Math.ceil(this.speedUpgradeCost * 2);
     this.sound.play("pop");
     this.updateCoinText();
   }
@@ -903,13 +899,16 @@ export class ShepherdScene extends Phaser.Scene {
     );
     this.sheepBuyBtn.setAlpha(sheepAffordable ? 1 : 0.55);
 
-    const growMaxed = this.growUpgradeLevel >= UPGRADE_MAX_LEVEL;
-    const growAffordable = !growMaxed && this.coins >= this.growUpgradeCost;
-    this.growBuyBtn.setText(
-      growMaxed ? "Grow MAX" : `+Grow $${this.growUpgradeCost}`,
+    const speedMaxed = this.speedUpgradeLevel >= UPGRADE_MAX_LEVEL;
+    const speedAffordable =
+      !speedMaxed && this.coins >= this.speedUpgradeCost;
+    this.speedBuyBtn.setText(
+      speedMaxed ? "Speed MAX" : `+Speed $${this.speedUpgradeCost}`,
     );
-    this.growBuyBtn.setBackgroundColor(growAffordable ? "#2a6a2a" : "#333344");
-    this.growBuyBtn.setAlpha(growAffordable ? 1 : 0.55);
+    this.speedBuyBtn.setBackgroundColor(
+      speedAffordable ? "#2a6a2a" : "#333344",
+    );
+    this.speedBuyBtn.setAlpha(speedAffordable ? 1 : 0.55);
 
     const capMaxed = this.capacityUpgradeLevel >= UPGRADE_MAX_LEVEL;
     const capAffordable = !capMaxed && this.coins >= this.capacityUpgradeCost;
@@ -1369,9 +1368,9 @@ export class ShepherdScene extends Phaser.Scene {
       score: this.score,
       coins: this.coins,
       buySheepCost: this.buySheepCost,
-      growSec: this.growSec,
+      alphaDogSpeed: this.alphaDogSpeed,
       fieldCapacity: this.fieldCapacity,
-      growUpgradeLevel: this.growUpgradeLevel,
+      speedUpgradeLevel: this.speedUpgradeLevel,
       capacityUpgradeLevel: this.capacityUpgradeLevel,
       viewport: { width: this.scale.width, height: this.scale.height },
     };
@@ -1421,8 +1420,8 @@ export class ShepherdScene extends Phaser.Scene {
       let desiredVy = 0;
       if (kx !== 0 || ky !== 0) {
         const klen = Math.hypot(kx, ky);
-        desiredVx = (kx / klen) * DOG_SPEED;
-        desiredVy = (ky / klen) * DOG_SPEED;
+        desiredVx = (kx / klen) * this.alphaDogSpeed;
+        desiredVy = (ky / klen) * this.alphaDogSpeed;
         this.alphaDogTargetX = this.alphaDog.sprite.x;
         this.alphaDogTargetY = this.alphaDog.sprite.y;
       } else {
@@ -1430,8 +1429,8 @@ export class ShepherdScene extends Phaser.Scene {
         const ddy = this.alphaDogTargetY - this.alphaDog.sprite.y;
         const dDist = Math.hypot(ddx, ddy);
         if (dDist > 5) {
-          desiredVx = (ddx / dDist) * DOG_SPEED;
-          desiredVy = (ddy / dDist) * DOG_SPEED;
+          desiredVx = (ddx / dDist) * this.alphaDogSpeed;
+          desiredVy = (ddy / dDist) * this.alphaDogSpeed;
         }
       }
       const desiredSpd = Math.hypot(desiredVx, desiredVy);
@@ -1446,7 +1445,7 @@ export class ShepherdScene extends Phaser.Scene {
         );
       }
       const speed =
-        desiredSpd > 2 ? DOG_SPEED * Math.max(0, Math.cos(diff)) : 0;
+        desiredSpd > 2 ? this.alphaDogSpeed * Math.max(0, Math.cos(diff)) : 0;
       this.alphaDog.vx = Math.cos(this.alphaDog.angle) * speed;
       this.alphaDog.vy = Math.sin(this.alphaDog.angle) * speed;
       this.alphaDog.sprite.x += this.alphaDog.vx * dt;
@@ -2092,11 +2091,11 @@ export class ShepherdScene extends Phaser.Scene {
       // Field growth — babies grow into adults while in the field
       if (s.stage === "baby" && this.fieldContains(s.sprite.x, s.sprite.y)) {
         s.growthT += dt;
-        const t = Math.min(1, s.growthT / this.growSec);
+        const t = Math.min(1, s.growthT / GROW_SEC);
         const scale =
           BABY_SHEEP_SCALE + (ADULT_SHEEP_SCALE - BABY_SHEEP_SCALE) * t;
         s.sprite.setScale(scale);
-        if (s.growthT >= this.growSec) {
+        if (s.growthT >= GROW_SEC) {
           s.stage = "adult";
           s.sprite.setScale(ADULT_SHEEP_SCALE);
           this.playGrownFx(s);
