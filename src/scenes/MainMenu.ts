@@ -2,10 +2,7 @@ import { Scene } from "phaser";
 import { FONT_BODY, FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
 
 /** Register each prototype here: [scene key, display label] */
-export const GAMES: [string, string][] = [
-  ["Shepherd", "Shepherd Dog"],
-  ["Rover", "Rover Search"],
-];
+export const GAMES: [string, string][] = [["Shepherd", "Shepherd Dog"]];
 
 export interface MainMenuState {
   active: boolean;
