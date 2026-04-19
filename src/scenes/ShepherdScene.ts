@@ -13,8 +13,8 @@ const MAX_SHEEP = 30;
 // Field — babies grow here into adults
 const FIELD_CX = 1800;
 const FIELD_CY = 900;
-const FIELD_W_PX = 420;
-const FIELD_H_PX = 420;
+const FIELD_W_PX = 288;
+const FIELD_H_PX = 168;
 const FIELD_CAPACITY_BASE = 3;
 const CAPACITY_UPGRADE_STEP = 1;
 const FENCE_COST = 100;
@@ -36,17 +36,17 @@ const SALE_PRICE_MAX = 10;
 // Shear shed — pay $SHEAR_VALUE to shear an adult back into a baby
 const SHEAR_CX = 1200;
 const SHEAR_CY = 440;
-const SHEAR_W_PX = 220;
-const SHEAR_H_PX = 170;
+const SHEAR_W_PX = 288;
+const SHEAR_H_PX = 288;
 const SHEAR_VALUE = 3;
 const SHEAR_SEC = 4;
-const MARKET_W_PX = 260;
-const MARKET_H_PX = 200;
+const MARKET_W_PX = 236;
+const MARKET_H_PX = 216;
 
 // Country road — top-left → turns → center → bottom-right
 const ROAD_W_PX = 140;
-const TRUCK_W = 288;
-const TRUCK_H = 400;
+const TRUCK_W = 66;
+const TRUCK_H = 175;
 const TRUCK_SPEED = 320;
 const ROAD_WAYPOINTS: readonly { x: number; y: number }[] = [
   { x: 350, y: -TRUCK_H },           // [0] spawn off-screen, top-left area
@@ -1321,10 +1321,9 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private updateTrucks(dt: number): void {
-    const truckGap = 0;
+    const truckGap = 20;
     for (let i = this.trucks.length - 1; i >= 0; i--) {
       const t = this.trucks[i];
-
       if (t.state === "dropping") {
         t.dropTimer += dt;
         if (!t.hasDropped && t.dropTimer >= 0.2) {
@@ -1359,7 +1358,7 @@ export class ShepherdScene extends Phaser.Scene {
               const ahead = other.sprite.y > t.sprite.y ||
                 (other.sprite.y === t.sprite.y && otherIdx < myIdx);
               if (ahead) {
-                maxY = Math.min(maxY, other.sprite.y - TRUCK_H - truckGap);
+                maxY = Math.min(maxY, other.sprite.y - other.sprite.displayHeight - truckGap);
               }
             }
           }
@@ -1820,7 +1819,7 @@ export class ShepherdScene extends Phaser.Scene {
           w.targetSheep === dog.targetSheep &&
           w.scaredMs === 0 &&
           Math.hypot(w.sprite.x - sx, w.sprite.y - sy) <
-            HERD_INTERCEPT_THREAT_RANGE,
+          HERD_INTERCEPT_THREAT_RANGE,
       );
 
       let herdX: number;
