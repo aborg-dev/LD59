@@ -107,6 +107,8 @@ const WOLF_W = 42;
 const WOLF_H = 22;
 const WOLF_TURN_RATE = 3.5;
 const WOLF_NORMAL_SPEED = 190;
+const WOLF_BUILDING_AVOIDANCE_RADIUS = 180;
+const WOLF_BUILDING_AVOIDANCE_FORCE = WOLF_NORMAL_SPEED * 4;
 const WOLF_EAT_RANGE = 32;
 const WOLF_CONTACT_RANGE = 80;
 const WOLF_FLEE_SPEED = 650;
@@ -769,7 +771,7 @@ export class ShepherdScene extends Phaser.Scene {
       y = Math.random() * WORLD_H;
     }
 
-    const sprite = this.add.image(x, y, "wolf").setDepth(9);
+    const sprite = this.add.image(x, y, "wolf").setDepth(1.6);
     this.hudCamera.ignore(sprite);
     this.wolves.push({
       sprite,
@@ -2215,6 +2217,23 @@ export class ShepherdScene extends Phaser.Scene {
           }
         }
 
+        // Steer away from building footprints
+        for (const [cx, cy, w, h] of [
+          [MARKET_CX, MARKET_CY, MARKET_W_PX, MARKET_H_PX],
+          [SHEAR_CX,  SHEAR_CY,  SHEAR_W_PX,  SHEAR_H_PX],
+        ] as [number, number, number, number][]) {
+          const nearX = Math.max(cx - w / 2, Math.min(cx + w / 2, wolf.sprite.x));
+          const nearY = Math.max(cy - h / 2, Math.min(cy + h / 2, wolf.sprite.y));
+          const repX = wolf.sprite.x - nearX;
+          const repY = wolf.sprite.y - nearY;
+          const dist = Math.hypot(repX, repY);
+          if (dist < WOLF_BUILDING_AVOIDANCE_RADIUS && dist > 0.01) {
+            const strength = (1 - dist / WOLF_BUILDING_AVOIDANCE_RADIUS) * WOLF_BUILDING_AVOIDANCE_FORCE;
+            desiredVx += (repX / dist) * strength;
+            desiredVy += (repY / dist) * strength;
+          }
+        }
+
         const desiredSpd = Math.hypot(desiredVx, desiredVy);
         if (desiredSpd > 2) {
           let diff = Math.atan2(desiredVy, desiredVx) - wolf.angle;
@@ -2236,6 +2255,9 @@ export class ShepherdScene extends Phaser.Scene {
       // Field fence — with a fence, wolves can't enter. Push any wolf inside
       // the field out to the nearest edge and reflect its velocity.
       if (this.fenceBuilt) this.pushOutOfField(wolf.sprite, wolf);
+      this.pushOutOfRect(MARKET_CX, MARKET_CY, MARKET_W_PX, MARKET_H_PX, wolf.sprite, wolf);
+      this.pushOutOfRect(SHEAR_CX, SHEAR_CY, SHEAR_W_PX, SHEAR_H_PX, wolf.sprite, wolf);
+      wolf.sprite.setAlpha(this.fieldContains(wolf.sprite.x, wolf.sprite.y) ? 0.25 : 1);
     }
 
     // --- Sheep behavior ---
