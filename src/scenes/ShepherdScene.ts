@@ -218,6 +218,8 @@ export class ShepherdScene extends Phaser.Scene {
   private trucks: Truck[] = [];
   private gameOverTriggered = false;
   private paused = false;
+  private placingGuard = false;
+  private guardMarkers: Phaser.GameObjects.Graphics[] = [];
 
   private coinText!: Phaser.GameObjects.Text;
   private dogCountText!: Phaser.GameObjects.Text;
@@ -517,6 +519,7 @@ export class ShepherdScene extends Phaser.Scene {
         this.editorHandlePointerDown(p);
         return;
       }
+      if (this.placingGuard) return;
       if (p.y > this.fieldBottom) return;
       if (p.y < this.fieldTop) return;
       this.dispatchFollower();
@@ -531,6 +534,7 @@ export class ShepherdScene extends Phaser.Scene {
     });
 
     this.input.keyboard?.on("keydown-SPACE", () => this.dispatchFollower());
+    this.input.keyboard?.on("keydown-ESC", () => this.cancelGuardPlacement());
     this.input.keyboard?.on("keydown-ENTER", () => this.toggleDebugPanel());
 
     // --- Top HUD ---
@@ -634,7 +638,10 @@ export class ShepherdScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
-    this.guardBuyBtn.on("pointerdown", () => this.buyGuardDog());
+    this.guardBuyBtn.on("pointerdown", () => {
+      if (this.placingGuard) this.cancelGuardPlacement();
+      else this.buyGuardDog();
+    });
     this.cameras.main.ignore(this.guardBuyBtn);
 
     this.sheepBuyBtn = this.add
@@ -939,35 +946,71 @@ export class ShepherdScene extends Phaser.Scene {
   private guardPosts(): { x: number; y: number }[] {
     const off = 40;
     return [
-      {
-        x: FIELD_CX - FIELD_W_PX / 2 - off,
-        y: FIELD_CY - FIELD_H_PX / 2 - off,
-      },
-      {
-        x: FIELD_CX + FIELD_W_PX / 2 + off,
-        y: FIELD_CY - FIELD_H_PX / 2 - off,
-      },
-      {
-        x: FIELD_CX + FIELD_W_PX / 2 + off,
-        y: FIELD_CY + FIELD_H_PX / 2 + off,
-      },
-      {
-        x: FIELD_CX - FIELD_W_PX / 2 - off,
-        y: FIELD_CY + FIELD_H_PX / 2 + off,
-      },
+      // Field corners
+      { x: FIELD_CX - FIELD_W_PX / 2 - off, y: FIELD_CY - FIELD_H_PX / 2 - off },
+      { x: FIELD_CX + FIELD_W_PX / 2 + off, y: FIELD_CY - FIELD_H_PX / 2 - off },
+      { x: FIELD_CX + FIELD_W_PX / 2 + off, y: FIELD_CY + FIELD_H_PX / 2 + off },
+      { x: FIELD_CX - FIELD_W_PX / 2 - off, y: FIELD_CY + FIELD_H_PX / 2 + off },
+      // Market corners
+      { x: MARKET_CX - MARKET_W_PX / 2 - off, y: MARKET_CY - MARKET_H_PX / 2 - off },
+      { x: MARKET_CX + MARKET_W_PX / 2 + off, y: MARKET_CY - MARKET_H_PX / 2 - off },
+      { x: MARKET_CX + MARKET_W_PX / 2 + off, y: MARKET_CY + MARKET_H_PX / 2 + off },
+      { x: MARKET_CX - MARKET_W_PX / 2 - off, y: MARKET_CY + MARKET_H_PX / 2 + off },
+      // Shear corners
+      { x: SHEAR_CX - SHEAR_W_PX / 2 - off, y: SHEAR_CY - SHEAR_H_PX / 2 - off },
+      { x: SHEAR_CX + SHEAR_W_PX / 2 + off, y: SHEAR_CY - SHEAR_H_PX / 2 - off },
+      { x: SHEAR_CX + SHEAR_W_PX / 2 + off, y: SHEAR_CY + SHEAR_H_PX / 2 + off },
+      { x: SHEAR_CX - SHEAR_W_PX / 2 - off, y: SHEAR_CY + SHEAR_H_PX / 2 + off },
     ];
+  }
+
+  private isPostOccupied(px: number, py: number): boolean {
+    return this.dogs.some(
+      (d) => d.mode === "guarding" && Math.hypot((d.postX ?? 0) - px, (d.postY ?? 0) - py) < 10,
+    );
+  }
+
+  private showGuardMarkers(): void {
+    this.cancelGuardPlacement();
+    this.placingGuard = true;
+    for (const post of this.guardPosts()) {
+      if (this.isPostOccupied(post.x, post.y)) continue;
+      const g = this.add.graphics().setDepth(50).setInteractive(
+        new Phaser.Geom.Circle(post.x, post.y, 22),
+        Phaser.Geom.Circle.Contains,
+      );
+      this.hudCamera.ignore(g);
+      const drawMarker = (hover: boolean) => {
+        g.clear();
+        g.fillStyle(hover ? 0xffd700 : 0xccaaff, hover ? 0.85 : 0.55);
+        g.fillCircle(post.x, post.y, 18);
+        g.lineStyle(2, 0xffffff, 0.9);
+        g.strokeCircle(post.x, post.y, 18);
+      };
+      drawMarker(false);
+      g.on("pointerover", () => drawMarker(true));
+      g.on("pointerout", () => drawMarker(false));
+      g.on("pointerdown", () => {
+        this.coins -= this.guardBuyCost;
+        this.guardBuyCost = Math.ceil(this.guardBuyCost * 1.6);
+        this.spawnGuardDog(post.x, post.y);
+        this.sound.play("pop");
+        this.updateCoinText();
+        this.cancelGuardPlacement();
+      });
+      this.guardMarkers.push(g);
+    }
+  }
+
+  private cancelGuardPlacement(): void {
+    this.placingGuard = false;
+    for (const g of this.guardMarkers) g.destroy();
+    this.guardMarkers = [];
   }
 
   buyGuardDog(): void {
     if (this.coins < this.guardBuyCost) return;
-    this.coins -= this.guardBuyCost;
-    this.guardBuyCost = Math.ceil(this.guardBuyCost * 1.6);
-    const existing = this.dogs.filter((d) => d.mode === "guarding").length;
-    const posts = this.guardPosts();
-    const post = posts[existing % posts.length];
-    this.spawnGuardDog(post.x, post.y);
-    this.sound.play("pop");
-    this.updateCoinText();
+    this.showGuardMarkers();
   }
 
   private spawnGuardDog(x: number, y: number): void {
