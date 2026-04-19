@@ -70,13 +70,27 @@ describe("shepherd core loop", () => {
     await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Shepherd');
       const sheep = gs.spawnSheep();
-      sheep.sprite.x = gs.dumpState().field.x;
-      sheep.sprite.y = gs.dumpState().field.y;
+      const f = gs.dumpState().field;
+      sheep.sprite.x = f.x;
+      sheep.sprite.y = f.y;
       sheep.vx = 0;
       sheep.vy = 0;
     })()`);
 
-    await game.advanceTime(15000);
+    // Re-pin the sheep every second so wander doesn't drift it out of the field.
+    for (let i = 0; i < 15; i++) {
+      await game.advanceTime(1000);
+      await game.eval_(`(() => {
+        const gs = window.game.scene.getScene('Shepherd');
+        const s = gs.sheep[0];
+        if (!s) return;
+        const f = gs.dumpState().field;
+        s.sprite.x = f.x;
+        s.sprite.y = f.y;
+        s.vx = 0;
+        s.vy = 0;
+      })()`);
+    }
 
     const s = await shepherdState();
     const adults = s.sheep.filter((sh) => sh.stage === "adult");

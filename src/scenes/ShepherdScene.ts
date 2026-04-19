@@ -607,7 +607,6 @@ export class ShepherdScene extends Phaser.Scene {
     if (this.coins < this.buySheepCost) return;
     if (this.sheep.length >= MAX_SHEEP) return;
     this.coins -= this.buySheepCost;
-    this.buySheepCost = Math.ceil(this.buySheepCost * 1.3);
     this.spawnTruck();
     this.sound.play("pop");
     this.updateCoinText();
