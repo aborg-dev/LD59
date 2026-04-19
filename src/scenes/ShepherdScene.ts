@@ -293,13 +293,31 @@ export class ShepherdScene extends Phaser.Scene {
 
     this.hudCamera = this.cameras.add(0, 0, width, height);
 
-    // Grass background — two 64x64 variants tiled randomly across the world
-    const grassKeys = ["grass1", "grass2"];
+    // Load map objects
+    this.mapTrees = (mapData.trees as MapTree[]).map((t, i) => ({
+      ...t,
+      variant: t.variant ?? (i * 3 + Math.round(t.x * 0.07 + t.y * 0.05)) % 5,
+    }));
+    this.mapSpawns = mapData.spawns;
+
+    // Grass background — wavy boundary between high-detail (left) and low-detail (right)
+    // Boundary x oscillates with a sine wave; soft blend zone on either side
     const tile = 64;
+    const baseBoundary = WORLD_W / 3;
+    const waveAmp = 220;           // px world units of horizontal oscillation
+    const waveFreq = (Math.PI) / 900; // ~1 full cycles over world height
+    const blendHalf = 96;          // half-width of soft transition zone (px)
+    const lowKeys = ["grassLow1", "grassLow2", "grassLow3", "grassLow4"];
+    const highKeys = ["grass1", "grass2"];
     const grassLayer = this.add.layer().setDepth(0);
     for (let yy = 0; yy < WORLD_H; yy += tile) {
+      const boundary = baseBoundary + Math.cos(yy * waveFreq) * waveAmp;
       for (let xx = 0; xx < WORLD_W; xx += tile) {
-        const key = grassKeys[Math.random() < 0.5 ? 0 : 1];
+        const dist = (xx + tile / 2) - boundary;
+        // highProb: 1 left of zone, 0 right of zone, linear in between
+        const highProb = dist < -blendHalf ? 1 : dist > blendHalf ? 0 : (blendHalf - dist) / (blendHalf * 2);
+        const pool = Math.random() < highProb ? highKeys : lowKeys;
+        const key = pool[Math.floor(Math.random() * pool.length)];
         const img = this.add.image(xx, yy, key).setOrigin(0, 0);
         grassLayer.add(img);
       }
@@ -431,13 +449,6 @@ export class ShepherdScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2);
     this.hudCamera.ignore(shearLabel);
-
-    // Load map objects — assign variant if missing (seeded by position for stability)
-    this.mapTrees = (mapData.trees as MapTree[]).map((t, i) => ({
-      ...t,
-      variant: t.variant ?? (i * 3 + Math.round(t.x * 0.07 + t.y * 0.05)) % 5,
-    }));
-    this.mapSpawns = mapData.spawns;
 
     // Render trees
     for (const t of this.mapTrees) {
@@ -2411,6 +2422,7 @@ export class ShepherdScene extends Phaser.Scene {
       this.editorGfx.lineStyle(2, 0x00ffff, 0.8);
       this.editorGfx.strokeCircle(t.x, t.y, t.r);
     }
+
     for (const sp of this.mapSpawns) {
       this.editorGfx.lineStyle(3, 0xff8800, 0.9);
       const s = 14;
@@ -2453,28 +2465,19 @@ export class ShepherdScene extends Phaser.Scene {
   private editorDeleteNearest(x: number, y: number): void {
     let bestIdx = -1;
     let bestDist = 120;
-    for (let i = 0; i < this.mapTrees.length; i++) {
-      const t = this.mapTrees[i];
-      const d = Math.hypot(x - t.x, y - t.y);
-      if (d < bestDist) {
-        bestDist = d;
-        bestIdx = i;
+    if (this.editorTool === "tree") {
+      for (let i = 0; i < this.mapTrees.length; i++) {
+        const d = Math.hypot(x - this.mapTrees[i].x, y - this.mapTrees[i].y);
+        if (d < bestDist) { bestDist = d; bestIdx = i; }
       }
-    }
-    if (bestIdx >= 0) {
-      this.mapTrees.splice(bestIdx, 1);
-      return;
-    }
-    bestDist = 60;
-    for (let i = 0; i < this.mapSpawns.length; i++) {
-      const sp = this.mapSpawns[i];
-      const d = Math.hypot(x - sp.x, y - sp.y);
-      if (d < bestDist) {
-        bestDist = d;
-        bestIdx = i;
+      if (bestIdx >= 0) this.mapTrees.splice(bestIdx, 1);
+    } else {
+      for (let i = 0; i < this.mapSpawns.length; i++) {
+        const d = Math.hypot(x - this.mapSpawns[i].x, y - this.mapSpawns[i].y);
+        if (d < bestDist) { bestDist = d; bestIdx = i; }
       }
+      if (bestIdx >= 0) this.mapSpawns.splice(bestIdx, 1);
     }
-    if (bestIdx >= 0) this.mapSpawns.splice(bestIdx, 1);
   }
 
   private buildEditorPanel(): void {

@@ -34,6 +34,10 @@ export class Preloader extends Scene {
       frameWidth: 36,
       frameHeight: 62,
     });
+    this.load.image("grassLow1", "1723_Gras_LowDetail_1.png");
+    this.load.image("grassLow2", "1723_Gras_LowDetail_2.png");
+    this.load.image("grassLow3", "1723_Gras_LowDetail_3.png");
+    this.load.image("grassLow4", "1723_Gras_LowDetail_4.png");
     this.load.image("grass1", "1723_Gras_HighDetail_1.png");
     this.load.image("grass2", "1723_Gras_HighDetail_2.png");
     this.load.image("tree0", "1755_TreeSmall_1.png");
