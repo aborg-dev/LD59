@@ -33,11 +33,11 @@ const UPGRADE_MAX_LEVEL = 4;
 // Market — adults are sold here for coins
 const MARKET_CX = 520;
 const MARKET_CY = 900;
-const SALE_INTERVAL_MIN_MS = 4000;
-const SALE_INTERVAL_MAX_MS = 8000;
-const SALE_BATCH_MIN = 1;
-const SALE_BATCH_MAX = 3;
+const SALE_INTERVAL_MIN_MS = 5000;
+const SALE_INTERVAL_MAX_MS = 10000;
 const MARKET_WANDER_SPEED = 40;
+const SALE_PRICE_MIN = 2;
+const SALE_PRICE_MAX = 5;
 
 // Shear shed — pay $SHEAR_VALUE to shear an adult back into a baby
 const SHEAR_CX = 1200;
@@ -124,6 +124,7 @@ interface Sheep {
   modeT: number;
   wanderAngle: number;
   scaredMs: number;
+  salePrice: number;
   readyIcon?: Phaser.GameObjects.Text;
 }
 
@@ -658,9 +659,6 @@ export class ShepherdScene extends Phaser.Scene {
     this.wolfSpawnStartMs = this.time.now;
     this.scheduleNextWolf();
 
-    // Market batch-sale timer
-    this.scheduleNextSale();
-
     this.updateDogCountText();
 
     // Set camera zoomed out to fit entire world
@@ -706,9 +704,7 @@ export class ShepherdScene extends Phaser.Scene {
       y = Math.random() * WORLD_H;
     }
 
-    const sprite = this.add
-      .image(x, y, "wolf")
-      .setDepth(9);
+    const sprite = this.add.image(x, y, "wolf").setScale(1.75).setDepth(9);
     this.hudCamera.ignore(sprite);
     this.wolves.push({
       sprite,
@@ -797,54 +793,55 @@ export class ShepherdScene extends Phaser.Scene {
     this.marketCountText.setText(`Waiting: ${n}`);
   }
 
-  private sellSheep(s: Sheep): void {
-    s.sold = true;
-    this.score++;
-    this.coins += this.sellPrice;
-    this.updateCoinText();
-    this.sound.play("score");
-    this.playSaleFx(s);
-    this.updateMarketCountText();
-    this.time.delayedCall(400, () => {
-      if (s.sprite.active) {
-        this.tweens.add({
-          targets: s.sprite,
-          alpha: 0,
-          scale: 0.3,
-          duration: 400,
-          onComplete: () => {
-            s.sprite.destroy();
-            const idx = this.sheep.indexOf(s);
-            if (idx >= 0) this.sheep.splice(idx, 1);
-          },
-        });
-      }
-    });
-  }
-
-  private sellBatch(): void {
-    const pool = this.sheep.filter((s) => s.waiting && !s.sold);
-    if (pool.length === 0) return;
-    const n = Math.min(
-      pool.length,
-      SALE_BATCH_MIN +
-      Math.floor(Math.random() * (SALE_BATCH_MAX - SALE_BATCH_MIN + 1)),
-    );
-    for (let i = 0; i < n; i++) {
-      const j = i + Math.floor(Math.random() * (pool.length - i));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-      this.sellSheep(pool[i]);
-    }
-    this.updateMarketCountText();
-  }
-
-  private scheduleNextSale(): void {
+  private scheduleSheepSale(s: Sheep): void {
     const delay =
       SALE_INTERVAL_MIN_MS +
       Math.random() * (SALE_INTERVAL_MAX_MS - SALE_INTERVAL_MIN_MS);
     this.time.delayedCall(delay, () => {
-      this.sellBatch();
-      this.scheduleNextSale();
+      if (!this.sheep.includes(s) || s.sold) return;
+      s.sold = true;
+      this.score++;
+      this.coins += s.salePrice;
+      this.updateCoinText();
+      this.sound.play("score");
+      this.playSaleFx(s);
+      this.updateMarketCountText();
+      // Floating price label
+      const priceLabel = this.add
+        .text(s.sprite.x, s.sprite.y - 36, `+$${s.salePrice}`, {
+          fontFamily: FONT_UI,
+          fontSize: 44,
+          color: "#ffd700",
+          stroke: "#000000",
+          strokeThickness: 5,
+          resolution: TEXT_RESOLUTION,
+        })
+        .setOrigin(0.5, 1)
+        .setDepth(12);
+      this.hudCamera.ignore(priceLabel);
+      this.tweens.add({
+        targets: priceLabel,
+        y: priceLabel.y - 60,
+        alpha: 0,
+        duration: 900,
+        ease: "Quad.easeOut",
+        onComplete: () => priceLabel.destroy(),
+      });
+      this.time.delayedCall(400, () => {
+        if (s.sprite.active) {
+          this.tweens.add({
+            targets: s.sprite,
+            alpha: 0,
+            scale: 0.3,
+            duration: 400,
+            onComplete: () => {
+              s.sprite.destroy();
+              const idx = this.sheep.indexOf(s);
+              if (idx >= 0) this.sheep.splice(idx, 1);
+            },
+          });
+        }
+      });
     });
   }
 
@@ -1165,6 +1162,7 @@ export class ShepherdScene extends Phaser.Scene {
       growthT: 0,
       sold: false,
       waiting: false,
+      salePrice: 0,
       grazing: false,
       modeT: SHEEP_WALK_MIN_SEC + Math.random() * SHEEP_WALK_MAX_SEC,
       wanderAngle: initAngle,
@@ -1372,7 +1370,8 @@ export class ShepherdScene extends Phaser.Scene {
           Math.min(DOG_TURN_RATE * dt, diff),
         );
       }
-      const speed = desiredSpd > 2 ? DOG_SPEED * Math.max(0, Math.cos(diff)) : 0;
+      const speed =
+        desiredSpd > 2 ? DOG_SPEED * Math.max(0, Math.cos(diff)) : 0;
       this.alphaDog.vx = Math.cos(this.alphaDog.angle) * speed;
       this.alphaDog.vy = Math.sin(this.alphaDog.angle) * speed;
       this.alphaDog.sprite.x += this.alphaDog.vx * dt;
@@ -1504,7 +1503,7 @@ export class ShepherdScene extends Phaser.Scene {
           d.mode === "herding" &&
           d.targetSheep &&
           Math.hypot(d.targetSheep.sprite.x - sx, d.targetSheep.sprite.y - sy) <
-          HIGHLIGHT_CLUSTER_R,
+            HIGHLIGHT_CLUSTER_R,
       );
       const myIdx = clusterDogs.indexOf(dog);
       const count = clusterDogs.length;
@@ -1837,9 +1836,9 @@ export class ShepherdScene extends Phaser.Scene {
         s.grazing = alignN === 0 ? !s.grazing : false;
         s.modeT = s.grazing
           ? SHEEP_GRAZE_MIN_SEC +
-          Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
+            Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
           : SHEEP_WALK_MIN_SEC +
-          Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
+            Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
         if (!s.grazing) s.wanderAngle = Math.random() * Math.PI * 2;
       }
       if (!s.grazing && alignN === 0) {
@@ -1987,7 +1986,7 @@ export class ShepherdScene extends Phaser.Scene {
         s.readyIcon = undefined;
       }
 
-      // Market — adults entering the market queue up for batch sale
+      // Market — adults entering the market wait, then sell individually
       if (
         s.stage === "adult" &&
         !s.waiting &&
@@ -1996,6 +1995,9 @@ export class ShepherdScene extends Phaser.Scene {
         s.waiting = true;
         s.vx *= 0.2;
         s.vy *= 0.2;
+        s.salePrice =
+          SALE_PRICE_MIN +
+          Math.floor(Math.random() * (SALE_PRICE_MAX - SALE_PRICE_MIN + 1));
         if (s.readyIcon) {
           this.tweens.add({
             targets: s.readyIcon,
@@ -2007,6 +2009,7 @@ export class ShepherdScene extends Phaser.Scene {
           s.readyIcon = undefined;
         }
         this.updateMarketCountText();
+        this.scheduleSheepSale(s);
       }
     }
 
@@ -2256,97 +2259,97 @@ export class ShepherdScene extends Phaser.Scene {
       max: number;
       step: number;
     }> = [
-        {
-          label: "Max Speed",
-          get: () => SHEEP_MAX_SPEED,
-          set: (v) => {
-            SHEEP_MAX_SPEED = v;
-          },
-          min: 0,
-          max: 800,
-          step: 5,
+      {
+        label: "Max Speed",
+        get: () => SHEEP_MAX_SPEED,
+        set: (v) => {
+          SHEEP_MAX_SPEED = v;
         },
-        {
-          label: "Damping",
-          get: () => SHEEP_DAMPING,
-          set: (v) => {
-            SHEEP_DAMPING = v;
-          },
-          min: 0.8,
-          max: 0.999,
-          step: 0.001,
+        min: 0,
+        max: 800,
+        step: 5,
+      },
+      {
+        label: "Damping",
+        get: () => SHEEP_DAMPING,
+        set: (v) => {
+          SHEEP_DAMPING = v;
         },
-        {
-          label: "Wander Force",
-          get: () => SHEEP_WANDER_FORCE,
-          set: (v) => {
-            SHEEP_WANDER_FORCE = v;
-          },
-          min: 0,
-          max: 400,
-          step: 5,
+        min: 0.8,
+        max: 0.999,
+        step: 0.001,
+      },
+      {
+        label: "Wander Force",
+        get: () => SHEEP_WANDER_FORCE,
+        set: (v) => {
+          SHEEP_WANDER_FORCE = v;
         },
-        {
-          label: "Cohesion Force",
-          get: () => SHEEP_COHESION_FORCE,
-          set: (v) => {
-            SHEEP_COHESION_FORCE = v;
-          },
-          min: 0,
-          max: 200,
-          step: 2,
+        min: 0,
+        max: 400,
+        step: 5,
+      },
+      {
+        label: "Cohesion Force",
+        get: () => SHEEP_COHESION_FORCE,
+        set: (v) => {
+          SHEEP_COHESION_FORCE = v;
         },
-        {
-          label: "Alignment Force",
-          get: () => ALIGNMENT_FORCE,
-          set: (v) => {
-            ALIGNMENT_FORCE = v;
-          },
-          min: 0,
-          max: 300,
-          step: 5,
+        min: 0,
+        max: 200,
+        step: 2,
+      },
+      {
+        label: "Alignment Force",
+        get: () => ALIGNMENT_FORCE,
+        set: (v) => {
+          ALIGNMENT_FORCE = v;
         },
-        {
-          label: "Flee Force",
-          get: () => FLEE_FORCE,
-          set: (v) => {
-            FLEE_FORCE = v;
-          },
-          min: 0,
-          max: 1000,
-          step: 10,
+        min: 0,
+        max: 300,
+        step: 5,
+      },
+      {
+        label: "Flee Force",
+        get: () => FLEE_FORCE,
+        set: (v) => {
+          FLEE_FORCE = v;
         },
-        {
-          label: "Fear Radius",
-          get: () => FEAR_RADIUS,
-          set: (v) => {
-            FEAR_RADIUS = v;
-          },
-          min: 0,
-          max: 500,
-          step: 5,
+        min: 0,
+        max: 1000,
+        step: 10,
+      },
+      {
+        label: "Fear Radius",
+        get: () => FEAR_RADIUS,
+        set: (v) => {
+          FEAR_RADIUS = v;
         },
-        {
-          label: "Panic Inherit",
-          get: () => PANIC_INHERIT,
-          set: (v) => {
-            PANIC_INHERIT = v;
-          },
-          min: 0,
-          max: 1,
-          step: 0.05,
+        min: 0,
+        max: 500,
+        step: 5,
+      },
+      {
+        label: "Panic Inherit",
+        get: () => PANIC_INHERIT,
+        set: (v) => {
+          PANIC_INHERIT = v;
         },
-        {
-          label: "Turn Rate",
-          get: () => SHEEP_TURN_RATE,
-          set: (v) => {
-            SHEEP_TURN_RATE = v;
-          },
-          min: 0.5,
-          max: 15,
-          step: 0.5,
+        min: 0,
+        max: 1,
+        step: 0.05,
+      },
+      {
+        label: "Turn Rate",
+        get: () => SHEEP_TURN_RATE,
+        set: (v) => {
+          SHEEP_TURN_RATE = v;
         },
-      ];
+        min: 0.5,
+        max: 15,
+        step: 0.5,
+      },
+    ];
 
     for (const cfg of params) {
       const row = document.createElement("div");
