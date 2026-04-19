@@ -956,6 +956,18 @@ export class ShepherdScene extends Phaser.Scene {
         s.vy = Math.sin(s.angle) * spd;
       }
 
+      // Tree collision
+      for (const t of this.mapTrees) {
+        const tdx = s.sprite.x - t.x;
+        const tdy = s.sprite.y - t.y;
+        const td = Math.hypot(tdx, tdy);
+        const minDist = t.r + SHEEP_RADIUS;
+        if (td < minDist && td > 0.01) {
+          s.sprite.x += (tdx / td) * (minDist - td);
+          s.sprite.y += (tdy / td) * (minDist - td);
+        }
+      }
+
       // Pen check — penned if contained in any pen
       let insidePen = false;
       for (const p of this.pens) {
