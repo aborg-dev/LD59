@@ -1363,8 +1363,9 @@ export class ShepherdScene extends Phaser.Scene {
         }
       }
       const desiredSpd = Math.hypot(desiredVx, desiredVy);
+      let diff = 0;
       if (desiredSpd > 2) {
-        let diff = Math.atan2(desiredVy, desiredVx) - this.alphaDog.angle;
+        diff = Math.atan2(desiredVy, desiredVx) - this.alphaDog.angle;
         while (diff > Math.PI) diff -= Math.PI * 2;
         while (diff < -Math.PI) diff += Math.PI * 2;
         this.alphaDog.angle += Math.max(
@@ -1372,7 +1373,7 @@ export class ShepherdScene extends Phaser.Scene {
           Math.min(DOG_TURN_RATE * dt, diff),
         );
       }
-      const speed = desiredSpd > 2 ? DOG_SPEED : 0;
+      const speed = desiredSpd > 2 ? DOG_SPEED * Math.max(0, Math.cos(diff)) : 0;
       this.alphaDog.vx = Math.cos(this.alphaDog.angle) * speed;
       this.alphaDog.vy = Math.sin(this.alphaDog.angle) * speed;
       this.alphaDog.sprite.x += this.alphaDog.vx * dt;
