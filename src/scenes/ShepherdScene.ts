@@ -156,10 +156,14 @@ interface Dog {
 interface Truck {
   sprite: Phaser.GameObjects.Image;
   wpIdx: number;
+  angle: number;
+  targetAngle: number;
   state: "arriving" | "dropping" | "leaving";
   dropTimer: number;
   hasDropped: boolean;
 }
+
+const TRUCK_TURN_RATE = 7.0; // rad/s — how fast the truck rotates into a new heading
 
 interface MapTree {
   x: number;
@@ -1259,19 +1263,26 @@ export class ShepherdScene extends Phaser.Scene {
     const start = ROAD_WAYPOINTS[0];
     const sprite = this.add
       .image(start.x, start.y, "truck")
+      .setOrigin(0.5, 0.35)
       .setDisplaySize(TRUCK_W, TRUCK_H)
       .setScale(2.0)
       .setDepth(7);
     this.hudCamera.ignore(sprite);
+    const initAngle = Math.atan2(
+      ROAD_WAYPOINTS[1].y - ROAD_WAYPOINTS[0].y,
+      ROAD_WAYPOINTS[1].x - ROAD_WAYPOINTS[0].x,
+    ) + Math.PI / 2;
     const t: Truck = {
       sprite,
       wpIdx: 1,
+      angle: initAngle,
+      targetAngle: initAngle,
       state: "arriving",
       dropTimer: 0,
       hasDropped: false,
     };
+    sprite.setRotation(initAngle);
     this.trucks.push(t);
-    this.setTruckRotation(t);
     if (this.truckSfxFade) {
       this.truckSfxFade.stop();
       this.truckSfxFade = undefined;
@@ -1290,8 +1301,8 @@ export class ShepherdScene extends Phaser.Scene {
     if (t.wpIdx < 1 || t.wpIdx >= ROAD_WAYPOINTS.length) return;
     const prev = ROAD_WAYPOINTS[t.wpIdx - 1];
     const next = ROAD_WAYPOINTS[t.wpIdx];
-    const angle = Math.atan2(next.y - prev.y, next.x - prev.x);
-    t.sprite.setRotation(angle + Math.PI / 2);
+    const dir = Math.atan2(next.y - prev.y, next.x - prev.x);
+    t.targetAngle = dir + Math.PI / 2;
   }
 
   private checkGameOver(): void {
@@ -1324,61 +1335,74 @@ export class ShepherdScene extends Phaser.Scene {
         if (t.dropTimer >= 1.0) {
           t.state = "leaving";
         }
-        continue;
-      }
-
-      if (t.wpIdx >= ROAD_WAYPOINTS.length) {
+      } else if (t.wpIdx >= ROAD_WAYPOINTS.length) {
         t.sprite.destroy();
         this.trucks.splice(i, 1);
         continue;
-      }
+      } else {
+        const target = ROAD_WAYPOINTS[t.wpIdx];
+        const dx = target.x - t.sprite.x;
+        const dy = target.y - t.sprite.y;
+        const distToWp = Math.hypot(dx, dy);
+        const step = TRUCK_SPEED * dt;
 
-      const target = ROAD_WAYPOINTS[t.wpIdx];
-      const dx = target.x - t.sprite.x;
-      const dy = target.y - t.sprite.y;
-      const distToWp = Math.hypot(dx, dy);
-      const step = TRUCK_SPEED * dt;
-
-      // On the drop segment, queue behind other trucks and stop at DROP_Y
-      if (t.state === "arriving" && t.wpIdx === DROP_SEGMENT_WP_IDX) {
-        const myIdx = this.trucks.indexOf(t);
-        let maxY = DROP_Y;
-        for (const other of this.trucks) {
-          if (other === t || other.state === "leaving") continue;
-          if (other.state === "dropping") {
-            maxY = Math.min(maxY, DROP_Y - TRUCK_H - truckGap);
-          } else if (other.wpIdx === DROP_SEGMENT_WP_IDX) {
-            // Use spawn-order as tiebreaker when trucks are at the same position
-            const otherIdx = this.trucks.indexOf(other);
-            const ahead = other.sprite.y > t.sprite.y ||
-              (other.sprite.y === t.sprite.y && otherIdx < myIdx);
-            if (ahead) {
-              maxY = Math.min(maxY, other.sprite.y - TRUCK_H - truckGap);
+        // On the drop segment, queue behind other trucks and stop at DROP_Y
+        if (t.state === "arriving" && t.wpIdx === DROP_SEGMENT_WP_IDX) {
+          const myIdx = this.trucks.indexOf(t);
+          let maxY = DROP_Y;
+          for (const other of this.trucks) {
+            if (other === t || other.state === "leaving") continue;
+            if (other.state === "dropping") {
+              maxY = Math.min(maxY, DROP_Y - TRUCK_H - truckGap);
+            } else if (other.wpIdx === DROP_SEGMENT_WP_IDX) {
+              const otherIdx = this.trucks.indexOf(other);
+              const ahead = other.sprite.y > t.sprite.y ||
+                (other.sprite.y === t.sprite.y && otherIdx < myIdx);
+              if (ahead) {
+                maxY = Math.min(maxY, other.sprite.y - TRUCK_H - truckGap);
+              }
             }
           }
+          const advance = Math.min(step, maxY - t.sprite.y);
+          if (advance > 0) t.sprite.y += advance;
+          if (t.sprite.y >= DROP_Y) {
+            t.sprite.y = DROP_Y;
+            t.state = "dropping";
+            t.dropTimer = 0;
+          }
+        } else {
+          // Generic waypoint following
+          // Begin rotating early so the turn is visually centered on the corner:
+          // start when the truck is half a turn-arc away from the waypoint.
+          const anticipateDist = (Math.PI / 2) / TRUCK_TURN_RATE * TRUCK_SPEED * 0.5;
+          const nextAfterCorner = t.wpIdx + 1;
+          if (nextAfterCorner < ROAD_WAYPOINTS.length && distToWp <= anticipateDist) {
+            const corner = ROAD_WAYPOINTS[t.wpIdx];
+            const afterCorner = ROAD_WAYPOINTS[nextAfterCorner];
+            const dir = Math.atan2(afterCorner.y - corner.y, afterCorner.x - corner.x);
+            t.targetAngle = dir + Math.PI / 2;
+          }
+
+          if (distToWp <= step) {
+            t.sprite.x = target.x;
+            t.sprite.y = target.y;
+            t.wpIdx++;
+            if (t.wpIdx < ROAD_WAYPOINTS.length) {
+              this.setTruckRotation(t);
+            }
+          } else {
+            t.sprite.x += (dx / distToWp) * step;
+            t.sprite.y += (dy / distToWp) * step;
+          }
         }
-        const advance = Math.min(step, maxY - t.sprite.y);
-        if (advance > 0) t.sprite.y += advance;
-        if (t.sprite.y >= DROP_Y) {
-          t.sprite.y = DROP_Y;
-          t.state = "dropping";
-          t.dropTimer = 0;
-        }
-        continue;
       }
 
-      // Generic waypoint following for all other segments
-      if (distToWp <= step) {
-        t.sprite.x = target.x;
-        t.sprite.y = target.y;
-        t.wpIdx++;
-        if (t.wpIdx < ROAD_WAYPOINTS.length) {
-          this.setTruckRotation(t);
-        }
-      } else {
-        t.sprite.x += (dx / distToWp) * step;
-        t.sprite.y += (dy / distToWp) * step;
-      }
+      // Smooth rotation toward target angle every frame
+      let diff = t.targetAngle - t.angle;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      t.angle += Math.max(-TRUCK_TURN_RATE * dt, Math.min(TRUCK_TURN_RATE * dt, diff));
+      t.sprite.setRotation(t.angle);
     }
     if (
       this.trucks.length === 0 &&
