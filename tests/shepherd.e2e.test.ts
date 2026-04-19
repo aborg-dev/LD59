@@ -128,7 +128,8 @@ describe("shepherd core loop", () => {
       const gs = window.game.scene.getScene('Shepherd');
       gs.coins = 200;
       gs.updateCoinText();
-      gs.buyGuardDog();
+      const post = gs.guardPosts()[0];
+      gs.spawnGuardDog(post.x, post.y);
     })()`);
 
     const sAfterBuy = await shepherdState();
@@ -416,7 +417,7 @@ describe("shepherd core loop", () => {
     expect(s.sheep[0].growthT).toBe(0);
   });
 
-  it("shear progress resets if the sheep leaves the shed mid-shear", async () => {
+  it("adults being sheared are confined to the shed until done", async () => {
     await game.startScene("Shepherd");
 
     await game.eval_(`(() => {
@@ -431,28 +432,28 @@ describe("shepherd core loop", () => {
       sheep.vx = 0; sheep.vy = 0;
     })()`);
 
-    // Accumulate some shearT
-    await game.advanceTime(1000);
-
-    // Move the sheep out of the shed
+    // Kick shearing off so containment applies, then try to launch the sheep away
+    await game.advanceTime(200);
     await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Shepherd');
       const s = gs.sheep[0];
-      s.sprite.x = 2500;
-      s.sprite.y = 1300;
-      s.vx = 0; s.vy = 0;
+      s.vx = 600;
+      s.vy = 600;
     })()`);
-    await game.advanceTime(50);
+    await game.advanceTime(600);
 
     const result = (await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Shepherd');
       const s = gs.sheep[0];
-      return { stage: s.stage, scale: s.sprite.scaleX, shearT: s.shearT };
-    })()`)) as { stage: string; scale: number; shearT: number };
+      const sh = gs.dumpState().shear;
+      const inside =
+        s.sprite.x > sh.x - sh.w / 2 && s.sprite.x < sh.x + sh.w / 2 &&
+        s.sprite.y > sh.y - sh.h / 2 && s.sprite.y < sh.y + sh.h / 2;
+      return { inside, shearT: s.shearT };
+    })()`)) as { inside: boolean; shearT: number };
 
-    expect(result.stage).toBe("adult");
-    expect(result.shearT).toBe(0);
-    expect(result.scale).toBe(1);
+    expect(result.inside).toBe(true);
+    expect(result.shearT).toBeGreaterThan(0);
   });
 
   it("adult sheep in the market are sold for coins", async () => {

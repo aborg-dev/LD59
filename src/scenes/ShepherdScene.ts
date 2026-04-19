@@ -2053,6 +2053,28 @@ export class ShepherdScene extends Phaser.Scene {
         }
       }
 
+      // Adults being sheared can't leave the shed until the shear finishes
+      if (s.stage === "adult" && s.shearT > 0) {
+        const minX = SHEAR_CX - SHEAR_W_PX / 2 + SHEEP_RADIUS;
+        const maxX = SHEAR_CX + SHEAR_W_PX / 2 - SHEEP_RADIUS;
+        const minY = SHEAR_CY - SHEAR_H_PX / 2 + SHEEP_RADIUS;
+        const maxY = SHEAR_CY + SHEAR_H_PX / 2 - SHEEP_RADIUS;
+        if (s.sprite.x < minX) {
+          s.sprite.x = minX;
+          s.vx = Math.abs(s.vx);
+        } else if (s.sprite.x > maxX) {
+          s.sprite.x = maxX;
+          s.vx = -Math.abs(s.vx);
+        }
+        if (s.sprite.y < minY) {
+          s.sprite.y = minY;
+          s.vy = Math.abs(s.vy);
+        } else if (s.sprite.y > maxY) {
+          s.sprite.y = maxY;
+          s.vy = -Math.abs(s.vy);
+        }
+      }
+
       // Field capacity — field is full, new babies are bounced off the fence.
       // Sheep already growing (growthT > 0) are handled by the containment
       // clamp above, so this only affects newcomers trying to enter.
