@@ -1256,7 +1256,7 @@ export class ShepherdScene extends Phaser.Scene {
         t.dropTimer += dt;
         if (!t.hasDropped && t.dropTimer >= 0.2) {
           this.spawnSheep(t.sprite.x - TRUCK_W / 2 - 40, t.sprite.y);
-          this.sound.play("sheep", { volume: 0.25 });
+          this.sound.play("sheep-bleat", { volume: 0.25 });
           t.hasDropped = true;
         }
         if (t.dropTimer >= 1.0) {
