@@ -217,6 +217,9 @@ export class ShepherdScene extends Phaser.Scene {
   private trucks: Truck[] = [];
   private gameOverTriggered = false;
   private bgMusic?: Phaser.Sound.BaseSound;
+  private truckSfx?: Phaser.Sound.BaseSound;
+  private shearSfx?: Phaser.Sound.BaseSound;
+  private grazingSfx?: Phaser.Sound.BaseSound;
   private paused = false;
   private placingGuard = false;
   private guardMarkers: Phaser.GameObjects.Graphics[] = [];
@@ -282,7 +285,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.trucks = [];
     this.gameOverTriggered = false;
     this.bgMusic?.stop();
-    this.bgMusic = this.sound.add("background", { loop: true, volume: 0.25 });
+    this.bgMusic = this.sound.add("background", { loop: true, volume: 0.1 });
     this.bgMusic.play();
     this.dogBuyCost = 5;
     this.guardBuyCost = GUARD_BUY_BASE_COST;
@@ -856,7 +859,7 @@ export class ShepherdScene extends Phaser.Scene {
       this.score++;
       this.coins += s.salePrice;
       this.updateCoinText();
-      this.sound.play("score");
+      this.sound.play("money");
       this.playSaleFx(s);
       this.updateMarketCountText();
       // Floating price label
@@ -1201,7 +1204,7 @@ export class ShepherdScene extends Phaser.Scene {
     if (this.sheep.length >= MAX_SHEEP) return;
     this.coins -= this.buySheepCost;
     this.spawnTruck();
-    this.sound.play("score");
+    this.sound.play("money");
     this.updateCoinText();
   }
 
@@ -1219,7 +1222,10 @@ export class ShepherdScene extends Phaser.Scene {
       dropTimer: 0,
       hasDropped: false,
     });
-    this.sound.play("truck", { volume: 0.5 });
+    if (!this.truckSfx?.isPlaying) {
+      this.truckSfx = this.sound.add("truck", { loop: true, volume: 0.45 });
+      this.truckSfx.play();
+    }
   }
 
   private checkGameOver(): void {
@@ -1274,6 +1280,27 @@ export class ShepherdScene extends Phaser.Scene {
           this.trucks.splice(i, 1);
         }
       }
+    }
+    if (this.trucks.length === 0 && this.truckSfx?.isPlaying) {
+      this.truckSfx.stop();
+    }
+    const anyShearing = this.sheep.some(
+      (s) => s.stage === "adult" && s.shearT > 0 && !s.sold,
+    );
+    if (anyShearing && !this.shearSfx?.isPlaying) {
+      this.shearSfx = this.sound.add("shear", { loop: true, volume: 0.4 });
+      this.shearSfx.play();
+    } else if (!anyShearing && this.shearSfx?.isPlaying) {
+      this.shearSfx.stop();
+    }
+    const anyGrazing = this.sheep.some(
+      (s) => s.stage === "baby" && s.growthT > 0 && !s.sold,
+    );
+    if (anyGrazing && !this.grazingSfx?.isPlaying) {
+      this.grazingSfx = this.sound.add("grazing", { loop: true, volume: 0.35 });
+      this.grazingSfx.play();
+    } else if (!anyGrazing && this.grazingSfx?.isPlaying) {
+      this.grazingSfx.stop();
     }
   }
 
@@ -1793,7 +1820,7 @@ export class ShepherdScene extends Phaser.Scene {
         );
         if (dFld < 700) {
           wolf.howled = true;
-          this.sound.play("howl", { volume: 0.3 });
+          this.sound.play("howl", { volume: 0.12 });
         }
       }
 
@@ -2856,5 +2883,11 @@ export class ShepherdScene extends Phaser.Scene {
     this.editorPanel = null;
     this.bgMusic?.stop();
     this.bgMusic = undefined;
+    this.truckSfx?.stop();
+    this.truckSfx = undefined;
+    this.shearSfx?.stop();
+    this.shearSfx = undefined;
+    this.grazingSfx?.stop();
+    this.grazingSfx = undefined;
   }
 }
