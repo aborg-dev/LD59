@@ -54,12 +54,12 @@ let FLEE_FORCE = 520;
 
 const WOLF_W = 42;
 const WOLF_H = 22;
-const WOLF_ACCEL = 550;
-const WOLF_MAX_SPEED = 600;
+const WOLF_TURN_RATE = 3.5;
 const WOLF_NORMAL_SPEED = 190;
 const WOLF_EAT_RANGE = 32;
-const WOLF_PUSH_RANGE = 110;
-const WOLF_PUSH_FORCE = 900;
+const WOLF_CONTACT_RANGE = 44;
+const WOLF_FLEE_SPEED = 650;
+const WOLF_SCARED_MS = 1800;
 const WOLF_SPAWN_INTERVAL_MS = 12000;
 
 
@@ -82,6 +82,7 @@ interface Wolf {
   vx: number;
   vy: number;
   angle: number;
+  scaredMs: number;
 }
 
 interface Dog {
@@ -473,7 +474,7 @@ export class ShepherdScene extends Phaser.Scene {
     const sprite = this.add.rectangle(x, y, WOLF_W, WOLF_H, 0x7a1a1a).setDepth(9);
     sprite.setStrokeStyle(2, 0xff5555);
     this.hudCamera.ignore(sprite);
-    this.wolves.push({ sprite, targetSheep: null, vx: 0, vy: 0, angle: 0 });
+    this.wolves.push({ sprite, targetSheep: null, vx: 0, vy: 0, angle: 0, scaredMs: 0 });
   }
 
   private updateCoinText(): void {
@@ -865,21 +866,14 @@ export class ShepherdScene extends Phaser.Scene {
       this.moveDog(dog, desiredVx, desiredVy, dt);
     }
 
-    // --- Defending dogs ---
+    // --- Defending dogs — charge at full speed, no slowdown ---
     for (const dog of this.dogs) {
       if (dog.mode !== "defending" || !dog.targetWolf) continue;
-      const wx = dog.targetWolf.sprite.x;
-      const wy = dog.targetWolf.sprite.y;
-      const toWolfX = wx - dog.sprite.x;
-      const toWolfY = wy - dog.sprite.y;
+      const toWolfX = dog.targetWolf.sprite.x - dog.sprite.x;
+      const toWolfY = dog.targetWolf.sprite.y - dog.sprite.y;
       const toWolfD = Math.hypot(toWolfX, toWolfY);
-      let desiredVx = 0;
-      let desiredVy = 0;
-      if (toWolfD > 5) {
-        const approachSpeed = Math.min(toWolfD * 3.5, DOG_SPEED);
-        desiredVx = (toWolfX / toWolfD) * approachSpeed;
-        desiredVy = (toWolfY / toWolfD) * approachSpeed;
-      }
+      const desiredVx = toWolfD > 1 ? (toWolfX / toWolfD) * DOG_SPEED : 0;
+      const desiredVy = toWolfD > 1 ? (toWolfY / toWolfD) * DOG_SPEED : 0;
       this.moveDog(dog, desiredVx, desiredVy, dt);
     }
 
@@ -895,64 +889,78 @@ export class ShepherdScene extends Phaser.Scene {
         continue;
       }
 
-      // Pick target sheep
-      if (!wolf.targetSheep || wolf.targetSheep.penned) {
-        let best: Sheep | null = null;
-        let bestDist = Infinity;
-        for (const s of this.sheep) {
-          if (s.penned) continue;
-          const d = Math.hypot(s.sprite.x - wolf.sprite.x, s.sprite.y - wolf.sprite.y);
-          if (d < bestDist) { bestDist = d; best = s; }
-        }
-        wolf.targetSheep = best;
-      }
+      wolf.scaredMs = Math.max(0, wolf.scaredMs - dtMs);
 
-      let ax = 0;
-      let ay = 0;
-
-      // Move toward target sheep
-      if (wolf.targetSheep) {
-        const dx = wolf.targetSheep.sprite.x - wolf.sprite.x;
-        const dy = wolf.targetSheep.sprite.y - wolf.sprite.y;
-        const d = Math.hypot(dx, dy);
-        if (d < WOLF_EAT_RANGE) {
-          // Eat the sheep
-          const idx = this.sheep.indexOf(wolf.targetSheep);
-          if (idx !== -1) {
-            this.sheep[idx].sprite.destroy();
-            this.sheep.splice(idx, 1);
-          }
-          wolf.targetSheep = null;
-        } else {
-          ax += (dx / d) * WOLF_ACCEL;
-          ay += (dy / d) * WOLF_ACCEL;
-        }
-      }
-
-      // Push from defending dogs
+      // Dog contact: scare wolf and send it fleeing
+      const scareSources: { x: number; y: number }[] = this.alphaDog
+        ? [this.alphaDog.sprite]
+        : [];
       for (const dog of this.dogs) {
-        if (dog.mode !== "defending" || dog.targetWolf !== wolf) continue;
-        const ddx = wolf.sprite.x - dog.sprite.x;
-        const ddy = wolf.sprite.y - dog.sprite.y;
+        if (dog.mode === "defending" && dog.targetWolf === wolf) scareSources.push(dog.sprite);
+      }
+      for (const src of scareSources) {
+        const ddx = wolf.sprite.x - src.x;
+        const ddy = wolf.sprite.y - src.y;
         const dd = Math.hypot(ddx, ddy);
-        if (dd < WOLF_PUSH_RANGE && dd > 0.01) {
-          const strength = (1 - dd / WOLF_PUSH_RANGE) * WOLF_PUSH_FORCE;
-          ax += (ddx / dd) * strength;
-          ay += (ddy / dd) * strength;
+        if (dd < WOLF_CONTACT_RANGE && dd > 0.01) {
+          wolf.scaredMs = WOLF_SCARED_MS;
+          wolf.vx = (ddx / dd) * WOLF_FLEE_SPEED;
+          wolf.vy = (ddy / dd) * WOLF_FLEE_SPEED;
+          wolf.angle = Math.atan2(wolf.vy, wolf.vx);
         }
       }
 
-      wolf.vx = (wolf.vx + ax * dt) * 0.92;
-      wolf.vy = (wolf.vy + ay * dt) * 0.92;
-      const spd = Math.hypot(wolf.vx, wolf.vy);
-      if (spd > WOLF_MAX_SPEED) {
-        wolf.vx = (wolf.vx / spd) * WOLF_MAX_SPEED;
-        wolf.vy = (wolf.vy / spd) * WOLF_MAX_SPEED;
-      }
-      wolf.sprite.x += wolf.vx * dt;
-      wolf.sprite.y += wolf.vy * dt;
-      if (spd > 5) {
-        wolf.angle = Math.atan2(wolf.vy, wolf.vx);
+      if (wolf.scaredMs > 0) {
+        // Fleeing — maintain flee velocity (slight damping so it doesn't accelerate forever)
+        wolf.sprite.x += wolf.vx * dt;
+        wolf.sprite.y += wolf.vy * dt;
+        wolf.sprite.rotation = wolf.angle;
+      } else {
+        // Normal: turn toward nearest sheep and move
+        if (!wolf.targetSheep || wolf.targetSheep.penned) {
+          let best: Sheep | null = null;
+          let bestDist = Infinity;
+          for (const s of this.sheep) {
+            if (s.penned) continue;
+            const d = Math.hypot(s.sprite.x - wolf.sprite.x, s.sprite.y - wolf.sprite.y);
+            if (d < bestDist) { bestDist = d; best = s; }
+          }
+          wolf.targetSheep = best;
+        }
+
+        let desiredVx = 0;
+        let desiredVy = 0;
+        if (wolf.targetSheep) {
+          const dx = wolf.targetSheep.sprite.x - wolf.sprite.x;
+          const dy = wolf.targetSheep.sprite.y - wolf.sprite.y;
+          const d = Math.hypot(dx, dy);
+          if (d < WOLF_EAT_RANGE) {
+            const idx = this.sheep.indexOf(wolf.targetSheep);
+            if (idx !== -1) {
+              this.sheep[idx].sprite.destroy();
+              this.sheep.splice(idx, 1);
+            }
+            wolf.targetSheep = null;
+          } else {
+            desiredVx = (dx / d) * WOLF_NORMAL_SPEED;
+            desiredVy = (dy / d) * WOLF_NORMAL_SPEED;
+          }
+        }
+
+        const desiredSpd = Math.hypot(desiredVx, desiredVy);
+        if (desiredSpd > 2) {
+          let diff = Math.atan2(desiredVy, desiredVx) - wolf.angle;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          wolf.angle += Math.max(-WOLF_TURN_RATE * dt, Math.min(WOLF_TURN_RATE * dt, diff));
+          wolf.vx = Math.cos(wolf.angle) * WOLF_NORMAL_SPEED;
+          wolf.vy = Math.sin(wolf.angle) * WOLF_NORMAL_SPEED;
+        } else {
+          wolf.vx = 0;
+          wolf.vy = 0;
+        }
+        wolf.sprite.x += wolf.vx * dt;
+        wolf.sprite.y += wolf.vy * dt;
         wolf.sprite.rotation = wolf.angle;
       }
     }
