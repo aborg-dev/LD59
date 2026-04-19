@@ -11,7 +11,6 @@ import {
 const FIELD_W = 1280;
 const FIELD_H = 720;
 const HUD_TOP_H = 70;
-const HUD_BOTTOM_H = 80;
 
 export interface StateDump {
   Boot: BootState | null;
@@ -38,7 +37,7 @@ const config: Phaser.Types.Core.GameConfig = {
     autoCenter: Phaser.Scale.CENTER_BOTH,
     parent: "game",
     width: FIELD_W,
-    height: HUD_TOP_H + FIELD_H + HUD_BOTTOM_H,
+    height: HUD_TOP_H + FIELD_H,
   },
   scene: [Boot, Preloader, MainMenu, ShepherdScene, GameOver],
 };
