@@ -295,14 +295,14 @@ describe("shepherd core loop", () => {
     expect(fencedInside).toBe(false);
   });
 
-  it("field capacity caps sheep at 10 growing at once", async () => {
+  it("field capacity caps sheep at 3 growing at once", async () => {
     await game.startScene("Shepherd");
 
     const overflowOutside = await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Shepherd');
       const f = gs.dumpState().field;
-      // Put 10 growing sheep inside the field
-      for (let i = 0; i < 10; i++) {
+      // Fill the field to capacity
+      for (let i = 0; i < 3; i++) {
         const s = gs.spawnSheep();
         s.sprite.x = f.x + (i % 5 - 2) * 50;
         s.sprite.y = f.y + (Math.floor(i / 5) - 0.5) * 50;
@@ -320,8 +320,8 @@ describe("shepherd core loop", () => {
 
     await game.advanceTime(100);
     const dump = await shepherdState();
-    expect(dump.field.growing).toBe(10);
-    // The 11th baby should end up outside the field
+    expect(dump.field.growing).toBe(3);
+    // The next baby should end up outside the field
     const extra = dump.sheep[dump.sheep.length - 1];
     const f = dump.field;
     const inside =
