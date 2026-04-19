@@ -638,7 +638,7 @@ export class ShepherdScene extends Phaser.Scene {
     };
 
     const pauseBtn = this.add
-      .text(width * 0.8, btnY, "PAUSE", btnStyle)
+      .text(width * 0.71, btnY, "PAUSE", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
@@ -650,7 +650,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(pauseBtn);
 
     const menuBtn = this.add
-      .text(width * 0.9, btnY, "MENU", btnStyle)
+      .text(width * 0.82, btnY, "MENU", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
@@ -660,8 +660,23 @@ export class ShepherdScene extends Phaser.Scene {
     });
     this.cameras.main.ignore(menuBtn);
 
+    // Mute toggle — bottom-right, persisted across reloads
+    const savedMute = localStorage.getItem("shepherd:muted") === "1";
+    this.sound.mute = savedMute;
+    const muteBtn = this.add
+      .text(width * 0.93, btnY, savedMute ? "UNMUTE" : "MUTE", btnStyle)
+      .setOrigin(0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+    muteBtn.on("pointerdown", () => {
+      this.sound.mute = !this.sound.mute;
+      localStorage.setItem("shepherd:muted", this.sound.mute ? "1" : "0");
+      muteBtn.setText(this.sound.mute ? "UNMUTE" : "MUTE");
+    });
+    this.cameras.main.ignore(muteBtn);
+
     this.dogBuyBtn = this.add
-      .text(width * 0.06, btnY, "", btnStyle)
+      .text(width * 0.05, btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
@@ -669,7 +684,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(this.dogBuyBtn);
 
     this.guardBuyBtn = this.add
-      .text(width * 0.18, btnY, "", btnStyle)
+      .text(width * 0.16, btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
@@ -680,7 +695,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(this.guardBuyBtn);
 
     this.sheepBuyBtn = this.add
-      .text(width * 0.3, btnY, "", btnStyle)
+      .text(width * 0.27, btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
@@ -688,7 +703,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(this.sheepBuyBtn);
 
     this.speedBuyBtn = this.add
-      .text(width * 0.42, btnY, "", btnStyle)
+      .text(width * 0.38, btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
@@ -696,7 +711,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(this.speedBuyBtn);
 
     this.capacityBuyBtn = this.add
-      .text(width * 0.54, btnY, "", btnStyle)
+      .text(width * 0.49, btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
@@ -704,7 +719,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(this.capacityBuyBtn);
 
     this.fenceBuyBtn = this.add
-      .text(width * 0.68, btnY, "", btnStyle)
+      .text(width * 0.60, btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
