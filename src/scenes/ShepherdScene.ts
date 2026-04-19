@@ -38,7 +38,7 @@ const SHEAR_CX = 1200;
 const SHEAR_CY = 440;
 const SHEAR_W_PX = 220;
 const SHEAR_H_PX = 170;
-const SHEAR_VALUE = 5;
+const SHEAR_VALUE = 3;
 const SHEAR_SEC = 4;
 const MARKET_W_PX = 260;
 const MARKET_H_PX = 200;
@@ -393,6 +393,23 @@ export class ShepherdScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2);
     this.hudCamera.ignore(marketLabel);
+    const marketPriceLabel = this.add
+      .text(
+        MARKET_CX,
+        MARKET_CY - 12,
+        `+$${SALE_PRICE_MIN}-${SALE_PRICE_MAX}`,
+        {
+          fontFamily: FONT_UI,
+          fontSize: 48,
+          color: "#ffd700",
+          stroke: "#000000",
+          strokeThickness: 6,
+          resolution: TEXT_RESOLUTION,
+        },
+      )
+      .setOrigin(0.5)
+      .setDepth(2);
+    this.hudCamera.ignore(marketPriceLabel);
     this.marketCountText = this.add
       .text(MARKET_CX, MARKET_CY - MARKET_H_PX / 2 - 70, "Waiting: 0", {
         fontFamily: FONT_UI,
@@ -448,6 +465,18 @@ export class ShepherdScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2);
     this.hudCamera.ignore(shearLabel);
+    const shearPriceLabel = this.add
+      .text(SHEAR_CX, SHEAR_CY - 12, `+$${SHEAR_VALUE}`, {
+        fontFamily: FONT_UI,
+        fontSize: 52,
+        color: "#ffd700",
+        stroke: "#000000",
+        strokeThickness: 6,
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5)
+      .setDepth(2);
+    this.hudCamera.ignore(shearPriceLabel);
 
     // Render trees
     for (const t of this.mapTrees) {
