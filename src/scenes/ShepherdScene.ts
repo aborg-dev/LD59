@@ -22,6 +22,8 @@ const FIELD_W_PX = 420;
 const FIELD_H_PX = 420;
 const FIELD_CAPACITY = 10;
 const FENCE_COST = 100;
+const GUARD_RANGE = 320;
+const GUARD_BUY_BASE_COST = 30;
 const GROW_SEC_BASE = 12;
 const GROW_SEC_MIN = 4;
 const GROW_UPGRADE_STEP = 2;
@@ -31,6 +33,13 @@ const UPGRADE_MAX_LEVEL = 4;
 // Market — adults are sold here for coins
 const MARKET_CX = 520;
 const MARKET_CY = 900;
+
+// Shear shed — pay $SHEAR_VALUE to shear an adult back into a baby
+const SHEAR_CX = 1200;
+const SHEAR_CY = 440;
+const SHEAR_W_PX = 220;
+const SHEAR_H_PX = 170;
+const SHEAR_VALUE = 5;
 const MARKET_W_PX = 260;
 const MARKET_H_PX = 200;
 
@@ -128,7 +137,9 @@ interface Dog {
   vx: number;
   vy: number;
   angle: number;
-  mode: "following" | "herding" | "defending";
+  mode: "following" | "herding" | "defending" | "guarding";
+  postX?: number;
+  postY?: number;
 }
 
 interface Truck {
@@ -154,6 +165,7 @@ export interface ShepherdSceneState {
   trucks: { x: number; y: number; state: string }[];
   field: { x: number; y: number; w: number; h: number; capacity: number; growing: number };
   market: { x: number; y: number; w: number; h: number };
+  shear: { x: number; y: number; w: number; h: number };
   score: number;
   coins: number;
   buySheepCost: number;
@@ -198,6 +210,7 @@ export class ShepherdScene extends Phaser.Scene {
   private bannerText!: Phaser.GameObjects.Text;
   private bannerTween?: Phaser.Tweens.Tween;
   private dogBuyCost = 5;
+  private guardBuyCost = GUARD_BUY_BASE_COST;
   private buySheepCost = BUY_SHEEP_BASE_COST;
   private growSec = GROW_SEC_BASE;
   private sellPrice = SELL_VALUE_BASE;
@@ -211,6 +224,7 @@ export class ShepherdScene extends Phaser.Scene {
   private growBuyBtn!: Phaser.GameObjects.Text;
   private sellBuyBtn!: Phaser.GameObjects.Text;
   private fenceBuyBtn!: Phaser.GameObjects.Text;
+  private guardBuyBtn!: Phaser.GameObjects.Text;
   private fieldLabel!: Phaser.GameObjects.Text;
   private fieldRect!: Phaser.GameObjects.Rectangle;
   private fenceGfx!: Phaser.GameObjects.Graphics;
@@ -251,6 +265,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.trucks = [];
     this.gameOverTriggered = false;
     this.dogBuyCost = 5;
+    this.guardBuyCost = GUARD_BUY_BASE_COST;
     this.buySheepCost = BUY_SHEEP_BASE_COST;
     this.growSec = GROW_SEC_BASE;
     this.sellPrice = SELL_VALUE_BASE;
@@ -324,6 +339,49 @@ export class ShepherdScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2);
     this.hudCamera.ignore(marketLabel);
+
+    // Shear shed — adults can be shorn here for a smaller, repeatable payout
+    const shearRect = this.add
+      .rectangle(SHEAR_CX, SHEAR_CY, SHEAR_W_PX, SHEAR_H_PX, 0x9a9a9a, 1)
+      .setDepth(1);
+    shearRect.setStrokeStyle(5, 0x3a2814);
+    this.hudCamera.ignore(shearRect);
+    const shearTopY = SHEAR_CY - SHEAR_H_PX / 2;
+    const shearLeftX = SHEAR_CX - SHEAR_W_PX / 2 - 14;
+    const shearRightX = SHEAR_CX + SHEAR_W_PX / 2 + 14;
+    const shearPeakY = shearTopY - 72;
+    const shearRoofGfx = this.add.graphics().setDepth(1.5);
+    shearRoofGfx.fillStyle(0x9a3a2a, 1);
+    shearRoofGfx.fillTriangle(
+      shearLeftX,
+      shearTopY,
+      shearRightX,
+      shearTopY,
+      SHEAR_CX,
+      shearPeakY,
+    );
+    shearRoofGfx.lineStyle(5, 0x3a2814);
+    shearRoofGfx.strokeTriangle(
+      shearLeftX,
+      shearTopY,
+      shearRightX,
+      shearTopY,
+      SHEAR_CX,
+      shearPeakY,
+    );
+    this.hudCamera.ignore(shearRoofGfx);
+    const shearLabel = this.add
+      .text(SHEAR_CX, SHEAR_CY - SHEAR_H_PX / 2 - 82, "SHEAR", {
+        fontFamily: FONT_UI,
+        fontSize: 28,
+        color: "#fff1c1",
+        stroke: "#000000",
+        strokeThickness: 4,
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5)
+      .setDepth(2);
+    this.hudCamera.ignore(shearLabel);
 
     // Load map objects
     this.mapTrees = mapData.trees as MapTree[];
@@ -420,6 +478,12 @@ export class ShepherdScene extends Phaser.Scene {
 
     this.input.keyboard?.on("keydown-SPACE", () => this.dispatchFollower());
     this.input.keyboard?.on("keydown-ENTER", () => this.toggleDebugPanel());
+    this.input.keyboard?.on("keydown-M", () => {
+      this.coins += 100;
+      this.updateCoinText();
+      this.sound.play("pop");
+      this.showBanner("+$100");
+    });
 
     // --- Top HUD ---
     const hudTopBar = this.add
@@ -498,15 +562,23 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(menuBtn);
 
     this.dogBuyBtn = this.add
-      .text(width * 0.08, btnY, "", btnStyle)
+      .text(width * 0.06, btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
     this.dogBuyBtn.on("pointerdown", () => this.buyDog());
     this.cameras.main.ignore(this.dogBuyBtn);
 
+    this.guardBuyBtn = this.add
+      .text(width * 0.18, btnY, "", btnStyle)
+      .setOrigin(0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+    this.guardBuyBtn.on("pointerdown", () => this.buyGuardDog());
+    this.cameras.main.ignore(this.guardBuyBtn);
+
     this.sheepBuyBtn = this.add
-      .text(width * 0.22, btnY, "", btnStyle)
+      .text(width * 0.3, btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
@@ -514,7 +586,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(this.sheepBuyBtn);
 
     this.growBuyBtn = this.add
-      .text(width * 0.38, btnY, "", btnStyle)
+      .text(width * 0.42, btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
@@ -522,7 +594,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(this.growBuyBtn);
 
     this.sellBuyBtn = this.add
-      .text(width * 0.5, btnY, "", btnStyle)
+      .text(width * 0.54, btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
@@ -530,7 +602,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(this.sellBuyBtn);
 
     this.fenceBuyBtn = this.add
-      .text(width * 0.66, btnY, "", btnStyle)
+      .text(width * 0.68, btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
@@ -699,6 +771,13 @@ export class ShepherdScene extends Phaser.Scene {
     this.dogBuyBtn.setBackgroundColor(dogAffordable ? "#2a6a2a" : "#333344");
     this.dogBuyBtn.setAlpha(dogAffordable ? 1 : 0.55);
 
+    const guardAffordable = this.coins >= this.guardBuyCost;
+    this.guardBuyBtn.setText(`+Guard $${this.guardBuyCost}`);
+    this.guardBuyBtn.setBackgroundColor(
+      guardAffordable ? "#2a6a2a" : "#333344",
+    );
+    this.guardBuyBtn.setAlpha(guardAffordable ? 1 : 0.55);
+
     const sheepAffordable = this.coins >= this.buySheepCost;
     this.sheepBuyBtn.setText(`+Sheep $${this.buySheepCost}`);
     this.sheepBuyBtn.setBackgroundColor(
@@ -745,6 +824,48 @@ export class ShepherdScene extends Phaser.Scene {
     this.updateCoinText();
   }
 
+  private guardPosts(): { x: number; y: number }[] {
+    const off = 40;
+    return [
+      { x: FIELD_CX - FIELD_W_PX / 2 - off, y: FIELD_CY - FIELD_H_PX / 2 - off },
+      { x: FIELD_CX + FIELD_W_PX / 2 + off, y: FIELD_CY - FIELD_H_PX / 2 - off },
+      { x: FIELD_CX + FIELD_W_PX / 2 + off, y: FIELD_CY + FIELD_H_PX / 2 + off },
+      { x: FIELD_CX - FIELD_W_PX / 2 - off, y: FIELD_CY + FIELD_H_PX / 2 + off },
+    ];
+  }
+
+  buyGuardDog(): void {
+    if (this.coins < this.guardBuyCost) return;
+    this.coins -= this.guardBuyCost;
+    this.guardBuyCost = Math.ceil(this.guardBuyCost * 1.6);
+    const existing = this.dogs.filter((d) => d.mode === "guarding").length;
+    const posts = this.guardPosts();
+    const post = posts[existing % posts.length];
+    this.spawnGuardDog(post.x, post.y);
+    this.sound.play("pop");
+    this.updateCoinText();
+  }
+
+  private spawnGuardDog(x: number, y: number): void {
+    const sprite = this.add
+      .rectangle(x, y, DOG_W, DOG_H, 0x5a2e88)
+      .setDepth(10);
+    sprite.setStrokeStyle(2, 0xccaaff);
+    this.hudCamera.ignore(sprite);
+    this.dogs.push({
+      sprite,
+      targetSheep: null,
+      targetWolf: null,
+      vx: 0,
+      vy: 0,
+      angle: 0,
+      mode: "guarding",
+      postX: x,
+      postY: y,
+    });
+    this.updateDogCountText();
+  }
+
   private fieldContains(x: number, y: number): boolean {
     return (
       x > FIELD_CX - FIELD_W_PX / 2 &&
@@ -752,6 +873,29 @@ export class ShepherdScene extends Phaser.Scene {
       y > FIELD_CY - FIELD_H_PX / 2 &&
       y < FIELD_CY + FIELD_H_PX / 2
     );
+  }
+
+  private shearContains(x: number, y: number): boolean {
+    return (
+      x > SHEAR_CX - SHEAR_W_PX / 2 &&
+      x < SHEAR_CX + SHEAR_W_PX / 2 &&
+      y > SHEAR_CY - SHEAR_H_PX / 2 &&
+      y < SHEAR_CY + SHEAR_H_PX / 2
+    );
+  }
+
+  private playShearFx(s: Sheep): void {
+    const puff = this.add
+      .circle(s.sprite.x, s.sprite.y, 6, 0xffffff, 0.65)
+      .setDepth(11);
+    this.hudCamera.ignore(puff);
+    this.tweens.add({
+      targets: puff,
+      radius: 48,
+      alpha: 0,
+      duration: 450,
+      onComplete: () => puff.destroy(),
+    });
   }
 
   private marketContains(x: number, y: number): boolean {
@@ -1034,6 +1178,7 @@ export class ShepherdScene extends Phaser.Scene {
         growing: this.babiesGrowing(),
       },
       market: { x: MARKET_CX, y: MARKET_CY, w: MARKET_W_PX, h: MARKET_H_PX },
+      shear: { x: SHEAR_CX, y: SHEAR_CY, w: SHEAR_W_PX, h: SHEAR_H_PX },
       score: this.score,
       coins: this.coins,
       buySheepCost: this.buySheepCost,
@@ -1163,7 +1308,10 @@ export class ShepherdScene extends Phaser.Scene {
     if (this.dogVisuals) {
       const nextDog = this.dogs.find((d) => d.mode === "following") ?? null;
       for (const dog of this.dogs) {
-        if (dog.mode === "herding") {
+        if (dog.mode === "guarding") {
+          dog.sprite.setFillStyle(0x5a2e88);
+          dog.sprite.setStrokeStyle(2, 0xccaaff);
+        } else if (dog.mode === "herding") {
           dog.sprite.setFillStyle(0x8888dd);
           dog.sprite.setStrokeStyle(2, 0xaaaaff);
         } else if (dog === nextDog) {
@@ -1176,8 +1324,13 @@ export class ShepherdScene extends Phaser.Scene {
       }
     } else {
       for (const dog of this.dogs) {
-        dog.sprite.setFillStyle(0x333355);
-        dog.sprite.setStrokeStyle(2, 0xaaaaff);
+        if (dog.mode === "guarding") {
+          dog.sprite.setFillStyle(0x5a2e88);
+          dog.sprite.setStrokeStyle(2, 0xccaaff);
+        } else {
+          dog.sprite.setFillStyle(0x333355);
+          dog.sprite.setStrokeStyle(2, 0xaaaaff);
+        }
       }
     }
 
@@ -1269,6 +1422,45 @@ export class ShepherdScene extends Phaser.Scene {
       this.moveDog(dog, desiredVx, desiredVy, dt);
     }
 
+    // --- Guard dogs — stay at post, charge any wolf within range ---
+    for (const dog of this.dogs) {
+      if (dog.mode !== "guarding") continue;
+      const post = { x: dog.postX ?? dog.sprite.x, y: dog.postY ?? dog.sprite.y };
+
+      let nearest: Wolf | null = null;
+      let bestD = GUARD_RANGE;
+      for (const w of this.wolves) {
+        const d = Math.hypot(w.sprite.x - post.x, w.sprite.y - post.y);
+        if (d < bestD) {
+          bestD = d;
+          nearest = w;
+        }
+      }
+      dog.targetWolf = nearest;
+
+      let desiredVx = 0;
+      let desiredVy = 0;
+      if (nearest) {
+        const toX = nearest.sprite.x - dog.sprite.x;
+        const toY = nearest.sprite.y - dog.sprite.y;
+        const toD = Math.hypot(toX, toY);
+        if (toD > 1) {
+          desiredVx = (toX / toD) * DOG_SPEED;
+          desiredVy = (toY / toD) * DOG_SPEED;
+        }
+      } else {
+        const toX = post.x - dog.sprite.x;
+        const toY = post.y - dog.sprite.y;
+        const toD = Math.hypot(toX, toY);
+        if (toD > 5) {
+          const spd = Math.min(toD * 3, DOG_SPEED);
+          desiredVx = (toX / toD) * spd;
+          desiredVy = (toY / toD) * spd;
+        }
+      }
+      this.moveDog(dog, desiredVx, desiredVy, dt);
+    }
+
     // --- Wolf AI ---
     for (let i = this.wolves.length - 1; i >= 0; i--) {
       const wolf = this.wolves[i];
@@ -1292,8 +1484,12 @@ export class ShepherdScene extends Phaser.Scene {
         ? [this.alphaDog.sprite]
         : [];
       for (const dog of this.dogs) {
-        if (dog.mode === "defending" && dog.targetWolf === wolf)
+        if (
+          (dog.mode === "defending" || dog.mode === "guarding") &&
+          dog.targetWolf === wolf
+        ) {
           scareSources.push(dog.sprite);
+        }
       }
       for (const src of scareSources) {
         const ddx = wolf.sprite.x - src.x;
@@ -1594,6 +1790,24 @@ export class ShepherdScene extends Phaser.Scene {
           this.playGrownFx(s);
           this.attachReadyIcon(s);
         }
+      }
+
+      // Shearing — adults entering the shear shed revert to babies and
+      // pay out a smaller sum. Repeatable for more income than straight sale.
+      if (
+        s.stage === "adult" &&
+        !s.sold &&
+        this.shearContains(s.sprite.x, s.sprite.y)
+      ) {
+        this.coins += SHEAR_VALUE;
+        this.updateCoinText();
+        this.sound.play("pop");
+        this.playShearFx(s);
+        s.stage = "baby";
+        s.growthT = 0;
+        s.sprite.setScale(BABY_SHEEP_SCALE);
+        s.readyIcon?.destroy();
+        s.readyIcon = undefined;
       }
 
       // Market sale — adults entering the market are sold
