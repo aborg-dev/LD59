@@ -215,6 +215,7 @@ export class ShepherdScene extends Phaser.Scene {
 
   private trucks: Truck[] = [];
   private gameOverTriggered = false;
+  private paused = false;
 
   private coinText!: Phaser.GameObjects.Text;
   private dogCountText!: Phaser.GameObjects.Text;
@@ -600,6 +601,18 @@ export class ShepherdScene extends Phaser.Scene {
       padding: { left: 16, right: 16, top: 10, bottom: 10 },
       resolution: TEXT_RESOLUTION,
     };
+
+    const pauseBtn = this.add
+      .text(width * 0.8, btnY, "PAUSE", btnStyle)
+      .setOrigin(0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+    pauseBtn.on("pointerdown", () => {
+      this.paused = !this.paused;
+      pauseBtn.setText(this.paused ? "RESUME" : "PAUSE");
+      this.sound.play("pop");
+    });
+    this.cameras.main.ignore(pauseBtn);
 
     const menuBtn = this.add
       .text(width * 0.9, btnY, "MENU", btnStyle)
@@ -1322,10 +1335,12 @@ export class ShepherdScene extends Phaser.Scene {
       this.updateCamera();
       return;
     }
-    this.accumulator += delta;
-    while (this.accumulator >= ShepherdScene.stepMs) {
-      this.step();
-      this.accumulator -= ShepherdScene.stepMs;
+    if (!this.paused) {
+      this.accumulator += delta;
+      while (this.accumulator >= ShepherdScene.stepMs) {
+        this.step();
+        this.accumulator -= ShepherdScene.stepMs;
+      }
     }
     this.updateHighlight();
     this.updateCamera();
