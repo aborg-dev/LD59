@@ -1887,6 +1887,9 @@ export class ShepherdScene extends Phaser.Scene {
             this.alphaDog.sprite.y += (tdy / td) * (minDist - td);
           }
         }
+      this.pushOutOfRect(MARKET_CX, MARKET_CY, MARKET_W_PX, MARKET_H_PX, this.alphaDog.sprite, this.alphaDog);
+      this.pushOutOfRect(SHEAR_CX, SHEAR_CY, SHEAR_W_PX, SHEAR_H_PX, this.alphaDog.sprite, this.alphaDog);
+      this.pushOutOfRect(FIELD_CX, FIELD_CY, FIELD_W_PX, FIELD_H_PX, this.alphaDog.sprite, this.alphaDog);
     }
 
     // Update facing targets once per step
@@ -2666,6 +2669,9 @@ export class ShepherdScene extends Phaser.Scene {
           dog.sprite.y += (tdy / td) * (minDist - td);
         }
       }
+    this.pushOutOfRect(MARKET_CX, MARKET_CY, MARKET_W_PX, MARKET_H_PX, dog.sprite, dog);
+    this.pushOutOfRect(SHEAR_CX, SHEAR_CY, SHEAR_W_PX, SHEAR_H_PX, dog.sprite, dog);
+    this.pushOutOfRect(FIELD_CX, FIELD_CY, FIELD_W_PX, FIELD_H_PX, dog.sprite, dog);
   }
 
   private findFacingWolf(): Wolf | null {
