@@ -1557,6 +1557,9 @@ export class ShepherdScene extends Phaser.Scene {
                 if (dog.targetSheep === eaten) { dog.targetSheep = null; dog.mode = "following"; }
               }
               if (this.alphaDog.targetSheep === eaten) { this.alphaDog.targetSheep = null; this.alphaDog.mode = "following"; }
+              for (const w of this.wolves) {
+                if (w.targetSheep === eaten) w.targetSheep = null;
+              }
               if (this.facingSheep === eaten) this.facingSheep = null;
             }
             wolf.targetSheep = null;
