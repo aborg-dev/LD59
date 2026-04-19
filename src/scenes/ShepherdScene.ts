@@ -469,6 +469,7 @@ export class ShepherdScene extends Phaser.Scene {
     const alphaStartY = FIELD_CY + FIELD_H_PX / 2 + 60;
     const alphaSprite = this.add
       .image(alphaStartX, alphaStartY, "alpha_dog")
+      .setOrigin(0.5, 0.25)
       .setDepth(11);
     this.hudCamera.ignore(alphaSprite);
     this.alphaDog = {
