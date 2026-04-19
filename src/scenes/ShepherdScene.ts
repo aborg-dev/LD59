@@ -1114,10 +1114,20 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private updateTrucks(dt: number): void {
+    const truckGap = 20;
     for (let i = this.trucks.length - 1; i >= 0; i--) {
       const t = this.trucks[i];
       if (t.state === "arriving") {
-        t.sprite.y += t.vy * dt;
+        // Queue behind any truck ahead on the road (not yet leaving)
+        let maxY = DROP_Y;
+        for (const other of this.trucks) {
+          if (other === t) continue;
+          if (other.state === "leaving") continue;
+          if (other.sprite.y > t.sprite.y) {
+            maxY = Math.min(maxY, other.sprite.y - TRUCK_H - truckGap);
+          }
+        }
+        t.sprite.y = Math.min(t.sprite.y + t.vy * dt, maxY);
         if (t.sprite.y >= DROP_Y) {
           t.sprite.y = DROP_Y;
           t.state = "dropping";

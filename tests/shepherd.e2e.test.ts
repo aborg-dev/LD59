@@ -93,6 +93,34 @@ describe("shepherd core loop", () => {
     expect(result.scaredMs).toBeGreaterThan(0);
   });
 
+  it("multiple trucks queue on the road without overlapping", async () => {
+    await game.startScene("Shepherd");
+
+    await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      gs.coins = 1000;
+      gs.updateCoinText();
+      gs.buySheep();
+      gs.buySheep();
+      gs.buySheep();
+    })()`);
+
+    // Let the lead truck reach the drop zone and the followers queue up
+    await game.advanceTime(4000);
+
+    const trucks = (await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      return gs.trucks.map(t => ({ x: t.sprite.x, y: t.sprite.y, state: t.state }));
+    })()`)) as { x: number; y: number; state: string }[];
+
+    expect(trucks.length).toBeGreaterThanOrEqual(2);
+    const sorted = [...trucks].sort((a, b) => a.y - b.y);
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const gap = sorted[i + 1].y - sorted[i].y;
+      expect(gap).toBeGreaterThanOrEqual(80);
+    }
+  });
+
   it("buying a guard dog spawns at a field post and scares nearby wolves", async () => {
     await game.startScene("Shepherd");
 
