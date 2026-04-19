@@ -262,9 +262,9 @@ export class ShepherdScene extends Phaser.Scene {
 
     this.hudCamera = this.cameras.add(0, 0, width, height);
 
-    // Grass background
+    // Grass background — 64x64 tile repeated across the world
     const bg = this.add
-      .rectangle(WORLD_W / 2, WORLD_H / 2, WORLD_W, WORLD_H, 0x4a8c3a)
+      .tileSprite(WORLD_W / 2, WORLD_H / 2, WORLD_W, WORLD_H, "grass")
       .setDepth(0);
     this.hudCamera.ignore(bg);
 

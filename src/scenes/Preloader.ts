@@ -34,6 +34,7 @@ export class Preloader extends Scene {
       frameWidth: 36,
       frameHeight: 62,
     });
+    this.load.image("grass", "grass.png");
   }
 
   create() {
