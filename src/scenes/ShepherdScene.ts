@@ -1579,12 +1579,10 @@ export class ShepherdScene extends Phaser.Scene {
             -WOLF_TURN_RATE * dt,
             Math.min(WOLF_TURN_RATE * dt, diff),
           );
-          wolf.vx = Math.cos(wolf.angle) * WOLF_NORMAL_SPEED;
-          wolf.vy = Math.sin(wolf.angle) * WOLF_NORMAL_SPEED;
-        } else {
-          wolf.vx = 0;
-          wolf.vy = 0;
         }
+        // No target: keep drifting in current direction so the wolf exits the map
+        wolf.vx = Math.cos(wolf.angle) * WOLF_NORMAL_SPEED;
+        wolf.vy = Math.sin(wolf.angle) * WOLF_NORMAL_SPEED;
         wolf.sprite.x += wolf.vx * dt;
         wolf.sprite.y += wolf.vy * dt;
         wolf.sprite.rotation = wolf.angle;
