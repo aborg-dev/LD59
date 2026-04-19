@@ -789,7 +789,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.fenceBuilt = true;
     this.fieldRect.setStrokeStyle(6, 0x8b5a2b);
     this.fenceGfx.setVisible(true);
-    this.sound.play("pop");
+    this.playBuildSound();
     this.showBanner("Fence built — wolves can't enter the field");
     this.updateCoinText();
   }
@@ -831,7 +831,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.fieldCapacity =
       FIELD_CAPACITY_BASE + this.capacityUpgradeLevel * CAPACITY_UPGRADE_STEP;
     this.capacityUpgradeCost = Math.ceil(this.capacityUpgradeCost * 2);
-    this.sound.play("pop");
+    this.playBuildSound();
     this.updateCoinText();
   }
 
@@ -968,8 +968,22 @@ export class ShepherdScene extends Phaser.Scene {
       this.alphaDog.sprite.x + Math.cos(a) * 80,
       this.alphaDog.sprite.y + Math.sin(a) * 80,
     );
-    this.sound.play("pop");
+    this.playBarkSound();
     this.updateCoinText();
+  }
+
+  private playBarkSound(): void {
+    this.sound.play("pop", { rate: 0.75, detune: -500 });
+    this.time.delayedCall(130, () =>
+      this.sound.play("pop", { rate: 0.85, detune: -350 }),
+    );
+  }
+
+  private playBuildSound(): void {
+    this.sound.play("bounce", { rate: 0.6, detune: -600 });
+    this.time.delayedCall(180, () =>
+      this.sound.play("bounce", { rate: 0.55, detune: -700 }),
+    );
   }
 
   private guardPosts(): { x: number; y: number }[] {
@@ -1023,7 +1037,7 @@ export class ShepherdScene extends Phaser.Scene {
         this.coins -= this.guardBuyCost;
         this.guardBuyCost = Math.ceil(this.guardBuyCost * 1.6);
         this.spawnGuardDog(post.x, post.y);
-        this.sound.play("pop");
+        this.playBarkSound();
         this.updateCoinText();
         this.cancelGuardPlacement();
       });
@@ -1184,7 +1198,7 @@ export class ShepherdScene extends Phaser.Scene {
     if (this.sheep.length >= MAX_SHEEP) return;
     this.coins -= this.buySheepCost;
     this.spawnTruck();
-    this.sound.play("pop");
+    this.sound.play("score");
     this.updateCoinText();
   }
 
