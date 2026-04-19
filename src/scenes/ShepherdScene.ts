@@ -1197,40 +1197,48 @@ export class ShepherdScene extends Phaser.Scene {
     const gfx = this.add.graphics().setDepth(0.5);
     this.hudCamera.ignore(gfx);
 
-    const halfOuter = ROAD_W_PX / 2;        // 70 — full shoulder half-width
+    const halfOuter = ROAD_W_PX / 2;              // 70 — full shoulder half-width
     const halfPaved = Math.round(ROAD_W_PX * 0.28); // ~39 — gray center half-width
 
-    // Draw each segment: shoulder then paved center
+    // Pass 1 — ALL shoulder fills (tan) before any paved, so paved always wins
+    gfx.fillStyle(0xc4a07a);
     for (let i = 0; i + 1 < ROAD_WAYPOINTS.length; i++) {
       const p0 = ROAD_WAYPOINTS[i];
       const p1 = ROAD_WAYPOINTS[i + 1];
       const horiz = p0.y === p1.y;
-      const minX = Math.min(p0.x, p1.x) - (horiz ? 0 : halfOuter);
-      const minY = Math.min(p0.y, p1.y) - (horiz ? halfOuter : 0);
-      const w = Math.abs(p1.x - p0.x) + (horiz ? 0 : ROAD_W_PX);
-      const h = Math.abs(p1.y - p0.y) + (horiz ? ROAD_W_PX : 0);
-
-      gfx.fillStyle(0xc4a07a);
-      gfx.fillRect(minX, minY, w, h);
-
-      gfx.fillStyle(0x888880);
-      if (horiz) {
-        gfx.fillRect(minX, p0.y - halfPaved, w, halfPaved * 2);
-      } else {
-        gfx.fillRect(p0.x - halfPaved, minY, halfPaved * 2, h);
-      }
+      gfx.fillRect(
+        Math.min(p0.x, p1.x) - (horiz ? 0 : halfOuter),
+        Math.min(p0.y, p1.y) - (horiz ? halfOuter : 0),
+        Math.abs(p1.x - p0.x) + (horiz ? 0 : ROAD_W_PX),
+        Math.abs(p1.y - p0.y) + (horiz ? ROAD_W_PX : 0),
+      );
     }
-
-    // Corner fills at each internal waypoint
     for (let i = 1; i + 1 < ROAD_WAYPOINTS.length; i++) {
       const p = ROAD_WAYPOINTS[i];
-      gfx.fillStyle(0xc4a07a);
       gfx.fillRect(p.x - halfOuter, p.y - halfOuter, ROAD_W_PX, ROAD_W_PX);
-      gfx.fillStyle(0x888880);
+    }
+
+    // Pass 2 — ALL paved fills (gray) drawn on top of all shoulders.
+    // Segment rects extend to the corner point so no gap at junctions.
+    // Corner paved fills only the halfPaved×halfPaved centre — the outer corner
+    // quadrants stay tan from pass 1, giving a consistent shoulder all round.
+    gfx.fillStyle(0x888880);
+    for (let i = 0; i + 1 < ROAD_WAYPOINTS.length; i++) {
+      const p0 = ROAD_WAYPOINTS[i];
+      const p1 = ROAD_WAYPOINTS[i + 1];
+      const horiz = p0.y === p1.y;
+      if (horiz) {
+        gfx.fillRect(Math.min(p0.x, p1.x), p0.y - halfPaved, Math.abs(p1.x - p0.x), halfPaved * 2);
+      } else {
+        gfx.fillRect(p0.x - halfPaved, Math.min(p0.y, p1.y), halfPaved * 2, Math.abs(p1.y - p0.y));
+      }
+    }
+    for (let i = 1; i + 1 < ROAD_WAYPOINTS.length; i++) {
+      const p = ROAD_WAYPOINTS[i];
       gfx.fillRect(p.x - halfPaved, p.y - halfPaved, halfPaved * 2, halfPaved * 2);
     }
 
-    // Rough edge blobs along each segment
+    // Pass 3 — rough edge blobs along segments (skipping ±halfOuter from ends)
     gfx.fillStyle(0x7a5630);
     for (let i = 0; i + 1 < ROAD_WAYPOINTS.length; i++) {
       const p0 = ROAD_WAYPOINTS[i];
@@ -1239,10 +1247,12 @@ export class ShepherdScene extends Phaser.Scene {
       const len = Math.abs(horiz ? p1.x - p0.x : p1.y - p0.y);
       const dirX = horiz ? Math.sign(p1.x - p0.x) : 0;
       const dirY = horiz ? 0 : Math.sign(p1.y - p0.y);
-      const count = Math.floor(len / 20);
-
+      const skip = halfPaved;
+      const usable = len - skip * 2;
+      if (usable <= 0) continue;
+      const count = Math.floor(usable / 20);
       for (let j = 0; j < count; j++) {
-        const t = (j + 0.5) * 20;
+        const t = skip + (j + 0.5) * 20;
         const cx = p0.x + dirX * t;
         const cy = p0.y + dirY * t;
         const r = 5 + Math.random() * 11;
@@ -1254,6 +1264,27 @@ export class ShepherdScene extends Phaser.Scene {
         } else {
           gfx.fillCircle(cx - off, cy + jitter, r);
           gfx.fillCircle(cx + off, cy + jitter, r);
+        }
+      }
+    }
+
+    // Pass 3b — blobs on the 4 outer edges of each corner, same style as segments
+    for (let i = 1; i + 1 < ROAD_WAYPOINTS.length; i++) {
+      const p = ROAD_WAYPOINTS[i];
+      const edgeSigns: [number, "h" | "v"][] = [[-1, "h"], [1, "h"], [-1, "v"], [1, "v"]];
+      const count = Math.floor((halfOuter * 2) / 20);
+      for (const [sign, axis] of edgeSigns) {
+        for (let j = 0; j < count; j++) {
+          const along = -halfOuter + (j + 0.5) * 20;
+          if (Math.abs(along) < halfPaved) continue; // road passes through here, no shoulder
+          const off = halfOuter - 4 + Math.random() * 10;
+          const jitter = (Math.random() - 0.5) * 18;
+          const r = 5 + Math.random() * 11;
+          if (axis === "h") {
+            gfx.fillCircle(p.x + along + jitter, p.y + sign * off, r);
+          } else {
+            gfx.fillCircle(p.x + sign * off, p.y + along + jitter, r);
+          }
         }
       }
     }
