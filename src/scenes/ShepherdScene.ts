@@ -15,14 +15,14 @@ const FIELD_CX = 1800;
 const FIELD_CY = 900;
 const FIELD_W_PX = 420;
 const FIELD_H_PX = 420;
-const FIELD_CAPACITY = 3;
+const FIELD_CAPACITY_BASE = 3;
+const CAPACITY_UPGRADE_STEP = 1;
 const FENCE_COST = 100;
 const GUARD_RANGE = 320;
 const GUARD_BUY_BASE_COST = 30;
 const GROW_SEC_BASE = 12;
 const GROW_SEC_MIN = 4;
 const GROW_UPGRADE_STEP = 2;
-const SELL_UPGRADE_STEP = 5;
 const UPGRADE_MAX_LEVEL = 4;
 
 // Market — adults are sold here for coins
@@ -58,7 +58,6 @@ const BABY_SHEEP_SCALE = 0.45;
 const ADULT_SHEEP_SCALE = 1.0;
 
 const BUY_SHEEP_BASE_COST = 3;
-const SELL_VALUE_BASE = 10;
 
 let SHEEP_MAX_SPEED = 220;
 let SHEEP_WANDER_FORCE = 140;
@@ -183,9 +182,9 @@ export interface ShepherdSceneState {
   coins: number;
   buySheepCost: number;
   growSec: number;
-  sellPrice: number;
+  fieldCapacity: number;
   growUpgradeLevel: number;
-  sellUpgradeLevel: number;
+  capacityUpgradeLevel: number;
   viewport: { width: number; height: number };
 }
 
@@ -229,16 +228,16 @@ export class ShepherdScene extends Phaser.Scene {
   private guardBuyCost = GUARD_BUY_BASE_COST;
   private buySheepCost = BUY_SHEEP_BASE_COST;
   private growSec = GROW_SEC_BASE;
-  private sellPrice = SELL_VALUE_BASE;
+  private fieldCapacity = FIELD_CAPACITY_BASE;
   private growUpgradeLevel = 0;
-  private sellUpgradeLevel = 0;
+  private capacityUpgradeLevel = 0;
   private growUpgradeCost = 10;
-  private sellUpgradeCost = 10;
+  private capacityUpgradeCost = 10;
   private wolfSpawnStartMs = 0;
   private dogBuyBtn!: Phaser.GameObjects.Text;
   private sheepBuyBtn!: Phaser.GameObjects.Text;
   private growBuyBtn!: Phaser.GameObjects.Text;
-  private sellBuyBtn!: Phaser.GameObjects.Text;
+  private capacityBuyBtn!: Phaser.GameObjects.Text;
   private fenceBuyBtn!: Phaser.GameObjects.Text;
   private guardBuyBtn!: Phaser.GameObjects.Text;
   private fieldLabel!: Phaser.GameObjects.Text;
@@ -285,11 +284,11 @@ export class ShepherdScene extends Phaser.Scene {
     this.guardBuyCost = GUARD_BUY_BASE_COST;
     this.buySheepCost = BUY_SHEEP_BASE_COST;
     this.growSec = GROW_SEC_BASE;
-    this.sellPrice = SELL_VALUE_BASE;
+    this.fieldCapacity = FIELD_CAPACITY_BASE;
     this.growUpgradeLevel = 0;
-    this.sellUpgradeLevel = 0;
+    this.capacityUpgradeLevel = 0;
     this.growUpgradeCost = 10;
-    this.sellUpgradeCost = 10;
+    this.capacityUpgradeCost = 10;
     this.fenceBuilt = false;
 
     this.hudCamera = this.cameras.add(0, 0, width, height);
@@ -660,13 +659,13 @@ export class ShepherdScene extends Phaser.Scene {
     this.growBuyBtn.on("pointerdown", () => this.buyGrowUpgrade());
     this.cameras.main.ignore(this.growBuyBtn);
 
-    this.sellBuyBtn = this.add
+    this.capacityBuyBtn = this.add
       .text(width * 0.54, btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
-    this.sellBuyBtn.on("pointerdown", () => this.buySellUpgrade());
-    this.cameras.main.ignore(this.sellBuyBtn);
+    this.capacityBuyBtn.on("pointerdown", () => this.buyCapacityUpgrade());
+    this.cameras.main.ignore(this.capacityBuyBtn);
 
     this.fenceBuyBtn = this.add
       .text(width * 0.68, btnY, "", btnStyle)
@@ -799,14 +798,14 @@ export class ShepherdScene extends Phaser.Scene {
     }
   }
 
-  buySellUpgrade(): void {
-    if (this.sellUpgradeLevel >= UPGRADE_MAX_LEVEL) return;
-    if (this.coins < this.sellUpgradeCost) return;
-    this.coins -= this.sellUpgradeCost;
-    this.sellUpgradeLevel++;
-    this.sellPrice =
-      SELL_VALUE_BASE + this.sellUpgradeLevel * SELL_UPGRADE_STEP;
-    this.sellUpgradeCost = Math.ceil(this.sellUpgradeCost * 2);
+  buyCapacityUpgrade(): void {
+    if (this.capacityUpgradeLevel >= UPGRADE_MAX_LEVEL) return;
+    if (this.coins < this.capacityUpgradeCost) return;
+    this.coins -= this.capacityUpgradeCost;
+    this.capacityUpgradeLevel++;
+    this.fieldCapacity =
+      FIELD_CAPACITY_BASE + this.capacityUpgradeLevel * CAPACITY_UPGRADE_STEP;
+    this.capacityUpgradeCost = Math.ceil(this.capacityUpgradeCost * 2);
     this.sound.play("pop");
     this.updateCoinText();
   }
@@ -912,13 +911,15 @@ export class ShepherdScene extends Phaser.Scene {
     this.growBuyBtn.setBackgroundColor(growAffordable ? "#2a6a2a" : "#333344");
     this.growBuyBtn.setAlpha(growAffordable ? 1 : 0.55);
 
-    const sellMaxed = this.sellUpgradeLevel >= UPGRADE_MAX_LEVEL;
-    const sellAffordable = !sellMaxed && this.coins >= this.sellUpgradeCost;
-    this.sellBuyBtn.setText(
-      sellMaxed ? "Sell MAX" : `+Sell $${this.sellUpgradeCost}`,
+    const capMaxed = this.capacityUpgradeLevel >= UPGRADE_MAX_LEVEL;
+    const capAffordable = !capMaxed && this.coins >= this.capacityUpgradeCost;
+    this.capacityBuyBtn.setText(
+      capMaxed ? "Cap MAX" : `+Cap $${this.capacityUpgradeCost}`,
     );
-    this.sellBuyBtn.setBackgroundColor(sellAffordable ? "#2a6a2a" : "#333344");
-    this.sellBuyBtn.setAlpha(sellAffordable ? 1 : 0.55);
+    this.capacityBuyBtn.setBackgroundColor(
+      capAffordable ? "#2a6a2a" : "#333344",
+    );
+    this.capacityBuyBtn.setAlpha(capAffordable ? 1 : 0.55);
 
     const fenceAffordable = !this.fenceBuilt && this.coins >= FENCE_COST;
     this.fenceBuyBtn.setText(
@@ -1354,7 +1355,7 @@ export class ShepherdScene extends Phaser.Scene {
         y: FIELD_CY,
         w: FIELD_W_PX,
         h: FIELD_H_PX,
-        capacity: FIELD_CAPACITY,
+        capacity: this.fieldCapacity,
         growing: this.babiesGrowing(),
       },
       market: {
@@ -1369,9 +1370,9 @@ export class ShepherdScene extends Phaser.Scene {
       coins: this.coins,
       buySheepCost: this.buySheepCost,
       growSec: this.growSec,
-      sellPrice: this.sellPrice,
+      fieldCapacity: this.fieldCapacity,
       growUpgradeLevel: this.growUpgradeLevel,
-      sellUpgradeLevel: this.sellUpgradeLevel,
+      capacityUpgradeLevel: this.capacityUpgradeLevel,
       viewport: { width: this.scale.width, height: this.scale.height },
     };
   }
@@ -1402,7 +1403,9 @@ export class ShepherdScene extends Phaser.Scene {
 
     this.updateTrucks(dt);
     this.checkGameOver();
-    this.fieldLabel.setText(`FIELD  ${this.babiesGrowing()}/${FIELD_CAPACITY}`);
+    this.fieldLabel.setText(
+      `FIELD  ${this.babiesGrowing()}/${this.fieldCapacity}`,
+    );
 
     // --- Alpha dog (player-controlled) ---
     {
@@ -2081,7 +2084,7 @@ export class ShepherdScene extends Phaser.Scene {
       if (
         s.stage === "baby" &&
         s.growthT === 0 &&
-        this.babiesGrowing() >= FIELD_CAPACITY
+        this.babiesGrowing() >= this.fieldCapacity
       ) {
         this.pushOutOfField(s.sprite, s);
       }
@@ -2142,8 +2145,7 @@ export class ShepherdScene extends Phaser.Scene {
         s.vy *= 0.2;
         s.salePrice =
           SALE_PRICE_MIN +
-          Math.floor(Math.random() * (SALE_PRICE_MAX - SALE_PRICE_MIN + 1)) +
-          this.sellUpgradeLevel * SELL_UPGRADE_STEP;
+          Math.floor(Math.random() * (SALE_PRICE_MAX - SALE_PRICE_MIN + 1));
         if (s.readyIcon) {
           this.tweens.add({
             targets: s.readyIcon,

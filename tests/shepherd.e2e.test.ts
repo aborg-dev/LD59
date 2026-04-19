@@ -210,35 +210,21 @@ describe("shepherd core loop", () => {
     expect(after.growUpgradeLevel).toBe(1);
   });
 
-  it("sell upgrade increases coins earned on sale", async () => {
+  it("capacity upgrade raises the field's max simultaneously growing sheep", async () => {
     await game.startScene("Shepherd");
 
-    const startCoins = (await game.eval_(`(() => {
+    const before = (await shepherdState()).fieldCapacity;
+    await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Shepherd');
       gs.coins = 1000;
       gs.updateCoinText();
-      gs.buySellUpgrade();
-      gs.buySellUpgrade();
-      const c = gs.coins;
-      // Place an adult sheep inside the market to trigger a sale
-      const sheep = gs.spawnSheep();
-      sheep.stage = 'adult';
-      sheep.growthT = 999;
-      sheep.sprite.setScale(1);
-      const m = gs.dumpState().market;
-      sheep.sprite.x = m.x;
-      sheep.sprite.y = m.y;
-      sheep.vx = 0;
-      sheep.vy = 0;
-      return c;
-    })()`)) as number;
+      gs.buyCapacityUpgrade();
+    })()`);
 
-    // Market sale is delayed 5-10s; wait past the upper bound
-    await game.advanceTime(11000);
-
-    const s = await shepherdState();
-    // Sale pays random $2-$5 + $5 per upgrade level → with 2 levels, at least $12
-    expect(s.coins - startCoins).toBeGreaterThanOrEqual(12);
+    const after = await shepherdState();
+    expect(after.fieldCapacity).toBe(before + 1);
+    expect(after.capacityUpgradeLevel).toBe(1);
+    expect(after.field.capacity).toBe(before + 1);
   });
 
   it("fence costs $100 and must be purchased to block wolves", async () => {
