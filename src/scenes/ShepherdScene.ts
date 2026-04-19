@@ -130,6 +130,15 @@ export class ShepherdScene extends Phaser.Scene {
   private roomCol = 0;
   private roomRow = 0;
 
+  // Editor state
+  private editorActive = false;
+  private editorTool: "tree" | "spawn" = "tree";
+  private editorTreeRadius = 60;
+  private editorGfx!: Phaser.GameObjects.Graphics;
+  private editorCursorGfx!: Phaser.GameObjects.Graphics;
+  private editorPanel: HTMLDivElement | null = null;
+  private editorPointerWorld = { x: 0, y: 0 };
+
   constructor() {
     super("Shepherd");
   }
@@ -243,6 +252,15 @@ export class ShepherdScene extends Phaser.Scene {
     this.whistleRing.setStrokeStyle(3, 0xffff88, 0);
     this.hudCamera.ignore(this.whistleRing);
 
+    this.editorGfx = this.add.graphics().setDepth(60);
+    this.hudCamera.ignore(this.editorGfx);
+    this.editorCursorGfx = this.add.graphics().setDepth(61);
+    this.hudCamera.ignore(this.editorCursorGfx);
+
+    this.game.canvas.addEventListener("contextmenu", (e) =>
+      e.preventDefault(),
+    );
+
     this.input.keyboard?.on("keydown-SPACE", () =>
       this.whistle(this.dog.x, this.dog.y),
     );
@@ -250,18 +268,22 @@ export class ShepherdScene extends Phaser.Scene {
 
     // Mouse movement steers the dog; click barks from the dog's position.
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      if (this.editorActive) {
+        this.editorHandlePointerDown(p);
+        return;
+      }
       if (this.gameOver) return;
       if (p.y > this.fieldBottom) return;
       this.whistle(this.dog.x, this.dog.y);
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
+      const wp = this.cameras.main.getWorldPoint(p.x, p.y);
+      if (this.editorActive) this.editorPointerWorld = { x: wp.x, y: wp.y };
       if (this.gameOver) return;
       if (p.y <= this.fieldBottom) {
-        const wp = this.cameras.main.getWorldPoint(p.x, p.y);
         this.targetX = wp.x;
         this.targetY = wp.y;
       }
-      return;
     });
 
     // --- Top HUD: coins | wave ---
@@ -490,6 +512,24 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    if (this.editorActive) {
+      if (this.keys && this.arrowKeys) {
+        let kx = 0, ky = 0;
+        if (this.keys.left.isDown  || this.arrowKeys.left.isDown)  kx -= 1;
+        if (this.keys.right.isDown || this.arrowKeys.right.isDown) kx += 1;
+        if (this.keys.up.isDown    || this.arrowKeys.up.isDown)    ky -= 1;
+        if (this.keys.down.isDown  || this.arrowKeys.down.isDown)  ky += 1;
+        if (kx !== 0 || ky !== 0) {
+          const len = Math.hypot(kx, ky);
+          const step = DOG_SPEED * (delta / 1000);
+          this.dog.x = Phaser.Math.Clamp(this.dog.x + (kx / len) * step, 0, WORLD_W);
+          this.dog.y = Phaser.Math.Clamp(this.dog.y + (ky / len) * step, 0, WORLD_H);
+        }
+      }
+      this.updateEditorGraphics();
+      this.updateZoom();
+      return;
+    }
     if (this.gameOver) return;
     this.accumulator += delta;
     while (this.accumulator >= ShepherdScene.stepMs) {
@@ -890,6 +930,14 @@ export class ShepherdScene extends Phaser.Scene {
       "font-size:13px;font-weight:bold;color:#adf;margin-bottom:10px;";
     panel.appendChild(title);
 
+    const editBtn = document.createElement("button");
+    editBtn.textContent = "Edit Map";
+    editBtn.style.cssText =
+      "width:100%;padding:6px;margin-bottom:10px;border:1px solid #668;" +
+      "background:#334;color:#ddd;cursor:pointer;font:12px monospace;border-radius:3px;";
+    editBtn.addEventListener("click", () => this.enterEditorMode());
+    panel.appendChild(editBtn);
+
     const zoomBtn = document.createElement("button");
     const updateZoomBtn = () => {
       zoomBtn.textContent = this.zoomedOut ? "🔍 Room view" : "🗺 Full map";
@@ -1082,8 +1130,212 @@ export class ShepherdScene extends Phaser.Scene {
     document.body.appendChild(panel);
   }
 
+  private enterEditorMode(): void {
+    this.editorActive = true;
+    this.buildEditorPanel();
+    this.updateEditorGraphics();
+  }
+
+  private exitEditorMode(): void {
+    this.editorActive = false;
+    this.editorPanel?.remove();
+    this.editorPanel = null;
+    this.editorGfx.clear();
+    this.editorCursorGfx.clear();
+  }
+
+  private updateEditorGraphics(): void {
+    this.editorGfx.clear();
+    for (const t of this.mapTrees) {
+      this.editorGfx.fillStyle(0x00ffff, 0.12);
+      this.editorGfx.fillCircle(t.x, t.y, t.r);
+      this.editorGfx.lineStyle(2, 0x00ffff, 0.8);
+      this.editorGfx.strokeCircle(t.x, t.y, t.r);
+    }
+    for (const sp of this.mapSpawns) {
+      this.editorGfx.lineStyle(3, 0xff8800, 0.9);
+      const s = 14;
+      this.editorGfx.lineBetween(sp.x - s, sp.y - s, sp.x + s, sp.y + s);
+      this.editorGfx.lineBetween(sp.x + s, sp.y - s, sp.x - s, sp.y + s);
+      this.editorGfx.fillStyle(0xff8800, 0.8);
+      this.editorGfx.fillCircle(sp.x, sp.y, 5);
+    }
+    this.editorCursorGfx.clear();
+    const { x, y } = this.editorPointerWorld;
+    if (this.editorTool === "tree") {
+      this.editorCursorGfx.lineStyle(2, 0x00ffff, 1);
+      this.editorCursorGfx.strokeCircle(x, y, this.editorTreeRadius);
+    } else {
+      this.editorCursorGfx.lineStyle(3, 0xff8800, 1);
+      const s = 14;
+      this.editorCursorGfx.lineBetween(x - s, y - s, x + s, y + s);
+      this.editorCursorGfx.lineBetween(x + s, y - s, x - s, y + s);
+    }
+  }
+
+  private editorHandlePointerDown(p: Phaser.Input.Pointer): void {
+    const wp = this.cameras.main.getWorldPoint(p.x, p.y);
+    if (p.button === 2) {
+      this.editorDeleteNearest(wp.x, wp.y);
+      return;
+    }
+    if (this.editorTool === "tree") {
+      this.mapTrees.push({
+        x: Math.round(wp.x),
+        y: Math.round(wp.y),
+        r: this.editorTreeRadius,
+      });
+    } else {
+      this.mapSpawns.push({ x: Math.round(wp.x), y: Math.round(wp.y) });
+    }
+  }
+
+  private editorDeleteNearest(x: number, y: number): void {
+    let bestIdx = -1;
+    let bestDist = 120;
+    for (let i = 0; i < this.mapTrees.length; i++) {
+      const t = this.mapTrees[i];
+      const d = Math.hypot(x - t.x, y - t.y);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+    if (bestIdx >= 0) { this.mapTrees.splice(bestIdx, 1); return; }
+    bestDist = 60;
+    for (let i = 0; i < this.mapSpawns.length; i++) {
+      const sp = this.mapSpawns[i];
+      const d = Math.hypot(x - sp.x, y - sp.y);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+    if (bestIdx >= 0) this.mapSpawns.splice(bestIdx, 1);
+  }
+
+  private buildEditorPanel(): void {
+    const panel = document.createElement("div");
+    this.editorPanel = panel;
+    panel.style.cssText =
+      "position:fixed;top:70px;left:0;padding:10px;background:rgba(10,10,30,0.92);" +
+      "color:#ddd;font:12px monospace;border-right:2px solid #46a;z-index:9998;" +
+      "display:flex;flex-direction:column;gap:8px;min-width:210px;box-sizing:border-box;";
+
+    const title = document.createElement("div");
+    title.textContent = "Map Editor";
+    title.style.cssText = "font-size:13px;font-weight:bold;color:#adf;";
+    panel.appendChild(title);
+
+    const hint = document.createElement("div");
+    hint.textContent = "L-click: place   R-click: delete";
+    hint.style.color = "#888";
+    panel.appendChild(hint);
+
+    const toolRow = document.createElement("div");
+    toolRow.style.cssText = "display:flex;gap:4px;";
+    const makeToolBtn = (label: string, tool: "tree" | "spawn") => {
+      const btn = document.createElement("button");
+      btn.textContent = label;
+      btn.dataset.tool = tool;
+      btn.style.cssText =
+        "flex:1;padding:6px;border:1px solid #668;color:#ddd;cursor:pointer;" +
+        "font:11px monospace;background:" + (this.editorTool === tool ? "#46a" : "#334") + ";";
+      btn.addEventListener("click", () => {
+        this.editorTool = tool;
+        toolRow.querySelectorAll("button").forEach((b) => {
+          (b as HTMLButtonElement).style.background =
+            (b as HTMLButtonElement).dataset.tool === tool ? "#46a" : "#334";
+        });
+      });
+      return btn;
+    };
+    toolRow.appendChild(makeToolBtn("Tree", "tree"));
+    toolRow.appendChild(makeToolBtn("Spawn", "spawn"));
+    panel.appendChild(toolRow);
+
+    const radiusLabel = document.createElement("div");
+    radiusLabel.style.cssText = "display:flex;justify-content:space-between;";
+    const rlbl = document.createElement("span"); rlbl.textContent = "Tree Radius";
+    const rval = document.createElement("span");
+    rval.style.color = "#fa8";
+    rval.textContent = String(this.editorTreeRadius);
+    radiusLabel.appendChild(rlbl); radiusLabel.appendChild(rval);
+    const radiusSlider = document.createElement("input");
+    radiusSlider.type = "range"; radiusSlider.min = "20"; radiusSlider.max = "150";
+    radiusSlider.step = "5"; radiusSlider.value = String(this.editorTreeRadius);
+    radiusSlider.style.cssText = "width:100%;cursor:pointer;accent-color:#6af;";
+    radiusSlider.addEventListener("input", () => {
+      this.editorTreeRadius = parseFloat(radiusSlider.value);
+      rval.textContent = String(this.editorTreeRadius);
+    });
+    const radiusRow = document.createElement("div");
+    radiusRow.appendChild(radiusLabel); radiusRow.appendChild(radiusSlider);
+    panel.appendChild(radiusRow);
+
+    const counts = document.createElement("div");
+    counts.style.color = "#888";
+    const refreshCounts = () => {
+      counts.textContent = `Trees: ${this.mapTrees.length}  Spawns: ${this.mapSpawns.length}`;
+      if (this.editorPanel) requestAnimationFrame(refreshCounts);
+    };
+    refreshCounts();
+    panel.appendChild(counts);
+
+    const dlBtn = document.createElement("button");
+    dlBtn.textContent = "Download JSON";
+    dlBtn.style.cssText =
+      "padding:7px;border:1px solid #668;background:#334;color:#ddd;cursor:pointer;font:12px monospace;";
+    dlBtn.addEventListener("click", () => this.editorDownload());
+    panel.appendChild(dlBtn);
+
+    if (import.meta.env.DEV) {
+      const saveBtn = document.createElement("button");
+      saveBtn.textContent = "Save to File";
+      saveBtn.style.cssText =
+        "padding:7px;border:1px solid #668;background:#263;color:#ddd;cursor:pointer;font:12px monospace;";
+      saveBtn.addEventListener("click", () => this.editorSaveToServer(saveBtn));
+      panel.appendChild(saveBtn);
+    }
+
+    const exitBtn = document.createElement("button");
+    exitBtn.textContent = "Exit Edit Mode";
+    exitBtn.style.cssText =
+      "padding:7px;border:1px solid #668;background:#422;color:#ddd;cursor:pointer;font:12px monospace;";
+    exitBtn.addEventListener("click", () => this.exitEditorMode());
+    panel.appendChild(exitBtn);
+
+    document.body.appendChild(panel);
+  }
+
+  private editorDownload(): void {
+    const data = JSON.stringify(
+      { trees: this.mapTrees, spawns: this.mapSpawns },
+      null,
+      2,
+    );
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+    a.download = "shepherd-map.json";
+    a.click();
+  }
+
+  private async editorSaveToServer(btn: HTMLButtonElement): Promise<void> {
+    const orig = btn.textContent;
+    btn.textContent = "Saving…";
+    btn.disabled = true;
+    try {
+      const res = await fetch("/api/save-shepherd-map", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trees: this.mapTrees, spawns: this.mapSpawns }),
+      });
+      const json = await res.json();
+      btn.textContent = json.ok ? "Saved!" : "Error";
+    } catch {
+      btn.textContent = "Failed";
+    }
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000);
+  }
+
   shutdown(): void {
     this.debugPanel?.remove();
     this.debugPanel = null;
+    this.editorPanel?.remove();
+    this.editorPanel = null;
   }
 }
