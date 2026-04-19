@@ -730,6 +730,8 @@ export class ShepherdScene extends Phaser.Scene {
       .sprite(x, y, "dog_straight")
       .setOrigin(0.5, 0.25)
       .setDepth(10)
+      .setScale(0.75)
+      .setTint(0xdddddd)
       .play("dog_straight");
     this.hudCamera.ignore(sprite);
 
@@ -1072,7 +1074,8 @@ export class ShepherdScene extends Phaser.Scene {
       .sprite(x, y, "dog_straight")
       .setOrigin(0.5, 0.25)
       .setDepth(10)
-      .setTint(0xcc99ff)
+      .setScale(0.75)
+      .setTint(0xddaaff)
       .play("dog_straight");
     this.hudCamera.ignore(sprite);
     this.dogs.push({
@@ -1899,11 +1902,6 @@ export class ShepherdScene extends Phaser.Scene {
       }
     }
 
-    // Guard dogs keep a purple tint; follower/herding dogs are untinted
-    for (const dog of this.dogs) {
-      if (dog.mode === "guarding") dog.sprite.setTint(0xcc99ff);
-      else dog.sprite.clearTint();
-    }
 
     // --- Dog AI ---
     const followingDogs = this.dogs.filter((d) => d.mode === "following");
@@ -2630,7 +2628,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.updateDogAnim(dog, dog.angle - prevAngle, dt);
     dog.sprite.x += dog.vx * dt;
     dog.sprite.y += dog.vy * dt;
-    dog.sprite.rotation = dog.angle;
+    dog.sprite.rotation = dog.angle + Math.PI / 2;
     dog.sprite.x = Phaser.Math.Clamp(
       dog.sprite.x,
       DOG_RADIUS,
