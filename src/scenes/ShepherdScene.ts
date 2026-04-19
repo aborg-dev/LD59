@@ -86,8 +86,7 @@ const TREE_COLLISION = false;
 const DOG_RADIUS = 20;
 const DOG_W = 34;
 const DOG_H = 16;
-const ALPHA_DOG_W = 40;
-const ALPHA_DOG_H = 20;
+
 const DOG_SPEED = 350;
 const DOG_TURN_RATE = 6.5;
 const HERD_OFFSET = 120;
@@ -138,7 +137,7 @@ interface Wolf {
 }
 
 interface Dog {
-  sprite: Phaser.GameObjects.Rectangle;
+  sprite: Phaser.GameObjects.Rectangle | Phaser.GameObjects.Image;
   targetSheep: Sheep | null;
   targetWolf: Wolf | null;
   vx: number;
@@ -469,9 +468,8 @@ export class ShepherdScene extends Phaser.Scene {
     const alphaStartX = (FIELD_CX + MARKET_CX) / 2;
     const alphaStartY = FIELD_CY + FIELD_H_PX / 2 + 60;
     const alphaSprite = this.add
-      .rectangle(alphaStartX, alphaStartY, ALPHA_DOG_W, ALPHA_DOG_H, 0xffd700)
+      .image(alphaStartX, alphaStartY, "alpha_dog")
       .setDepth(11);
-    alphaSprite.setStrokeStyle(3, 0xffffff);
     this.hudCamera.ignore(alphaSprite);
     this.alphaDog = {
       sprite: alphaSprite,
@@ -715,7 +713,7 @@ export class ShepherdScene extends Phaser.Scene {
       y = Math.random() * WORLD_H;
     }
 
-    const sprite = this.add.image(x, y, "wolf").setScale(1.75).setDepth(9);
+    const sprite = this.add.image(x, y, "wolf").setDepth(9);
     this.hudCamera.ignore(sprite);
     this.wolves.push({
       sprite,
@@ -1387,7 +1385,7 @@ export class ShepherdScene extends Phaser.Scene {
       this.alphaDog.vy = Math.sin(this.alphaDog.angle) * speed;
       this.alphaDog.sprite.x += this.alphaDog.vx * dt;
       this.alphaDog.sprite.y += this.alphaDog.vy * dt;
-      this.alphaDog.sprite.rotation = this.alphaDog.angle;
+      this.alphaDog.sprite.rotation = this.alphaDog.angle + Math.PI / 2;
       this.alphaDog.sprite.x = Phaser.Math.Clamp(
         this.alphaDog.sprite.x,
         DOG_RADIUS,
@@ -1433,32 +1431,34 @@ export class ShepherdScene extends Phaser.Scene {
       }
     }
 
-    // Update dog visuals based on mode
+    // Update dog visuals based on mode (follower dogs are always rectangles)
     if (this.dogVisuals) {
       const nextDog = this.dogs.find((d) => d.mode === "following") ?? null;
       for (const dog of this.dogs) {
+        const r = dog.sprite as Phaser.GameObjects.Rectangle;
         if (dog.mode === "guarding") {
-          dog.sprite.setFillStyle(0x5a2e88);
-          dog.sprite.setStrokeStyle(2, 0xccaaff);
+          r.setFillStyle(0x5a2e88);
+          r.setStrokeStyle(2, 0xccaaff);
         } else if (dog.mode === "herding") {
-          dog.sprite.setFillStyle(0x8888dd);
-          dog.sprite.setStrokeStyle(2, 0xaaaaff);
+          r.setFillStyle(0x8888dd);
+          r.setStrokeStyle(2, 0xaaaaff);
         } else if (dog === nextDog) {
-          dog.sprite.setFillStyle(0x333355);
-          dog.sprite.setStrokeStyle(3, 0xffffff);
+          r.setFillStyle(0x333355);
+          r.setStrokeStyle(3, 0xffffff);
         } else {
-          dog.sprite.setFillStyle(0x333355);
-          dog.sprite.setStrokeStyle(2, 0xaaaaff);
+          r.setFillStyle(0x333355);
+          r.setStrokeStyle(2, 0xaaaaff);
         }
       }
     } else {
       for (const dog of this.dogs) {
+        const r = dog.sprite as Phaser.GameObjects.Rectangle;
         if (dog.mode === "guarding") {
-          dog.sprite.setFillStyle(0x5a2e88);
-          dog.sprite.setStrokeStyle(2, 0xccaaff);
+          r.setFillStyle(0x5a2e88);
+          r.setStrokeStyle(2, 0xccaaff);
         } else {
-          dog.sprite.setFillStyle(0x333355);
-          dog.sprite.setStrokeStyle(2, 0xaaaaff);
+          r.setFillStyle(0x333355);
+          r.setStrokeStyle(2, 0xaaaaff);
         }
       }
     }
