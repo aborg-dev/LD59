@@ -1912,7 +1912,7 @@ export class ShepherdScene extends Phaser.Scene {
             const idx = this.sheep.indexOf(eaten);
             if (idx !== -1) {
               this.playEatFx(eaten.sprite.x, eaten.sprite.y);
-              this.sound.play("bounce");
+              this.sound.play("bite");
               this.sheep[idx].readyIcon?.destroy();
               this.sheep[idx].sprite.destroy();
               this.sheep.splice(idx, 1);
