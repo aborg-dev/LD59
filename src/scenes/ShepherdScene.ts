@@ -277,11 +277,18 @@ export class ShepherdScene extends Phaser.Scene {
 
     this.hudCamera = this.cameras.add(0, 0, width, height);
 
-    // Grass background — 64x64 tile repeated across the world
-    const bg = this.add
-      .tileSprite(WORLD_W / 2, WORLD_H / 2, WORLD_W, WORLD_H, "grass")
-      .setDepth(0);
-    this.hudCamera.ignore(bg);
+    // Grass background — two 64x64 variants tiled randomly across the world
+    const grassKeys = ["grass1", "grass2"];
+    const tile = 64;
+    const grassLayer = this.add.layer().setDepth(0);
+    for (let yy = 0; yy < WORLD_H; yy += tile) {
+      for (let xx = 0; xx < WORLD_W; xx += tile) {
+        const key = grassKeys[Math.random() < 0.5 ? 0 : 1];
+        const img = this.add.image(xx, yy, key).setOrigin(0, 0);
+        grassLayer.add(img);
+      }
+    }
+    this.hudCamera.ignore(grassLayer);
 
     // Road along the right edge (dirt)
     const road = this.add
