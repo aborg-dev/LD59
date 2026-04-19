@@ -973,10 +973,7 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private playBarkSound(): void {
-    this.sound.play("pop", { rate: 0.75, detune: -500 });
-    this.time.delayedCall(130, () =>
-      this.sound.play("pop", { rate: 0.85, detune: -350 }),
-    );
+    this.sound.play("bark");
   }
 
   private playBuildSound(): void {
@@ -2362,7 +2359,7 @@ export class ShepherdScene extends Phaser.Scene {
     } else {
       return;
     }
-    this.sound.play("pop");
+    this.playBarkSound();
     const ring = this.add
       .circle(this.alphaDog.sprite.x, this.alphaDog.sprite.y, 10, 0xffffff, 0)
       .setDepth(12);
