@@ -23,8 +23,8 @@ const SHEEP_GRAZE_MIN_SEC = 1.5;
 const SHEEP_GRAZE_MAX_SEC = 4.0;
 const SHEEP_WALK_MIN_SEC = 0.8;
 const SHEEP_WALK_MAX_SEC = 2.2;
-const SHEEP_COHESION_RADIUS = 160;
-let SHEEP_COHESION_FORCE = 55;
+const SHEEP_COHESION_RADIUS = 200;
+let SHEEP_COHESION_FORCE = 80;
 const ALIGNMENT_RADIUS = 130;
 let ALIGNMENT_FORCE = 100;
 const SEPARATION_RADIUS = 42;
@@ -34,7 +34,8 @@ let SHEEP_TURN_RATE = 4.5;
 const PANIC_RADIUS = 90;
 let PANIC_INHERIT = 0.7;
 
-const DOG_RADIUS = 22;
+const DOG_RADIUS = 20;
+const ALPHA_DOG_RADIUS = 24;
 const DOG_SPEED = 350;
 const HERD_OFFSET = 120;
 let FEAR_RADIUS = 180;
@@ -76,6 +77,7 @@ interface MapTree {
 
 export interface ShepherdSceneState {
   active: boolean;
+  alphaDog: { x: number; y: number };
   dogs: { x: number; y: number }[];
   lastWhistle: { x: number; y: number } | null;
   sheep: { x: number; y: number; penned: boolean }[];
@@ -87,6 +89,21 @@ export interface ShepherdSceneState {
 }
 
 export class ShepherdScene extends Phaser.Scene {
+  private alphaDog!: Dog;
+  private alphaDogTargetX = 0;
+  private alphaDogTargetY = 0;
+  private keys?: {
+    up: Phaser.Input.Keyboard.Key;
+    down: Phaser.Input.Keyboard.Key;
+    left: Phaser.Input.Keyboard.Key;
+    right: Phaser.Input.Keyboard.Key;
+  };
+  private arrowKeys?: {
+    up: Phaser.Input.Keyboard.Key;
+    down: Phaser.Input.Keyboard.Key;
+    left: Phaser.Input.Keyboard.Key;
+    right: Phaser.Input.Keyboard.Key;
+  };
   private dogs: Dog[] = [];
   private lastWhistle: { x: number; y: number } | null = null;
   private sheep: Sheep[] = [];
@@ -186,6 +203,34 @@ export class ShepherdScene extends Phaser.Scene {
     this.editorCursorGfx = this.add.graphics().setDepth(61);
     this.hudCamera.ignore(this.editorCursorGfx);
 
+    // Alpha dog — player-controlled
+    const initialPen = this.pens[0];
+    const alphaSprite = this.add
+      .circle(initialPen.x, initialPen.y + initialPen.r + 80, ALPHA_DOG_RADIUS, 0x555555)
+      .setDepth(11);
+    alphaSprite.setStrokeStyle(3, 0xffffff);
+    this.hudCamera.ignore(alphaSprite);
+    this.alphaDog = { sprite: alphaSprite, targetSheep: null };
+    this.alphaDogTargetX = alphaSprite.x;
+    this.alphaDogTargetY = alphaSprite.y;
+
+    const kb = this.input.keyboard;
+    if (kb) {
+      const K = Phaser.Input.Keyboard.KeyCodes;
+      this.keys = {
+        up: kb.addKey(K.W),
+        down: kb.addKey(K.S),
+        left: kb.addKey(K.A),
+        right: kb.addKey(K.D),
+      };
+      this.arrowKeys = {
+        up: kb.addKey(K.UP),
+        down: kb.addKey(K.DOWN),
+        left: kb.addKey(K.LEFT),
+        right: kb.addKey(K.RIGHT),
+      };
+    }
+
     this.game.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
     // Sheep animation
@@ -219,8 +264,15 @@ export class ShepherdScene extends Phaser.Scene {
       const wp = this.cameras.main.getWorldPoint(p.x, p.y);
       if (this.editorActive) this.editorPointerWorld = { x: wp.x, y: wp.y };
       if (this.placingPen) this.penGhost.setPosition(wp.x, wp.y);
+      if (p.y > this.fieldTop && p.y < this.fieldBottom) {
+        this.alphaDogTargetX = wp.x;
+        this.alphaDogTargetY = wp.y;
+      }
     });
 
+    this.input.keyboard?.on("keydown-SPACE", () =>
+      this.whistle(this.alphaDog.sprite.x, this.alphaDog.sprite.y),
+    );
     this.input.keyboard?.on("keydown-ENTER", () => this.toggleDebugPanel());
     this.input.keyboard?.on("keydown-ESC", () => {
       if (this.placingPen) this.cancelPenPlacement();
@@ -237,7 +289,7 @@ export class ShepherdScene extends Phaser.Scene {
       .text(width / 2 - 120, HUD_TOP_H / 2, `$${this.coins}`, {
         fontFamily: FONT_UI,
         fontSize: 32,
-        color: "#ffe066",
+        color: "#707070",
         stroke: "#000000",
         strokeThickness: 4,
         resolution: TEXT_RESOLUTION,
@@ -397,7 +449,7 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private updateDogCountText(): void {
-    this.dogCountText.setText(`Dogs: ${this.dogs.length}`);
+    this.dogCountText.setText(`Dogs: ${this.dogs.length + 1}`);
   }
 
   private updateShopButtons(): void {
@@ -592,6 +644,7 @@ export class ShepherdScene extends Phaser.Scene {
   dumpState(): ShepherdSceneState {
     return {
       active: this.scene.isActive(),
+      alphaDog: { x: this.alphaDog.sprite.x, y: this.alphaDog.sprite.y },
       dogs: this.dogs.map((d) => ({
         x: d.sprite.x,
         y: d.sprite.y,
@@ -630,6 +683,55 @@ export class ShepherdScene extends Phaser.Scene {
   private step(): void {
     const dt = ShepherdScene.stepSec;
     const dtMs = dt * 1000;
+
+    // --- Alpha dog (player-controlled) ---
+    {
+      let kx = 0;
+      let ky = 0;
+      if (this.keys && this.arrowKeys) {
+        if (this.keys.left.isDown || this.arrowKeys.left.isDown) kx -= 1;
+        if (this.keys.right.isDown || this.arrowKeys.right.isDown) kx += 1;
+        if (this.keys.up.isDown || this.arrowKeys.up.isDown) ky -= 1;
+        if (this.keys.down.isDown || this.arrowKeys.down.isDown) ky += 1;
+      }
+      if (kx !== 0 || ky !== 0) {
+        const klen = Math.hypot(kx, ky);
+        const step = DOG_SPEED * dt;
+        this.alphaDog.sprite.x += (kx / klen) * step;
+        this.alphaDog.sprite.y += (ky / klen) * step;
+        this.alphaDogTargetX = this.alphaDog.sprite.x;
+        this.alphaDogTargetY = this.alphaDog.sprite.y;
+      } else {
+        const ddx = this.alphaDogTargetX - this.alphaDog.sprite.x;
+        const ddy = this.alphaDogTargetY - this.alphaDog.sprite.y;
+        const dDist = Math.hypot(ddx, ddy);
+        if (dDist > 0.1) {
+          const move = Math.min(dDist, DOG_SPEED * dt);
+          this.alphaDog.sprite.x += (ddx / dDist) * move;
+          this.alphaDog.sprite.y += (ddy / dDist) * move;
+        }
+      }
+      this.alphaDog.sprite.x = Phaser.Math.Clamp(
+        this.alphaDog.sprite.x,
+        DOG_RADIUS,
+        WORLD_W - DOG_RADIUS,
+      );
+      this.alphaDog.sprite.y = Phaser.Math.Clamp(
+        this.alphaDog.sprite.y,
+        DOG_RADIUS,
+        WORLD_H - DOG_RADIUS,
+      );
+      for (const t of this.mapTrees) {
+        const tdx = this.alphaDog.sprite.x - t.x;
+        const tdy = this.alphaDog.sprite.y - t.y;
+        const td = Math.hypot(tdx, tdy);
+        const minDist = t.r + DOG_RADIUS;
+        if (td < minDist && td > 0.01) {
+          this.alphaDog.sprite.x += (tdx / td) * (minDist - td);
+          this.alphaDog.sprite.y += (tdy / td) * (minDist - td);
+        }
+      }
+    }
 
     // --- Dog AI ---
     for (const dog of this.dogs) {
@@ -679,8 +781,8 @@ export class ShepherdScene extends Phaser.Scene {
       let ax = 0;
       let ay = 0;
 
-      // Flee from ALL dogs
-      for (const dog of this.dogs) {
+      // Flee from ALL dogs (alpha + AI)
+      for (const dog of [this.alphaDog, ...this.dogs]) {
         const fdx = s.sprite.x - dog.sprite.x;
         const fdy = s.sprite.y - dog.sprite.y;
         const fd = Math.hypot(fdx, fdy);
@@ -755,9 +857,9 @@ export class ShepherdScene extends Phaser.Scene {
         s.grazing = alignN === 0 ? !s.grazing : false;
         s.modeT = s.grazing
           ? SHEEP_GRAZE_MIN_SEC +
-            Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
+          Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
           : SHEEP_WALK_MIN_SEC +
-            Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
+          Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
         if (!s.grazing) s.wanderAngle = Math.random() * Math.PI * 2;
       }
       if (!s.grazing && alignN === 0) {
@@ -951,97 +1053,97 @@ export class ShepherdScene extends Phaser.Scene {
       max: number;
       step: number;
     }> = [
-      {
-        label: "Max Speed",
-        get: () => SHEEP_MAX_SPEED,
-        set: (v) => {
-          SHEEP_MAX_SPEED = v;
+        {
+          label: "Max Speed",
+          get: () => SHEEP_MAX_SPEED,
+          set: (v) => {
+            SHEEP_MAX_SPEED = v;
+          },
+          min: 0,
+          max: 800,
+          step: 5,
         },
-        min: 0,
-        max: 800,
-        step: 5,
-      },
-      {
-        label: "Damping",
-        get: () => SHEEP_DAMPING,
-        set: (v) => {
-          SHEEP_DAMPING = v;
+        {
+          label: "Damping",
+          get: () => SHEEP_DAMPING,
+          set: (v) => {
+            SHEEP_DAMPING = v;
+          },
+          min: 0.8,
+          max: 0.999,
+          step: 0.001,
         },
-        min: 0.8,
-        max: 0.999,
-        step: 0.001,
-      },
-      {
-        label: "Wander Force",
-        get: () => SHEEP_WANDER_FORCE,
-        set: (v) => {
-          SHEEP_WANDER_FORCE = v;
+        {
+          label: "Wander Force",
+          get: () => SHEEP_WANDER_FORCE,
+          set: (v) => {
+            SHEEP_WANDER_FORCE = v;
+          },
+          min: 0,
+          max: 400,
+          step: 5,
         },
-        min: 0,
-        max: 400,
-        step: 5,
-      },
-      {
-        label: "Cohesion Force",
-        get: () => SHEEP_COHESION_FORCE,
-        set: (v) => {
-          SHEEP_COHESION_FORCE = v;
+        {
+          label: "Cohesion Force",
+          get: () => SHEEP_COHESION_FORCE,
+          set: (v) => {
+            SHEEP_COHESION_FORCE = v;
+          },
+          min: 0,
+          max: 200,
+          step: 2,
         },
-        min: 0,
-        max: 200,
-        step: 2,
-      },
-      {
-        label: "Alignment Force",
-        get: () => ALIGNMENT_FORCE,
-        set: (v) => {
-          ALIGNMENT_FORCE = v;
+        {
+          label: "Alignment Force",
+          get: () => ALIGNMENT_FORCE,
+          set: (v) => {
+            ALIGNMENT_FORCE = v;
+          },
+          min: 0,
+          max: 300,
+          step: 5,
         },
-        min: 0,
-        max: 300,
-        step: 5,
-      },
-      {
-        label: "Flee Force",
-        get: () => FLEE_FORCE,
-        set: (v) => {
-          FLEE_FORCE = v;
+        {
+          label: "Flee Force",
+          get: () => FLEE_FORCE,
+          set: (v) => {
+            FLEE_FORCE = v;
+          },
+          min: 0,
+          max: 1000,
+          step: 10,
         },
-        min: 0,
-        max: 1000,
-        step: 10,
-      },
-      {
-        label: "Fear Radius",
-        get: () => FEAR_RADIUS,
-        set: (v) => {
-          FEAR_RADIUS = v;
+        {
+          label: "Fear Radius",
+          get: () => FEAR_RADIUS,
+          set: (v) => {
+            FEAR_RADIUS = v;
+          },
+          min: 0,
+          max: 500,
+          step: 5,
         },
-        min: 0,
-        max: 500,
-        step: 5,
-      },
-      {
-        label: "Panic Inherit",
-        get: () => PANIC_INHERIT,
-        set: (v) => {
-          PANIC_INHERIT = v;
+        {
+          label: "Panic Inherit",
+          get: () => PANIC_INHERIT,
+          set: (v) => {
+            PANIC_INHERIT = v;
+          },
+          min: 0,
+          max: 1,
+          step: 0.05,
         },
-        min: 0,
-        max: 1,
-        step: 0.05,
-      },
-      {
-        label: "Turn Rate",
-        get: () => SHEEP_TURN_RATE,
-        set: (v) => {
-          SHEEP_TURN_RATE = v;
+        {
+          label: "Turn Rate",
+          get: () => SHEEP_TURN_RATE,
+          set: (v) => {
+            SHEEP_TURN_RATE = v;
+          },
+          min: 0.5,
+          max: 15,
+          step: 0.5,
         },
-        min: 0.5,
-        max: 15,
-        step: 0.5,
-      },
-    ];
+      ];
 
     for (const cfg of params) {
       const row = document.createElement("div");
