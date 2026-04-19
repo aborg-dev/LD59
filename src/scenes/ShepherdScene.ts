@@ -12,10 +12,37 @@ const WORLD_H = ROOM_H * GRID_ROWS;
 const HUD_TOP_H = 70;
 const HUD_BOTTOM_H = 80;
 
-const PEN_RADIUS = 120;
 const SHEEP_RADIUS = 18;
 const MAX_SHEEP = 30;
-const SPAWN_INTERVAL_MS = 3000;
+
+// Field — babies grow here into adults
+const FIELD_CX = 1800;
+const FIELD_CY = 900;
+const FIELD_W_PX = 420;
+const FIELD_H_PX = 420;
+const GROW_SEC = 12;
+
+// Market — adults are sold here for coins
+const MARKET_CX = 520;
+const MARKET_CY = 900;
+const MARKET_W_PX = 260;
+const MARKET_H_PX = 200;
+
+// Road on the right edge — truck drives here
+const ROAD_W_PX = 160;
+const ROAD_CX = WORLD_W - ROAD_W_PX / 2 - 40;
+const DROP_X = ROAD_CX;
+const DROP_Y = 1100;
+
+const TRUCK_W = 96;
+const TRUCK_H = 56;
+const TRUCK_SPEED = 320;
+
+const BABY_SHEEP_SCALE = 0.45;
+const ADULT_SHEEP_SCALE = 1.0;
+
+const BUY_SHEEP_BASE_COST = 3;
+const SELL_SHEEP_VALUE = 10;
 
 let SHEEP_MAX_SPEED = 220;
 let SHEEP_WANDER_FORCE = 140;
@@ -62,14 +89,14 @@ const WOLF_FLEE_SPEED = 650;
 const WOLF_SCARED_MS = 1800;
 const WOLF_SPAWN_INTERVAL_MS = 20000;
 
-
-
 interface Sheep {
   sprite: Phaser.GameObjects.Sprite;
   vx: number;
   vy: number;
   angle: number;
-  penned: boolean;
+  stage: "baby" | "adult";
+  growthT: number;
+  sold: boolean;
   grazing: boolean;
   modeT: number;
   wanderAngle: number;
@@ -95,12 +122,13 @@ interface Dog {
   mode: "following" | "herding" | "defending";
 }
 
-interface Pen {
-  x: number;
-  y: number;
-  r: number;
-  circle: Phaser.GameObjects.Arc;
-  label: Phaser.GameObjects.Text;
+interface Truck {
+  sprite: Phaser.GameObjects.Rectangle;
+  vx: number;
+  vy: number;
+  state: "arriving" | "dropping" | "leaving";
+  dropTimer: number;
+  hasDropped: boolean;
 }
 
 interface MapTree {
@@ -113,11 +141,13 @@ export interface ShepherdSceneState {
   active: boolean;
   alphaDog: { x: number; y: number };
   dogs: { x: number; y: number }[];
-  sheep: { x: number; y: number; penned: boolean }[];
-  pens: { x: number; y: number; radius: number }[];
-  placingPen: boolean;
+  sheep: { x: number; y: number; stage: "baby" | "adult"; growthT: number }[];
+  trucks: { x: number; y: number; state: string }[];
+  field: { x: number; y: number; w: number; h: number };
+  market: { x: number; y: number; w: number; h: number };
   score: number;
   coins: number;
+  buySheepCost: number;
   viewport: { width: number; height: number };
 }
 
@@ -147,18 +177,16 @@ export class ShepherdScene extends Phaser.Scene {
   private coins = 0;
   private accumulator = 0;
 
-  private pens: Pen[] = [];
+  private trucks: Truck[] = [];
 
   private coinText!: Phaser.GameObjects.Text;
   private dogCountText!: Phaser.GameObjects.Text;
   private bannerText!: Phaser.GameObjects.Text;
   private bannerTween?: Phaser.Tweens.Tween;
   private dogBuyCost = 5;
-  private penBuyCost = 25;
+  private buySheepCost = BUY_SHEEP_BASE_COST;
   private dogBuyBtn!: Phaser.GameObjects.Text;
-  private penBuyBtn!: Phaser.GameObjects.Text;
-  private placingPen = false;
-  private penGhost!: Phaser.GameObjects.Arc;
+  private sheepBuyBtn!: Phaser.GameObjects.Text;
 
   private fieldTop = 0;
   private fieldBottom = 0;
@@ -192,10 +220,9 @@ export class ShepherdScene extends Phaser.Scene {
     this.dogs = [];
     this.wolves = [];
     this.sheep = [];
-    this.pens = [];
-    this.placingPen = false;
+    this.trucks = [];
     this.dogBuyCost = 5;
-    this.penBuyCost = 25;
+    this.buySheepCost = BUY_SHEEP_BASE_COST;
 
     this.hudCamera = this.cameras.add(0, 0, width, height);
 
@@ -205,16 +232,59 @@ export class ShepherdScene extends Phaser.Scene {
       .setDepth(0);
     this.hudCamera.ignore(bg);
 
-    // Initial pen in room (1,1)
-    this.createPen(1.5 * ROOM_W, 1.5 * ROOM_H);
+    // Road along the right edge (dirt)
+    const road = this.add
+      .rectangle(ROAD_CX, WORLD_H / 2, ROAD_W_PX, WORLD_H, 0x8a6a3a)
+      .setDepth(0.5);
+    this.hudCamera.ignore(road);
 
-    // Ghost preview used while placing a new pen
-    this.penGhost = this.add
-      .circle(0, 0, PEN_RADIUS, 0x8b5a2b, 0.18)
-      .setDepth(3)
-      .setVisible(false);
-    this.penGhost.setStrokeStyle(3, 0xffe099, 0.7);
-    this.hudCamera.ignore(this.penGhost);
+    // Field — baby sheep grow here
+    const fieldRect = this.add
+      .rectangle(FIELD_CX, FIELD_CY, FIELD_W_PX, FIELD_H_PX, 0x6ec04a, 0.55)
+      .setDepth(1);
+    fieldRect.setStrokeStyle(5, 0x3a2814);
+    this.hudCamera.ignore(fieldRect);
+    const fieldLabel = this.add
+      .text(FIELD_CX, FIELD_CY - FIELD_H_PX / 2 - 26, "FIELD", {
+        fontFamily: FONT_UI,
+        fontSize: 30,
+        color: "#fff1c1",
+        stroke: "#000000",
+        strokeThickness: 4,
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5)
+      .setDepth(2);
+    this.hudCamera.ignore(fieldLabel);
+
+    // Market — adult sheep sold here
+    const marketRect = this.add
+      .rectangle(MARKET_CX, MARKET_CY, MARKET_W_PX, MARKET_H_PX, 0xb26b3a, 1)
+      .setDepth(1);
+    marketRect.setStrokeStyle(5, 0x3a2814);
+    this.hudCamera.ignore(marketRect);
+    const roofTopY = MARKET_CY - MARKET_H_PX / 2;
+    const roofLeftX = MARKET_CX - MARKET_W_PX / 2 - 14;
+    const roofRightX = MARKET_CX + MARKET_W_PX / 2 + 14;
+    const roofPeakY = roofTopY - 80;
+    const roofGfx = this.add.graphics().setDepth(1.5);
+    roofGfx.fillStyle(0x6b3a1a, 1);
+    roofGfx.fillTriangle(roofLeftX, roofTopY, roofRightX, roofTopY, MARKET_CX, roofPeakY);
+    roofGfx.lineStyle(5, 0x3a2814);
+    roofGfx.strokeTriangle(roofLeftX, roofTopY, roofRightX, roofTopY, MARKET_CX, roofPeakY);
+    this.hudCamera.ignore(roofGfx);
+    const marketLabel = this.add
+      .text(MARKET_CX, MARKET_CY - MARKET_H_PX / 2 - 90, "MARKET", {
+        fontFamily: FONT_UI,
+        fontSize: 30,
+        color: "#fff1c1",
+        stroke: "#000000",
+        strokeThickness: 4,
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5)
+      .setDepth(2);
+    this.hudCamera.ignore(marketLabel);
 
     // Load map objects
     this.mapTrees = mapData.trees as MapTree[];
@@ -243,14 +313,23 @@ export class ShepherdScene extends Phaser.Scene {
     this.highlightGfx = this.add.graphics().setDepth(12);
     this.hudCamera.ignore(this.highlightGfx);
 
-    // Alpha dog — player-controlled
-    const initialPen = this.pens[0];
+    // Alpha dog — player-controlled, starts between field and market
+    const alphaStartX = (FIELD_CX + MARKET_CX) / 2;
+    const alphaStartY = FIELD_CY + FIELD_H_PX / 2 + 60;
     const alphaSprite = this.add
-      .rectangle(initialPen.x, initialPen.y + initialPen.r + 80, ALPHA_DOG_W, ALPHA_DOG_H, 0xffd700)
+      .rectangle(alphaStartX, alphaStartY, ALPHA_DOG_W, ALPHA_DOG_H, 0xffd700)
       .setDepth(11);
     alphaSprite.setStrokeStyle(3, 0xffffff);
     this.hudCamera.ignore(alphaSprite);
-    this.alphaDog = { sprite: alphaSprite, targetSheep: null, targetWolf: null, vx: 0, vy: 0, angle: 0, mode: "following" };
+    this.alphaDog = {
+      sprite: alphaSprite,
+      targetSheep: null,
+      targetWolf: null,
+      vx: 0,
+      vy: 0,
+      angle: 0,
+      mode: "following",
+    };
     this.alphaDogTargetX = alphaSprite.x;
     this.alphaDogTargetY = alphaSprite.y;
 
@@ -289,21 +368,11 @@ export class ShepherdScene extends Phaser.Scene {
       }
       if (p.y > this.fieldBottom) return;
       if (p.y < this.fieldTop) return;
-      const wp = this.cameras.main.getWorldPoint(p.x, p.y);
-      if (this.placingPen) {
-        if (p.button === 2) {
-          this.cancelPenPlacement();
-        } else {
-          this.placePenAt(wp.x, wp.y);
-        }
-        return;
-      }
       this.dispatchFollower();
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
       const wp = this.cameras.main.getWorldPoint(p.x, p.y);
       if (this.editorActive) this.editorPointerWorld = { x: wp.x, y: wp.y };
-      if (this.placingPen) this.penGhost.setPosition(wp.x, wp.y);
       if (p.y > this.fieldTop && p.y < this.fieldBottom) {
         this.alphaDogTargetX = wp.x;
         this.alphaDogTargetY = wp.y;
@@ -312,9 +381,6 @@ export class ShepherdScene extends Phaser.Scene {
 
     this.input.keyboard?.on("keydown-SPACE", () => this.dispatchFollower());
     this.input.keyboard?.on("keydown-ENTER", () => this.toggleDebugPanel());
-    this.input.keyboard?.on("keydown-ESC", () => {
-      if (this.placingPen) this.cancelPenPlacement();
-    });
 
     // --- Top HUD ---
     const hudTopBar = this.add
@@ -400,29 +466,15 @@ export class ShepherdScene extends Phaser.Scene {
     this.dogBuyBtn.on("pointerdown", () => this.buyDog());
     this.cameras.main.ignore(this.dogBuyBtn);
 
-    this.penBuyBtn = this.add
+    this.sheepBuyBtn = this.add
       .text(width * 0.35, btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
-    this.penBuyBtn.on("pointerdown", () => this.startPenPlacement());
-    this.cameras.main.ignore(this.penBuyBtn);
+    this.sheepBuyBtn.on("pointerdown", () => this.buySheep());
+    this.cameras.main.ignore(this.sheepBuyBtn);
 
     this.updateShopButtons();
-
-    // Continuous sheep spawning
-    this.time.addEvent({
-      delay: SPAWN_INTERVAL_MS,
-      loop: true,
-      callback: () => {
-        const unpenned = this.sheep.filter((s) => !s.penned).length;
-        if (unpenned >= MAX_SHEEP) return;
-        if (this.mapSpawns.length === 0) return;
-        const sp =
-          this.mapSpawns[Phaser.Math.Between(0, this.mapSpawns.length - 1)];
-        this.spawnSheep(sp.x, sp.y);
-      },
-    });
 
     // Wolf spawning
     this.time.addEvent({
@@ -431,22 +483,18 @@ export class ShepherdScene extends Phaser.Scene {
       callback: () => this.spawnWolf(),
     });
 
-    // Spawn a few sheep initially
-    for (let i = 0; i < 5 && i < this.mapSpawns.length; i++) {
-      const sp = this.mapSpawns[i];
-      this.spawnSheep(sp.x, sp.y);
-    }
-
     this.updateDogCountText();
 
     // Set camera zoomed out to fit entire world
     this.updateCamera();
 
-    this.showBanner("Click to whistle!");
+    this.showBanner("Buy a sheep, herd it to the field!");
   }
 
   private spawnDog(x: number, y: number): void {
-    const sprite = this.add.rectangle(x, y, DOG_W, DOG_H, 0x333355).setDepth(10);
+    const sprite = this.add
+      .rectangle(x, y, DOG_W, DOG_H, 0x333355)
+      .setDepth(10);
     sprite.setStrokeStyle(2, 0xaaaaff);
     this.hudCamera.ignore(sprite);
 
@@ -462,20 +510,37 @@ export class ShepherdScene extends Phaser.Scene {
     this.updateDogCountText();
   }
 
-
   private spawnWolf(): void {
     const edge = Math.floor(Math.random() * 4);
     let x: number;
     let y: number;
-    if (edge === 0) { x = Math.random() * WORLD_W; y = -40; }
-    else if (edge === 1) { x = WORLD_W + 40; y = Math.random() * WORLD_H; }
-    else if (edge === 2) { x = Math.random() * WORLD_W; y = WORLD_H + 40; }
-    else { x = -40; y = Math.random() * WORLD_H; }
+    if (edge === 0) {
+      x = Math.random() * WORLD_W;
+      y = -40;
+    } else if (edge === 1) {
+      x = WORLD_W + 40;
+      y = Math.random() * WORLD_H;
+    } else if (edge === 2) {
+      x = Math.random() * WORLD_W;
+      y = WORLD_H + 40;
+    } else {
+      x = -40;
+      y = Math.random() * WORLD_H;
+    }
 
-    const sprite = this.add.rectangle(x, y, WOLF_W, WOLF_H, 0x7a1a1a).setDepth(9);
+    const sprite = this.add
+      .rectangle(x, y, WOLF_W, WOLF_H, 0x7a1a1a)
+      .setDepth(9);
     sprite.setStrokeStyle(2, 0xff5555);
     this.hudCamera.ignore(sprite);
-    this.wolves.push({ sprite, targetSheep: null, vx: 0, vy: 0, angle: 0, scaredMs: 0 });
+    this.wolves.push({
+      sprite,
+      targetSheep: null,
+      vx: 0,
+      vy: 0,
+      angle: 0,
+      scaredMs: 0,
+    });
   }
 
   private updateCoinText(): void {
@@ -493,131 +558,146 @@ export class ShepherdScene extends Phaser.Scene {
     this.dogBuyBtn.setBackgroundColor(dogAffordable ? "#2a6a2a" : "#333344");
     this.dogBuyBtn.setAlpha(dogAffordable ? 1 : 0.55);
 
-    const penAffordable = this.coins >= this.penBuyCost;
-    const label = this.placingPen ? "Cancel" : `+Pen $${this.penBuyCost}`;
-    this.penBuyBtn.setText(label);
-    this.penBuyBtn.setBackgroundColor(
-      this.placingPen ? "#884422" : penAffordable ? "#2a6a2a" : "#333344",
+    const sheepAffordable = this.coins >= this.buySheepCost;
+    this.sheepBuyBtn.setText(`+Sheep $${this.buySheepCost}`);
+    this.sheepBuyBtn.setBackgroundColor(
+      sheepAffordable ? "#2a6a2a" : "#333344",
     );
-    this.penBuyBtn.setAlpha(this.placingPen || penAffordable ? 1 : 0.55);
+    this.sheepBuyBtn.setAlpha(sheepAffordable ? 1 : 0.55);
   }
 
   private buyDog(): void {
     if (this.coins < this.dogBuyCost) return;
     this.coins -= this.dogBuyCost;
     this.dogBuyCost = Math.ceil(this.dogBuyCost * 1.6);
-    const origin = this.pens[0];
     const a = Math.random() * Math.PI * 2;
     this.spawnDog(
-      origin.x + Math.cos(a) * (origin.r + 40),
-      origin.y + Math.sin(a) * (origin.r + 40),
+      this.alphaDog.sprite.x + Math.cos(a) * 80,
+      this.alphaDog.sprite.y + Math.sin(a) * 80,
     );
     this.sound.play("pop");
     this.updateCoinText();
   }
 
-  private nearestPen(x: number, y: number): Pen | null {
-    let best: Pen | null = null;
-    let bestDist = Infinity;
-    for (const p of this.pens) {
-      const d = Math.hypot(p.x - x, p.y - y);
-      if (d < bestDist) {
-        bestDist = d;
-        best = p;
-      }
-    }
-    return best;
+  private fieldContains(x: number, y: number): boolean {
+    return (
+      x > FIELD_CX - FIELD_W_PX / 2 &&
+      x < FIELD_CX + FIELD_W_PX / 2 &&
+      y > FIELD_CY - FIELD_H_PX / 2 &&
+      y < FIELD_CY + FIELD_H_PX / 2
+    );
   }
 
-  private createPen(x: number, y: number): Pen {
-    const circle = this.add
-      .circle(x, y, PEN_RADIUS, 0x8b5a2b, 0.25)
-      .setDepth(1);
-    circle.setStrokeStyle(4, 0xffe099);
-    this.hudCamera.ignore(circle);
-    const label = this.add
-      .text(x, y, "PEN", {
-        fontFamily: FONT_UI,
-        fontSize: 24,
-        color: "#fff1c1",
-        resolution: TEXT_RESOLUTION,
-      })
-      .setOrigin(0.5)
-      .setDepth(2);
-    this.hudCamera.ignore(label);
-    const pen: Pen = { x, y, r: PEN_RADIUS, circle, label };
-    this.pens.push(pen);
-    return pen;
+  private marketContains(x: number, y: number): boolean {
+    return (
+      x > MARKET_CX - MARKET_W_PX / 2 &&
+      x < MARKET_CX + MARKET_W_PX / 2 &&
+      y > MARKET_CY - MARKET_H_PX / 2 &&
+      y < MARKET_CY + MARKET_H_PX / 2
+    );
   }
 
-  private startPenPlacement(): void {
-    if (this.placingPen) {
-      this.cancelPenPlacement();
-      return;
-    }
-    if (this.coins < this.penBuyCost) return;
-    this.placingPen = true;
-    this.penGhost.setVisible(true);
-    this.showBanner("Click to place pen  (ESC to cancel)");
-    this.updateShopButtons();
+  private sheepGoal(s: Sheep): { x: number; y: number } {
+    return s.stage === "adult"
+      ? { x: MARKET_CX, y: MARKET_CY }
+      : { x: FIELD_CX, y: FIELD_CY };
   }
 
-  private cancelPenPlacement(): void {
-    this.placingPen = false;
-    this.penGhost.setVisible(false);
-    this.updateShopButtons();
-  }
-
-  private placePenAt(x: number, y: number): void {
-    if (this.coins < this.penBuyCost) {
-      this.cancelPenPlacement();
-      return;
-    }
-    this.coins -= this.penBuyCost;
-    this.penBuyCost = Math.ceil(this.penBuyCost * 1.7);
-    this.createPen(x, y);
+  buySheep(): void {
+    if (this.coins < this.buySheepCost) return;
+    if (this.sheep.length >= MAX_SHEEP) return;
+    this.coins -= this.buySheepCost;
+    this.buySheepCost = Math.ceil(this.buySheepCost * 1.3);
+    this.spawnTruck();
     this.sound.play("pop");
-    this.cancelPenPlacement();
     this.updateCoinText();
   }
 
-  spawnSheep(ox?: number, oy?: number): void {
-    const jitter = 30;
+  private spawnTruck(): void {
+    const sprite = this.add
+      .rectangle(ROAD_CX, -TRUCK_H, TRUCK_W, TRUCK_H, 0x553322)
+      .setDepth(7);
+    sprite.setStrokeStyle(3, 0xcc9966);
+    this.hudCamera.ignore(sprite);
+    this.trucks.push({
+      sprite,
+      vx: 0,
+      vy: TRUCK_SPEED,
+      state: "arriving",
+      dropTimer: 0,
+      hasDropped: false,
+    });
+  }
+
+  private updateTrucks(dt: number): void {
+    for (let i = this.trucks.length - 1; i >= 0; i--) {
+      const t = this.trucks[i];
+      if (t.state === "arriving") {
+        t.sprite.y += t.vy * dt;
+        if (t.sprite.y >= DROP_Y) {
+          t.sprite.y = DROP_Y;
+          t.state = "dropping";
+          t.dropTimer = 0;
+        }
+      } else if (t.state === "dropping") {
+        t.dropTimer += dt;
+        if (!t.hasDropped && t.dropTimer >= 0.2) {
+          this.spawnSheep(t.sprite.x - TRUCK_W / 2 - 40, t.sprite.y);
+          t.hasDropped = true;
+        }
+        if (t.dropTimer >= 1.0) {
+          t.state = "leaving";
+        }
+      } else {
+        t.sprite.y += TRUCK_SPEED * dt;
+        if (t.sprite.y > WORLD_H + TRUCK_H) {
+          t.sprite.destroy();
+          this.trucks.splice(i, 1);
+        }
+      }
+    }
+  }
+
+  spawnSheep(ox?: number, oy?: number): Sheep {
+    const jitter = 18;
     let sx: number;
     let sy: number;
     if (ox !== undefined && oy !== undefined) {
       sx = ox + Phaser.Math.Between(-jitter, jitter);
       sy = oy + Phaser.Math.Between(-jitter, jitter);
     } else {
-      const sp =
-        this.mapSpawns[Phaser.Math.Between(0, this.mapSpawns.length - 1)];
-      sx = sp.x + Phaser.Math.Between(-jitter, jitter);
-      sy = sp.y + Phaser.Math.Between(-jitter, jitter);
+      sx = DROP_X - TRUCK_W / 2 - 40;
+      sy = DROP_Y;
     }
 
-    const pen = this.nearestPen(sx, sy) ?? this.pens[0];
-    const dx = sx - pen.x;
-    const dy = sy - pen.y;
+    // Head toward the field by default
+    const dx = FIELD_CX - sx;
+    const dy = FIELD_CY - sy;
     const d = Math.hypot(dx, dy) || 1;
     const v0 = 60;
     const initAngle = Math.atan2(dy, dx);
 
     const s = this.add.sprite(sx, sy, "sheep").setDepth(5);
+    s.setScale(BABY_SHEEP_SCALE);
     s.rotation = initAngle + Math.PI / 2;
     s.play("sheep-walk");
     this.hudCamera.ignore(s);
 
-    this.sheep.push({
+    const sheep: Sheep = {
       sprite: s,
       vx: (dx / d) * v0,
       vy: (dy / d) * v0,
       angle: initAngle,
-      penned: false,
+      stage: "baby",
+      growthT: 0,
+      sold: false,
       grazing: false,
       modeT: SHEEP_WALK_MIN_SEC + Math.random() * SHEEP_WALK_MAX_SEC,
       wanderAngle: initAngle,
       scaredMs: 0,
-    });
+    };
+    this.sheep.push(sheep);
+    return sheep;
   }
 
   private showBanner(msg: string): void {
@@ -632,7 +712,29 @@ export class ShepherdScene extends Phaser.Scene {
     });
   }
 
-  private playPenEntryFx(s: Sheep): void {
+  private playGrownFx(s: Sheep): void {
+    this.tweens.add({
+      targets: s.sprite,
+      scale: ADULT_SHEEP_SCALE * 1.25,
+      duration: 140,
+      yoyo: true,
+      ease: "Quad.easeOut",
+    });
+    const ring = this.add
+      .circle(s.sprite.x, s.sprite.y, 6, 0xffffff, 0)
+      .setDepth(11);
+    ring.setStrokeStyle(3, 0xbfffae, 1);
+    this.hudCamera.ignore(ring);
+    this.tweens.add({
+      targets: ring,
+      radius: SHEEP_RADIUS * 2.6,
+      strokeAlpha: 0,
+      duration: 500,
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  private playSaleFx(s: Sheep): void {
     this.tweens.addCounter({
       from: 0,
       to: 1,
@@ -645,13 +747,6 @@ export class ShepherdScene extends Phaser.Scene {
         s.sprite.setTint((r << 16) | (g << 8) | b);
       },
     });
-    this.tweens.add({
-      targets: s.sprite,
-      scale: 1.3,
-      duration: 120,
-      yoyo: true,
-      ease: "Quad.easeOut",
-    });
     const ring = this.add
       .circle(s.sprite.x, s.sprite.y, 6, 0xffffff, 0)
       .setDepth(11);
@@ -659,9 +754,9 @@ export class ShepherdScene extends Phaser.Scene {
     this.hudCamera.ignore(ring);
     this.tweens.add({
       targets: ring,
-      radius: SHEEP_RADIUS * 2.4,
+      radius: SHEEP_RADIUS * 2.8,
       strokeAlpha: 0,
-      duration: 450,
+      duration: 500,
       onComplete: () => ring.destroy(),
     });
   }
@@ -687,12 +782,19 @@ export class ShepherdScene extends Phaser.Scene {
       sheep: this.sheep.map((s) => ({
         x: s.sprite.x,
         y: s.sprite.y,
-        penned: s.penned,
+        stage: s.stage,
+        growthT: s.growthT,
       })),
-      pens: this.pens.map((p) => ({ x: p.x, y: p.y, radius: p.r })),
-      placingPen: this.placingPen,
+      trucks: this.trucks.map((t) => ({
+        x: t.sprite.x,
+        y: t.sprite.y,
+        state: t.state,
+      })),
+      field: { x: FIELD_CX, y: FIELD_CY, w: FIELD_W_PX, h: FIELD_H_PX },
+      market: { x: MARKET_CX, y: MARKET_CY, w: MARKET_W_PX, h: MARKET_H_PX },
       score: this.score,
       coins: this.coins,
+      buySheepCost: this.buySheepCost,
       viewport: { width: this.scale.width, height: this.scale.height },
     };
   }
@@ -718,6 +820,8 @@ export class ShepherdScene extends Phaser.Scene {
   private step(): void {
     const dt = ShepherdScene.stepSec;
     const dtMs = dt * 1000;
+
+    this.updateTrucks(dt);
 
     // --- Alpha dog (player-controlled) ---
     {
@@ -751,7 +855,10 @@ export class ShepherdScene extends Phaser.Scene {
         let diff = Math.atan2(desiredVy, desiredVx) - this.alphaDog.angle;
         while (diff > Math.PI) diff -= Math.PI * 2;
         while (diff < -Math.PI) diff += Math.PI * 2;
-        this.alphaDog.angle += Math.max(-DOG_TURN_RATE * dt, Math.min(DOG_TURN_RATE * dt, diff));
+        this.alphaDog.angle += Math.max(
+          -DOG_TURN_RATE * dt,
+          Math.min(DOG_TURN_RATE * dt, diff),
+        );
       }
       const speed = desiredSpd > 2 ? DOG_SPEED : 0;
       this.alphaDog.vx = Math.cos(this.alphaDog.angle) * speed;
@@ -769,16 +876,17 @@ export class ShepherdScene extends Phaser.Scene {
         DOG_RADIUS,
         WORLD_H - DOG_RADIUS,
       );
-      if (TREE_COLLISION) for (const t of this.mapTrees) {
-        const tdx = this.alphaDog.sprite.x - t.x;
-        const tdy = this.alphaDog.sprite.y - t.y;
-        const td = Math.hypot(tdx, tdy);
-        const minDist = t.r + DOG_RADIUS;
-        if (td < minDist && td > 0.01) {
-          this.alphaDog.sprite.x += (tdx / td) * (minDist - td);
-          this.alphaDog.sprite.y += (tdy / td) * (minDist - td);
+      if (TREE_COLLISION)
+        for (const t of this.mapTrees) {
+          const tdx = this.alphaDog.sprite.x - t.x;
+          const tdy = this.alphaDog.sprite.y - t.y;
+          const td = Math.hypot(tdx, tdy);
+          const minDist = t.r + DOG_RADIUS;
+          if (td < minDist && td > 0.01) {
+            this.alphaDog.sprite.x += (tdx / td) * (minDist - td);
+            this.alphaDog.sprite.y += (tdy / td) * (minDist - td);
+          }
         }
-      }
     }
 
     // Update facing targets once per step
@@ -787,11 +895,17 @@ export class ShepherdScene extends Phaser.Scene {
 
     // Return herding/defending dogs whose target is gone back to following
     for (const dog of this.dogs) {
-      if (dog.mode === "herding" && (!dog.targetSheep || dog.targetSheep.penned)) {
+      if (
+        dog.mode === "herding" &&
+        (!dog.targetSheep || dog.targetSheep.sold)
+      ) {
         dog.mode = "following";
         dog.targetSheep = null;
       }
-      if (dog.mode === "defending" && (!dog.targetWolf || !this.wolves.includes(dog.targetWolf))) {
+      if (
+        dog.mode === "defending" &&
+        (!dog.targetWolf || !this.wolves.includes(dog.targetWolf))
+      ) {
         dog.mode = "following";
         dog.targetWolf = null;
       }
@@ -829,10 +943,17 @@ export class ShepherdScene extends Phaser.Scene {
     for (let i = 0; i < followingDogs.length; i++) {
       const dog = followingDogs[i];
       // Alternate sides: 0→right, 1→left, 2→far-right, ...
-      const side = i % 2 === 0 ? Math.floor(i / 2) + 1 : -(Math.floor(i / 2) + 1);
+      const side =
+        i % 2 === 0 ? Math.floor(i / 2) + 1 : -(Math.floor(i / 2) + 1);
       const row = Math.floor(i / 2) + 1;
-      const targetX = this.alphaDog.sprite.x - fwdX * FOLLOW_DIST * row + perpX * FOLLOW_SPREAD * side * 0.5;
-      const targetY = this.alphaDog.sprite.y - fwdY * FOLLOW_DIST * row + perpY * FOLLOW_SPREAD * side * 0.5;
+      const targetX =
+        this.alphaDog.sprite.x -
+        fwdX * FOLLOW_DIST * row +
+        perpX * FOLLOW_SPREAD * side * 0.5;
+      const targetY =
+        this.alphaDog.sprite.y -
+        fwdY * FOLLOW_DIST * row +
+        perpY * FOLLOW_SPREAD * side * 0.5;
       const toX = targetX - dog.sprite.x;
       const toY = targetY - dog.sprite.y;
       const toDist = Math.hypot(toX, toY);
@@ -851,25 +972,25 @@ export class ShepherdScene extends Phaser.Scene {
 
       const sx = dog.targetSheep.sprite.x;
       const sy = dog.targetSheep.sprite.y;
-      const pen = this.nearestPen(sx, sy);
-      const pen_x = pen ? pen.x : sx;
-      const pen_y = pen ? pen.y : sy;
-      const towardPenDx = pen_x - sx;
-      const towardPenDy = pen_y - sy;
-      // base herd position: behind sheep away from pen
-      const baseAngle = Math.atan2(-towardPenDy, -towardPenDx);
+      const goal = this.sheepGoal(dog.targetSheep);
+      const towardGoalDx = goal.x - sx;
+      const towardGoalDy = goal.y - sy;
+      // base herd position: behind sheep away from goal
+      const baseAngle = Math.atan2(-towardGoalDy, -towardGoalDx);
 
       // Fan-out: find other herding dogs targeting sheep in the same cluster
       const clusterDogs = this.dogs.filter(
         (d) =>
           d.mode === "herding" &&
           d.targetSheep &&
-          Math.hypot(d.targetSheep.sprite.x - sx, d.targetSheep.sprite.y - sy) < HIGHLIGHT_CLUSTER_R,
+          Math.hypot(d.targetSheep.sprite.x - sx, d.targetSheep.sprite.y - sy) <
+            HIGHLIGHT_CLUSTER_R,
       );
       const myIdx = clusterDogs.indexOf(dog);
       const count = clusterDogs.length;
       const fanSpread = Math.PI / 4;
-      const fanAngle = count > 1 ? (myIdx / (count - 1) - 0.5) * fanSpread * 2 : 0;
+      const fanAngle =
+        count > 1 ? (myIdx / (count - 1) - 0.5) * fanSpread * 2 : 0;
 
       const herdAngle = baseAngle + fanAngle;
       const herdX = sx + Math.cos(herdAngle) * HERD_OFFSET;
@@ -905,8 +1026,12 @@ export class ShepherdScene extends Phaser.Scene {
       const wolf = this.wolves[i];
 
       // Remove if out of world bounds
-      if (wolf.sprite.x < -60 || wolf.sprite.x > WORLD_W + 60 ||
-          wolf.sprite.y < -60 || wolf.sprite.y > WORLD_H + 60) {
+      if (
+        wolf.sprite.x < -60 ||
+        wolf.sprite.x > WORLD_W + 60 ||
+        wolf.sprite.y < -60 ||
+        wolf.sprite.y > WORLD_H + 60
+      ) {
         wolf.sprite.destroy();
         this.wolves.splice(i, 1);
         continue;
@@ -919,7 +1044,8 @@ export class ShepherdScene extends Phaser.Scene {
         ? [this.alphaDog.sprite]
         : [];
       for (const dog of this.dogs) {
-        if (dog.mode === "defending" && dog.targetWolf === wolf) scareSources.push(dog.sprite);
+        if (dog.mode === "defending" && dog.targetWolf === wolf)
+          scareSources.push(dog.sprite);
       }
       for (const src of scareSources) {
         const ddx = wolf.sprite.x - src.x;
@@ -940,13 +1066,19 @@ export class ShepherdScene extends Phaser.Scene {
         wolf.sprite.rotation = wolf.angle;
       } else {
         // Normal: turn toward nearest sheep and move
-        if (!wolf.targetSheep || wolf.targetSheep.penned) {
+        if (!wolf.targetSheep || wolf.targetSheep.sold) {
           let best: Sheep | null = null;
           let bestDist = Infinity;
           for (const s of this.sheep) {
-            if (s.penned) continue;
-            const d = Math.hypot(s.sprite.x - wolf.sprite.x, s.sprite.y - wolf.sprite.y);
-            if (d < bestDist) { bestDist = d; best = s; }
+            if (s.sold) continue;
+            const d = Math.hypot(
+              s.sprite.x - wolf.sprite.x,
+              s.sprite.y - wolf.sprite.y,
+            );
+            if (d < bestDist) {
+              bestDist = d;
+              best = s;
+            }
           }
           wolf.targetSheep = best;
         }
@@ -975,7 +1107,10 @@ export class ShepherdScene extends Phaser.Scene {
           let diff = Math.atan2(desiredVy, desiredVx) - wolf.angle;
           while (diff > Math.PI) diff -= Math.PI * 2;
           while (diff < -Math.PI) diff += Math.PI * 2;
-          wolf.angle += Math.max(-WOLF_TURN_RATE * dt, Math.min(WOLF_TURN_RATE * dt, diff));
+          wolf.angle += Math.max(
+            -WOLF_TURN_RATE * dt,
+            Math.min(WOLF_TURN_RATE * dt, diff),
+          );
           wolf.vx = Math.cos(wolf.angle) * WOLF_NORMAL_SPEED;
           wolf.vy = Math.sin(wolf.angle) * WOLF_NORMAL_SPEED;
         } else {
@@ -991,7 +1126,7 @@ export class ShepherdScene extends Phaser.Scene {
     // --- Sheep behavior ---
     for (let i = 0; i < this.sheep.length; i++) {
       const s = this.sheep[i];
-      if (s.penned) continue;
+      if (s.sold) continue;
 
       let ax = 0;
       let ay = 0;
@@ -1013,7 +1148,7 @@ export class ShepherdScene extends Phaser.Scene {
       for (let j = 0; j < this.sheep.length; j++) {
         if (i === j) continue;
         const o = this.sheep[j];
-        if (o.penned) continue;
+        if (o.sold) continue;
         const odx = s.sprite.x - o.sprite.x;
         const ody = s.sprite.y - o.sprite.y;
         const od = Math.hypot(odx, ody);
@@ -1034,7 +1169,7 @@ export class ShepherdScene extends Phaser.Scene {
       for (let j = 0; j < this.sheep.length; j++) {
         if (i === j) continue;
         const o = this.sheep[j];
-        if (o.penned) continue;
+        if (o.sold) continue;
         const odx = o.sprite.x - s.sprite.x;
         const ody = o.sprite.y - s.sprite.y;
         const od = Math.hypot(odx, ody);
@@ -1072,9 +1207,9 @@ export class ShepherdScene extends Phaser.Scene {
         s.grazing = alignN === 0 ? !s.grazing : false;
         s.modeT = s.grazing
           ? SHEEP_GRAZE_MIN_SEC +
-          Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
+            Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
           : SHEEP_WALK_MIN_SEC +
-          Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
+            Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
         if (!s.grazing) s.wanderAngle = Math.random() * Math.PI * 2;
       }
       if (!s.grazing && alignN === 0) {
@@ -1124,45 +1259,50 @@ export class ShepherdScene extends Phaser.Scene {
         continue;
       }
 
-      if (TREE_COLLISION) for (const t of this.mapTrees) {
-        const tdx = s.sprite.x - t.x;
-        const tdy = s.sprite.y - t.y;
-        const td = Math.hypot(tdx, tdy);
-        const minDist = t.r + SHEEP_RADIUS;
-        if (td < minDist && td > 0.01) {
-          s.sprite.x += (tdx / td) * (minDist - td);
-          s.sprite.y += (tdy / td) * (minDist - td);
+      if (TREE_COLLISION)
+        for (const t of this.mapTrees) {
+          const tdx = s.sprite.x - t.x;
+          const tdy = s.sprite.y - t.y;
+          const td = Math.hypot(tdx, tdy);
+          const minDist = t.r + SHEEP_RADIUS;
+          if (td < minDist && td > 0.01) {
+            s.sprite.x += (tdx / td) * (minDist - td);
+            s.sprite.y += (tdy / td) * (minDist - td);
+          }
+        }
+
+      // Field growth — babies grow into adults while in the field
+      if (s.stage === "baby" && this.fieldContains(s.sprite.x, s.sprite.y)) {
+        s.growthT += dt;
+        const t = Math.min(1, s.growthT / GROW_SEC);
+        const scale =
+          BABY_SHEEP_SCALE + (ADULT_SHEEP_SCALE - BABY_SHEEP_SCALE) * t;
+        s.sprite.setScale(scale);
+        if (s.growthT >= GROW_SEC) {
+          s.stage = "adult";
+          s.sprite.setScale(ADULT_SHEEP_SCALE);
+          this.playGrownFx(s);
         }
       }
 
-      // Pen check — penned if contained in any pen
-      let insidePen = false;
-      for (const p of this.pens) {
-        const pdx = s.sprite.x - p.x;
-        const pdy = s.sprite.y - p.y;
-        if (Math.hypot(pdx, pdy) + SHEEP_RADIUS <= p.r) {
-          insidePen = true;
-          break;
-        }
-      }
-      if (insidePen) {
-        s.penned = true;
+      // Market sale — adults entering the market are sold
+      if (s.stage === "adult" && this.marketContains(s.sprite.x, s.sprite.y)) {
+        s.sold = true;
         s.vx = 0;
         s.vy = 0;
         this.score++;
-        this.coins++;
+        this.coins += SELL_SHEEP_VALUE;
         this.updateCoinText();
         this.sound.play("score");
-        this.playPenEntryFx(s);
+        this.playSaleFx(s);
 
-        // Fade out penned sheep after a moment
-        this.time.delayedCall(800, () => {
+        this.time.delayedCall(400, () => {
           if (s.sprite.active) {
             this.tweens.add({
               targets: s.sprite,
               alpha: 0,
               scale: 0.3,
-              duration: 450,
+              duration: 400,
               onComplete: () => {
                 s.sprite.destroy();
                 const idx = this.sheep.indexOf(s);
@@ -1178,10 +1318,10 @@ export class ShepherdScene extends Phaser.Scene {
     const minSep = SHEEP_RADIUS * 2;
     for (let i = 0; i < this.sheep.length; i++) {
       const a = this.sheep[i];
-      if (a.penned) continue;
+      if (a.sold) continue;
       for (let j = i + 1; j < this.sheep.length; j++) {
         const b = this.sheep[j];
-        if (b.penned) continue;
+        if (b.sold) continue;
         const dx = b.sprite.x - a.sprite.x;
         const dy = b.sprite.y - a.sprite.y;
         const dist = Math.hypot(dx, dy);
@@ -1198,13 +1338,21 @@ export class ShepherdScene extends Phaser.Scene {
     }
   }
 
-  private moveDog(dog: Dog, desiredVx: number, desiredVy: number, dt: number): void {
+  private moveDog(
+    dog: Dog,
+    desiredVx: number,
+    desiredVy: number,
+    dt: number,
+  ): void {
     const desiredSpd = Math.hypot(desiredVx, desiredVy);
     if (desiredSpd > 2) {
       let diff = Math.atan2(desiredVy, desiredVx) - dog.angle;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
-      dog.angle += Math.max(-DOG_TURN_RATE * dt, Math.min(DOG_TURN_RATE * dt, diff));
+      dog.angle += Math.max(
+        -DOG_TURN_RATE * dt,
+        Math.min(DOG_TURN_RATE * dt, diff),
+      );
       dog.vx = Math.cos(dog.angle) * desiredSpd;
       dog.vy = Math.sin(dog.angle) * desiredSpd;
     } else {
@@ -1214,18 +1362,27 @@ export class ShepherdScene extends Phaser.Scene {
     dog.sprite.x += dog.vx * dt;
     dog.sprite.y += dog.vy * dt;
     dog.sprite.rotation = dog.angle;
-    dog.sprite.x = Phaser.Math.Clamp(dog.sprite.x, DOG_RADIUS, WORLD_W - DOG_RADIUS);
-    dog.sprite.y = Phaser.Math.Clamp(dog.sprite.y, DOG_RADIUS, WORLD_H - DOG_RADIUS);
-    if (TREE_COLLISION) for (const t of this.mapTrees) {
-      const tdx = dog.sprite.x - t.x;
-      const tdy = dog.sprite.y - t.y;
-      const td = Math.hypot(tdx, tdy);
-      const minDist = t.r + DOG_RADIUS;
-      if (td < minDist && td > 0.01) {
-        dog.sprite.x += (tdx / td) * (minDist - td);
-        dog.sprite.y += (tdy / td) * (minDist - td);
+    dog.sprite.x = Phaser.Math.Clamp(
+      dog.sprite.x,
+      DOG_RADIUS,
+      WORLD_W - DOG_RADIUS,
+    );
+    dog.sprite.y = Phaser.Math.Clamp(
+      dog.sprite.y,
+      DOG_RADIUS,
+      WORLD_H - DOG_RADIUS,
+    );
+    if (TREE_COLLISION)
+      for (const t of this.mapTrees) {
+        const tdx = dog.sprite.x - t.x;
+        const tdy = dog.sprite.y - t.y;
+        const td = Math.hypot(tdx, tdy);
+        const minDist = t.r + DOG_RADIUS;
+        if (td < minDist && td > 0.01) {
+          dog.sprite.x += (tdx / td) * (minDist - td);
+          dog.sprite.y += (tdy / td) * (minDist - td);
+        }
       }
-    }
   }
 
   private findFacingWolf(): Wolf | null {
@@ -1239,7 +1396,10 @@ export class ShepherdScene extends Phaser.Scene {
       const dist = Math.hypot(dx, dy);
       if (dist > FACING_RANGE || dist < 0.01) continue;
       const dot = (dx / dist) * fwdX + (dy / dist) * fwdY;
-      if (dot > bestDot) { bestDot = dot; best = w; }
+      if (dot > bestDot) {
+        bestDot = dot;
+        best = w;
+      }
     }
     return best;
   }
@@ -1250,7 +1410,7 @@ export class ShepherdScene extends Phaser.Scene {
     let best: Sheep | null = null;
     let bestDot = Math.cos(FACING_CONE);
     for (const s of this.sheep) {
-      if (s.penned) continue;
+      if (s.sold) continue;
       const dx = s.sprite.x - this.alphaDog.sprite.x;
       const dy = s.sprite.y - this.alphaDog.sprite.y;
       const dist = Math.hypot(dx, dy);
@@ -1294,7 +1454,8 @@ export class ShepherdScene extends Phaser.Scene {
 
   private updateHighlight(): void {
     this.highlightGfx.clear();
-    const pulse = 0.55 + 0.45 * Math.sin(((Date.now() % 800) / 800) * Math.PI * 2);
+    const pulse =
+      0.55 + 0.45 * Math.sin(((Date.now() % 800) / 800) * Math.PI * 2);
     if (this.facingWolf) {
       this.highlightGfx.lineStyle(3, 0xff4444, pulse);
       this.highlightGfx.strokeRect(
@@ -1305,10 +1466,20 @@ export class ShepherdScene extends Phaser.Scene {
       );
     } else if (this.facingSheep) {
       for (const s of this.sheep) {
-        if (s.penned) continue;
-        if (Math.hypot(s.sprite.x - this.facingSheep.sprite.x, s.sprite.y - this.facingSheep.sprite.y) > HIGHLIGHT_CLUSTER_R) continue;
+        if (s.sold) continue;
+        if (
+          Math.hypot(
+            s.sprite.x - this.facingSheep.sprite.x,
+            s.sprite.y - this.facingSheep.sprite.y,
+          ) > HIGHLIGHT_CLUSTER_R
+        )
+          continue;
         this.highlightGfx.lineStyle(3, 0xffd700, pulse);
-        this.highlightGfx.strokeCircle(s.sprite.x, s.sprite.y, SHEEP_RADIUS + 7);
+        this.highlightGfx.strokeCircle(
+          s.sprite.x,
+          s.sprite.y,
+          SHEEP_RADIUS + 7,
+        );
       }
     }
   }
@@ -1349,8 +1520,8 @@ export class ShepherdScene extends Phaser.Scene {
     stats.style.cssText =
       "margin-bottom:10px;padding:4px 6px;background:#1a1a2e;border-radius:3px;color:#fa8;";
     const refreshStats = () => {
-      const unpenned = this.sheep.filter((s) => !s.penned).length;
-      stats.textContent = `sheep: ${unpenned}  dogs: ${this.dogs.length}`;
+      const alive = this.sheep.filter((s) => !s.sold).length;
+      stats.textContent = `sheep: ${alive}  dogs: ${this.dogs.length}`;
       if (this.debugPanel) requestAnimationFrame(refreshStats);
     };
     refreshStats();
@@ -1377,97 +1548,97 @@ export class ShepherdScene extends Phaser.Scene {
       max: number;
       step: number;
     }> = [
-        {
-          label: "Max Speed",
-          get: () => SHEEP_MAX_SPEED,
-          set: (v) => {
-            SHEEP_MAX_SPEED = v;
-          },
-          min: 0,
-          max: 800,
-          step: 5,
+      {
+        label: "Max Speed",
+        get: () => SHEEP_MAX_SPEED,
+        set: (v) => {
+          SHEEP_MAX_SPEED = v;
         },
-        {
-          label: "Damping",
-          get: () => SHEEP_DAMPING,
-          set: (v) => {
-            SHEEP_DAMPING = v;
-          },
-          min: 0.8,
-          max: 0.999,
-          step: 0.001,
+        min: 0,
+        max: 800,
+        step: 5,
+      },
+      {
+        label: "Damping",
+        get: () => SHEEP_DAMPING,
+        set: (v) => {
+          SHEEP_DAMPING = v;
         },
-        {
-          label: "Wander Force",
-          get: () => SHEEP_WANDER_FORCE,
-          set: (v) => {
-            SHEEP_WANDER_FORCE = v;
-          },
-          min: 0,
-          max: 400,
-          step: 5,
+        min: 0.8,
+        max: 0.999,
+        step: 0.001,
+      },
+      {
+        label: "Wander Force",
+        get: () => SHEEP_WANDER_FORCE,
+        set: (v) => {
+          SHEEP_WANDER_FORCE = v;
         },
-        {
-          label: "Cohesion Force",
-          get: () => SHEEP_COHESION_FORCE,
-          set: (v) => {
-            SHEEP_COHESION_FORCE = v;
-          },
-          min: 0,
-          max: 200,
-          step: 2,
+        min: 0,
+        max: 400,
+        step: 5,
+      },
+      {
+        label: "Cohesion Force",
+        get: () => SHEEP_COHESION_FORCE,
+        set: (v) => {
+          SHEEP_COHESION_FORCE = v;
         },
-        {
-          label: "Alignment Force",
-          get: () => ALIGNMENT_FORCE,
-          set: (v) => {
-            ALIGNMENT_FORCE = v;
-          },
-          min: 0,
-          max: 300,
-          step: 5,
+        min: 0,
+        max: 200,
+        step: 2,
+      },
+      {
+        label: "Alignment Force",
+        get: () => ALIGNMENT_FORCE,
+        set: (v) => {
+          ALIGNMENT_FORCE = v;
         },
-        {
-          label: "Flee Force",
-          get: () => FLEE_FORCE,
-          set: (v) => {
-            FLEE_FORCE = v;
-          },
-          min: 0,
-          max: 1000,
-          step: 10,
+        min: 0,
+        max: 300,
+        step: 5,
+      },
+      {
+        label: "Flee Force",
+        get: () => FLEE_FORCE,
+        set: (v) => {
+          FLEE_FORCE = v;
         },
-        {
-          label: "Fear Radius",
-          get: () => FEAR_RADIUS,
-          set: (v) => {
-            FEAR_RADIUS = v;
-          },
-          min: 0,
-          max: 500,
-          step: 5,
+        min: 0,
+        max: 1000,
+        step: 10,
+      },
+      {
+        label: "Fear Radius",
+        get: () => FEAR_RADIUS,
+        set: (v) => {
+          FEAR_RADIUS = v;
         },
-        {
-          label: "Panic Inherit",
-          get: () => PANIC_INHERIT,
-          set: (v) => {
-            PANIC_INHERIT = v;
-          },
-          min: 0,
-          max: 1,
-          step: 0.05,
+        min: 0,
+        max: 500,
+        step: 5,
+      },
+      {
+        label: "Panic Inherit",
+        get: () => PANIC_INHERIT,
+        set: (v) => {
+          PANIC_INHERIT = v;
         },
-        {
-          label: "Turn Rate",
-          get: () => SHEEP_TURN_RATE,
-          set: (v) => {
-            SHEEP_TURN_RATE = v;
-          },
-          min: 0.5,
-          max: 15,
-          step: 0.5,
+        min: 0,
+        max: 1,
+        step: 0.05,
+      },
+      {
+        label: "Turn Rate",
+        get: () => SHEEP_TURN_RATE,
+        set: (v) => {
+          SHEEP_TURN_RATE = v;
         },
-      ];
+        min: 0.5,
+        max: 15,
+        step: 0.5,
+      },
+    ];
 
     for (const cfg of params) {
       const row = document.createElement("div");

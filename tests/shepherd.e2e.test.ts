@@ -18,27 +18,38 @@ afterAll(async () => {
   await game.close();
 });
 
-describe("shepherd idle clicker", () => {
-  it("starts with sheep on the field and no dogs", async () => {
+describe("shepherd core loop", () => {
+  it("starts empty — no sheep, no dogs until the player buys them", async () => {
     await game.startScene("Shepherd");
     const s = await shepherdState();
-    expect(s.sheep.length).toBeGreaterThan(0);
+    expect(s.sheep.length).toBe(0);
     expect(s.dogs.length).toBe(0);
+    expect(s.coins).toBeGreaterThan(0);
   });
 
-  it("spawns more sheep over time", async () => {
+  it("buying a sheep spawns a truck and drops a baby sheep", async () => {
     await game.startScene("Shepherd");
-    const before = await shepherdState();
-    const initialCount = before.sheep.length;
 
-    // Advance past a spawn interval
-    await game.advanceTime(4000);
+    await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      gs.coins = 100;
+      gs.updateCoinText();
+      gs.buySheep();
+    })()`);
+
+    const truckOnly = await shepherdState();
+    expect(truckOnly.trucks.length).toBe(1);
+
+    // Give the truck time to drive to the drop point and release the sheep
+    await game.advanceTime(8000);
+
     const after = await shepherdState();
-    expect(after.sheep.length).toBeGreaterThan(initialCount);
+    expect(after.sheep.length).toBeGreaterThanOrEqual(1);
+    expect(after.sheep[0].stage).toBe("baby");
+    expect(after.coins).toBeLessThan(100);
   });
 
-
-  it("buying a dog adds an active dog and spends coins", async () => {
+  it("buying a dog adds a dog and spends coins", async () => {
     await game.startScene("Shepherd");
 
     await game.eval_(`(() => {
@@ -53,23 +64,46 @@ describe("shepherd idle clicker", () => {
     expect(s.coins).toBeLessThan(100);
   });
 
-  it("penning a sheep increments score and coins", async () => {
+  it("baby sheep in the field grow into adults over time", async () => {
     await game.startScene("Shepherd");
 
     await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Shepherd');
-      gs.spawnSheep();
-      const s = gs.sheep[gs.sheep.length - 1];
-      const pen = gs.pens[0];
-      s.sprite.x = pen.x;
-      s.sprite.y = pen.y;
-      s.vx = 0;
-      s.vy = 0;
+      const sheep = gs.spawnSheep();
+      sheep.sprite.x = gs.dumpState().field.x;
+      sheep.sprite.y = gs.dumpState().field.y;
+      sheep.vx = 0;
+      sheep.vy = 0;
     })()`);
-    await game.advanceTime(50);
+
+    await game.advanceTime(15000);
+
+    const s = await shepherdState();
+    const adults = s.sheep.filter((sh) => sh.stage === "adult");
+    expect(adults.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("adult sheep in the market are sold for coins", async () => {
+    await game.startScene("Shepherd");
+
+    const startCoins = (await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      const sheep = gs.spawnSheep();
+      sheep.stage = 'adult';
+      sheep.growthT = 999;
+      sheep.sprite.setScale(1);
+      const m = gs.dumpState().market;
+      sheep.sprite.x = m.x;
+      sheep.sprite.y = m.y;
+      sheep.vx = 0;
+      sheep.vy = 0;
+      return gs.coins;
+    })()`)) as number;
+
+    await game.advanceTime(200);
 
     const s = await shepherdState();
     expect(s.score).toBeGreaterThanOrEqual(1);
-    expect(s.coins).toBeGreaterThanOrEqual(1);
+    expect(s.coins).toBeGreaterThan(startCoins);
   });
 });
