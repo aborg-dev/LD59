@@ -131,6 +131,7 @@ interface Wolf {
   vy: number;
   angle: number;
   scaredMs: number;
+  howled: boolean;
 }
 
 interface Dog {
@@ -215,6 +216,7 @@ export class ShepherdScene extends Phaser.Scene {
 
   private trucks: Truck[] = [];
   private gameOverTriggered = false;
+  private bgMusic?: Phaser.Sound.BaseSound;
   private paused = false;
   private placingGuard = false;
   private guardMarkers: Phaser.GameObjects.Graphics[] = [];
@@ -279,6 +281,9 @@ export class ShepherdScene extends Phaser.Scene {
     this.sheep = [];
     this.trucks = [];
     this.gameOverTriggered = false;
+    this.bgMusic?.stop();
+    this.bgMusic = this.sound.add("background", { loop: true, volume: 0.25 });
+    this.bgMusic.play();
     this.dogBuyCost = 5;
     this.guardBuyCost = GUARD_BUY_BASE_COST;
     this.buySheepCost = BUY_SHEEP_BASE_COST;
@@ -763,6 +768,7 @@ export class ShepherdScene extends Phaser.Scene {
       vy: 0,
       angle: 0,
       scaredMs: 0,
+      howled: false,
     });
   }
 
@@ -1213,6 +1219,7 @@ export class ShepherdScene extends Phaser.Scene {
       dropTimer: 0,
       hasDropped: false,
     });
+    this.sound.play("truck", { volume: 0.5 });
   }
 
   private checkGameOver(): void {
@@ -1778,6 +1785,18 @@ export class ShepherdScene extends Phaser.Scene {
 
       wolf.scaredMs = Math.max(0, wolf.scaredMs - dtMs);
 
+      // Howl once when the wolf first gets within alarm range of the field
+      if (!wolf.howled) {
+        const dFld = Math.hypot(
+          wolf.sprite.x - FIELD_CX,
+          wolf.sprite.y - FIELD_CY,
+        );
+        if (dFld < 700) {
+          wolf.howled = true;
+          this.sound.play("howl", { volume: 0.3 });
+        }
+      }
+
       // Dog contact: scare wolf and send it fleeing
       const scareSources: { x: number; y: number }[] = this.alphaDog
         ? [this.alphaDog.sprite]
@@ -1803,7 +1822,7 @@ export class ShepherdScene extends Phaser.Scene {
         const ddy = wolf.sprite.y - src.y;
         const dd = Math.hypot(ddx, ddy);
         if (dd < WOLF_CONTACT_RANGE && dd > 0.01) {
-          if (wolf.scaredMs <= 0) this.sound.play("pop");
+          if (wolf.scaredMs <= 0) this.playBarkSound();
           wolf.scaredMs = WOLF_SCARED_MS;
           wolf.vx = (ddx / dd) * WOLF_FLEE_SPEED;
           wolf.vy = (ddy / dd) * WOLF_FLEE_SPEED;
@@ -2835,5 +2854,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.debugPanel = null;
     this.editorPanel?.remove();
     this.editorPanel = null;
+    this.bgMusic?.stop();
+    this.bgMusic = undefined;
   }
 }
