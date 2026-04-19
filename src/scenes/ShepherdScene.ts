@@ -493,7 +493,7 @@ export class ShepherdScene extends Phaser.Scene {
     const alphaSprite = this.add
       .sprite(alphaStartX, alphaStartY, "dog_straight")
       .setOrigin(0.5, 0.25)
-      .setDepth(11)
+      .setDepth(1.8)
       .play("dog_straight");
     this.hudCamera.ignore(alphaSprite);
     this.alphaDog = {
@@ -732,7 +732,7 @@ export class ShepherdScene extends Phaser.Scene {
     const sprite = this.add
       .sprite(x, y, "dog_straight")
       .setOrigin(0.5, 0.25)
-      .setDepth(10)
+      .setDepth(1.7)
       .setScale(0.75)
       .setTint(0xdddddd)
       .play("dog_straight");
@@ -1077,7 +1077,7 @@ export class ShepherdScene extends Phaser.Scene {
     const sprite = this.add
       .sprite(x, y, "dog_straight")
       .setOrigin(0.5, 0.25)
-      .setDepth(10)
+      .setDepth(1.7)
       .setScale(0.75)
       .setTint(0xddaaff)
       .play("dog_straight");
@@ -1405,7 +1405,9 @@ export class ShepherdScene extends Phaser.Scene {
       .setOrigin(0.5, 0.35)
       .setDisplaySize(TRUCK_W, TRUCK_H)
       .setScale(2.0)
-      .setDepth(7);
+      .setDepth(1.8
+
+      );
     this.hudCamera.ignore(sprite);
     const initAngle = Math.atan2(
       ROAD_WAYPOINTS[1].y - ROAD_WAYPOINTS[0].y,
@@ -1625,7 +1627,7 @@ export class ShepherdScene extends Phaser.Scene {
     const v0 = 60;
     const initAngle = Math.atan2(dy, dx);
 
-    const s = this.add.sprite(sx, sy, "sheep").setDepth(5);
+    const s = this.add.sprite(sx, sy, "sheep").setDepth(1.5);
     s.setScale(BABY_SHEEP_SCALE);
     s.rotation = initAngle + Math.PI / 2;
     s.play("sheep-walk");
