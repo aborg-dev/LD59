@@ -179,6 +179,7 @@ export class ShepherdScene extends Phaser.Scene {
   private accumulator = 0;
 
   private trucks: Truck[] = [];
+  private gameOverTriggered = false;
 
   private coinText!: Phaser.GameObjects.Text;
   private dogCountText!: Phaser.GameObjects.Text;
@@ -222,6 +223,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.wolves = [];
     this.sheep = [];
     this.trucks = [];
+    this.gameOverTriggered = false;
     this.dogBuyCost = 5;
     this.buySheepCost = BUY_SHEEP_BASE_COST;
 
@@ -629,6 +631,21 @@ export class ShepherdScene extends Phaser.Scene {
     });
   }
 
+  private checkGameOver(): void {
+    if (this.gameOverTriggered) return;
+    if (this.coins >= this.buySheepCost) return;
+    if (this.sheep.some((s) => !s.sold)) return;
+    if (this.trucks.length > 0) return;
+    this.gameOverTriggered = true;
+    this.showBanner("Out of sheep!");
+    this.time.delayedCall(1400, () => {
+      this.scene.start("GameOver", {
+        score: this.score,
+        returnScene: "Shepherd",
+      });
+    });
+  }
+
   private updateTrucks(dt: number): void {
     for (let i = this.trucks.length - 1; i >= 0; i--) {
       const t = this.trucks[i];
@@ -839,6 +856,7 @@ export class ShepherdScene extends Phaser.Scene {
     const dtMs = dt * 1000;
 
     this.updateTrucks(dt);
+    this.checkGameOver();
 
     // --- Alpha dog (player-controlled) ---
     {
@@ -1302,6 +1320,28 @@ export class ShepherdScene extends Phaser.Scene {
             s.sprite.y += (tdy / td) * (minDist - td);
           }
         }
+
+      // Babies that have started growing can't leave the field until adult
+      if (s.stage === "baby" && s.growthT > 0) {
+        const minX = FIELD_CX - FIELD_W_PX / 2 + SHEEP_RADIUS;
+        const maxX = FIELD_CX + FIELD_W_PX / 2 - SHEEP_RADIUS;
+        const minY = FIELD_CY - FIELD_H_PX / 2 + SHEEP_RADIUS;
+        const maxY = FIELD_CY + FIELD_H_PX / 2 - SHEEP_RADIUS;
+        if (s.sprite.x < minX) {
+          s.sprite.x = minX;
+          s.vx = Math.abs(s.vx);
+        } else if (s.sprite.x > maxX) {
+          s.sprite.x = maxX;
+          s.vx = -Math.abs(s.vx);
+        }
+        if (s.sprite.y < minY) {
+          s.sprite.y = minY;
+          s.vy = Math.abs(s.vy);
+        } else if (s.sprite.y > maxY) {
+          s.sprite.y = maxY;
+          s.vy = -Math.abs(s.vy);
+        }
+      }
 
       // Field growth — babies grow into adults while in the field
       if (s.stage === "baby" && this.fieldContains(s.sprite.x, s.sprite.y)) {

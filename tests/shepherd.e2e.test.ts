@@ -77,24 +77,55 @@ describe("shepherd core loop", () => {
       sheep.vy = 0;
     })()`);
 
-    // Re-pin the sheep every second so wander doesn't drift it out of the field.
-    for (let i = 0; i < 15; i++) {
-      await game.advanceTime(1000);
-      await game.eval_(`(() => {
-        const gs = window.game.scene.getScene('Shepherd');
-        const s = gs.sheep[0];
-        if (!s) return;
-        const f = gs.dumpState().field;
-        s.sprite.x = f.x;
-        s.sprite.y = f.y;
-        s.vx = 0;
-        s.vy = 0;
-      })()`);
-    }
+    await game.advanceTime(15000);
 
     const s = await shepherdState();
     const adults = s.sheep.filter((sh) => sh.stage === "adult");
     expect(adults.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("triggers game over when out of money and sheep", async () => {
+    await game.startScene("Shepherd");
+
+    await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      gs.coins = 0;
+      gs.updateCoinText();
+      for (const s of gs.sheep) s.sprite.destroy();
+      gs.sheep = [];
+      for (const t of gs.trucks) t.sprite.destroy();
+      gs.trucks = [];
+    })()`);
+
+    await game.advanceTime(2000);
+    const dump = await game.dumpState();
+    expect(dump.Shepherd?.active).toBe(false);
+    expect(dump.GameOver?.active).toBe(true);
+  });
+
+  it("growing baby sheep cannot wander out of the field", async () => {
+    await game.startScene("Shepherd");
+
+    await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      const sheep = gs.spawnSheep();
+      const f = gs.dumpState().field;
+      sheep.sprite.x = f.x;
+      sheep.sprite.y = f.y;
+      sheep.vx = 0;
+      sheep.vy = 0;
+    })()`);
+
+    // Let it enter the field so growthT > 0, then advance partially — it must stay inside
+    await game.advanceTime(2000);
+    const mid = await shepherdState();
+    const f = mid.field;
+    const sheep = mid.sheep[0];
+    expect(sheep.stage).toBe("baby");
+    expect(sheep.x).toBeGreaterThan(f.x - f.w / 2);
+    expect(sheep.x).toBeLessThan(f.x + f.w / 2);
+    expect(sheep.y).toBeGreaterThan(f.y - f.h / 2);
+    expect(sheep.y).toBeLessThan(f.y + f.h / 2);
   });
 
   it("adult sheep in the market are sold for coins", async () => {

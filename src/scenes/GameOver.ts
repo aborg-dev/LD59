@@ -46,7 +46,7 @@ export class GameOver extends Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(width / 2, height / 2 + 60, "sheep penned", {
+      .text(width / 2, height / 2 + 60, "sheep sold", {
         fontFamily: FONT_BODY,
         fontSize: 28,
         color: "#cccccc",
