@@ -40,6 +40,7 @@ const SHEAR_CY = 440;
 const SHEAR_W_PX = 220;
 const SHEAR_H_PX = 170;
 const SHEAR_VALUE = 5;
+const SHEAR_SEC = 4;
 const MARKET_W_PX = 260;
 const MARKET_H_PX = 200;
 
@@ -114,6 +115,7 @@ interface Sheep {
   angle: number;
   stage: "baby" | "adult";
   growthT: number;
+  shearT: number;
   sold: boolean;
   waiting: boolean;
   grazing: boolean;
@@ -1184,6 +1186,7 @@ export class ShepherdScene extends Phaser.Scene {
       angle: initAngle,
       stage: "baby",
       growthT: 0,
+      shearT: 0,
       sold: false,
       waiting: false,
       salePrice: 0,
@@ -2033,22 +2036,34 @@ export class ShepherdScene extends Phaser.Scene {
         }
       }
 
-      // Shearing — adults entering the shear shed revert to babies and
-      // pay out a smaller sum. Repeatable for more income than straight sale.
+      // Shearing — adults inside the shear shed progressively shrink back to
+      // babies over SHEAR_SEC seconds. Leaving the shed resets progress.
       if (
         s.stage === "adult" &&
         !s.sold &&
         this.shearContains(s.sprite.x, s.sprite.y)
       ) {
-        this.coins += SHEAR_VALUE;
-        this.updateCoinText();
-        this.sound.play("pop");
-        this.playShearFx(s);
-        s.stage = "baby";
-        s.growthT = 0;
-        s.sprite.setScale(BABY_SHEEP_SCALE);
-        s.readyIcon?.destroy();
-        s.readyIcon = undefined;
+        s.shearT += dt;
+        const t = Math.min(1, s.shearT / SHEAR_SEC);
+        const scale =
+          ADULT_SHEEP_SCALE - (ADULT_SHEEP_SCALE - BABY_SHEEP_SCALE) * t;
+        s.sprite.setScale(scale);
+        if (s.shearT >= SHEAR_SEC) {
+          this.coins += SHEAR_VALUE;
+          this.updateCoinText();
+          this.sound.play("pop");
+          this.playShearFx(s);
+          s.stage = "baby";
+          s.growthT = 0;
+          s.shearT = 0;
+          s.sprite.setScale(BABY_SHEEP_SCALE);
+          s.readyIcon?.destroy();
+          s.readyIcon = undefined;
+        }
+      } else if (s.stage === "adult" && s.shearT > 0) {
+        // Left the shed mid-shear — reset progress and scale
+        s.shearT = 0;
+        s.sprite.setScale(ADULT_SHEEP_SCALE);
       }
 
       // Market — adults entering the market wait, then sell individually

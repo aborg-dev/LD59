@@ -377,7 +377,7 @@ describe("shepherd core loop", () => {
     expect(sheep.y).toBeLessThan(f.y + f.h / 2);
   });
 
-  it("shearing an adult pays out and reverts it to a baby", async () => {
+  it("shearing takes time and pays out when the animation completes", async () => {
     await game.startScene("Shepherd");
 
     const startCoins = (await game.eval_(`(() => {
@@ -396,12 +396,63 @@ describe("shepherd core loop", () => {
       return c;
     })()`)) as number;
 
-    await game.advanceTime(200);
+    // Part-way through — still adult, shrinking, no payout yet
+    await game.advanceTime(1000);
+    const mid = (await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      const s = gs.sheep[0];
+      return { stage: s.stage, scale: s.sprite.scaleX, coins: gs.coins };
+    })()`)) as { stage: string; scale: number; coins: number };
+    expect(mid.stage).toBe("adult");
+    expect(mid.scale).toBeLessThan(1);
+    expect(mid.scale).toBeGreaterThan(0.5);
+    expect(mid.coins).toBe(startCoins);
 
+    // Complete the shear
+    await game.advanceTime(4000);
     const s = await shepherdState();
     expect(s.coins).toBeGreaterThan(startCoins);
     expect(s.sheep[0].stage).toBe("baby");
     expect(s.sheep[0].growthT).toBe(0);
+  });
+
+  it("shear progress resets if the sheep leaves the shed mid-shear", async () => {
+    await game.startScene("Shepherd");
+
+    await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      const sheep = gs.spawnSheep();
+      sheep.stage = 'adult';
+      sheep.growthT = 999;
+      sheep.sprite.setScale(1);
+      const sh = gs.dumpState().shear;
+      sheep.sprite.x = sh.x;
+      sheep.sprite.y = sh.y;
+      sheep.vx = 0; sheep.vy = 0;
+    })()`);
+
+    // Accumulate some shearT
+    await game.advanceTime(1000);
+
+    // Move the sheep out of the shed
+    await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      const s = gs.sheep[0];
+      s.sprite.x = 2500;
+      s.sprite.y = 1300;
+      s.vx = 0; s.vy = 0;
+    })()`);
+    await game.advanceTime(50);
+
+    const result = (await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      const s = gs.sheep[0];
+      return { stage: s.stage, scale: s.sprite.scaleX, shearT: s.shearT };
+    })()`)) as { stage: string; scale: number; shearT: number };
+
+    expect(result.stage).toBe("adult");
+    expect(result.shearT).toBe(0);
+    expect(result.scale).toBe(1);
   });
 
   it("adult sheep in the market are sold for coins", async () => {
