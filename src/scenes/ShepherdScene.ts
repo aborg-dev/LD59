@@ -20,7 +20,11 @@ const FIELD_CX = 1800;
 const FIELD_CY = 900;
 const FIELD_W_PX = 420;
 const FIELD_H_PX = 420;
-const GROW_SEC = 12;
+const GROW_SEC_BASE = 12;
+const GROW_SEC_MIN = 4;
+const GROW_UPGRADE_STEP = 2;
+const SELL_UPGRADE_STEP = 5;
+const UPGRADE_MAX_LEVEL = 4;
 
 // Market — adults are sold here for coins
 const MARKET_CX = 520;
@@ -42,7 +46,7 @@ const BABY_SHEEP_SCALE = 0.45;
 const ADULT_SHEEP_SCALE = 1.0;
 
 const BUY_SHEEP_BASE_COST = 3;
-const SELL_SHEEP_VALUE = 10;
+const SELL_VALUE_BASE = 10;
 
 let SHEEP_MAX_SPEED = 220;
 let SHEEP_WANDER_FORCE = 140;
@@ -87,7 +91,9 @@ const WOLF_EAT_RANGE = 32;
 const WOLF_CONTACT_RANGE = 80;
 const WOLF_FLEE_SPEED = 650;
 const WOLF_SCARED_MS = 1800;
-const WOLF_SPAWN_INTERVAL_MS = 20000;
+const WOLF_SPAWN_MAX_MS = 20000;
+const WOLF_SPAWN_MIN_MS = 5000;
+const WOLF_RAMP_MS = 180000;
 
 interface Sheep {
   sprite: Phaser.GameObjects.Sprite;
@@ -149,6 +155,10 @@ export interface ShepherdSceneState {
   score: number;
   coins: number;
   buySheepCost: number;
+  growSec: number;
+  sellPrice: number;
+  growUpgradeLevel: number;
+  sellUpgradeLevel: number;
   viewport: { width: number; height: number };
 }
 
@@ -187,8 +197,17 @@ export class ShepherdScene extends Phaser.Scene {
   private bannerTween?: Phaser.Tweens.Tween;
   private dogBuyCost = 5;
   private buySheepCost = BUY_SHEEP_BASE_COST;
+  private growSec = GROW_SEC_BASE;
+  private sellPrice = SELL_VALUE_BASE;
+  private growUpgradeLevel = 0;
+  private sellUpgradeLevel = 0;
+  private growUpgradeCost = 10;
+  private sellUpgradeCost = 10;
+  private wolfSpawnStartMs = 0;
   private dogBuyBtn!: Phaser.GameObjects.Text;
   private sheepBuyBtn!: Phaser.GameObjects.Text;
+  private growBuyBtn!: Phaser.GameObjects.Text;
+  private sellBuyBtn!: Phaser.GameObjects.Text;
 
   private fieldTop = 0;
   private fieldBottom = 0;
@@ -226,6 +245,12 @@ export class ShepherdScene extends Phaser.Scene {
     this.gameOverTriggered = false;
     this.dogBuyCost = 5;
     this.buySheepCost = BUY_SHEEP_BASE_COST;
+    this.growSec = GROW_SEC_BASE;
+    this.sellPrice = SELL_VALUE_BASE;
+    this.growUpgradeLevel = 0;
+    this.sellUpgradeLevel = 0;
+    this.growUpgradeCost = 10;
+    this.sellUpgradeCost = 10;
 
     this.hudCamera = this.cameras.add(0, 0, width, height);
 
@@ -451,7 +476,7 @@ export class ShepherdScene extends Phaser.Scene {
     };
 
     const menuBtn = this.add
-      .text(width * 0.85, btnY, "MENU", btnStyle)
+      .text(width * 0.9, btnY, "MENU", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
@@ -462,7 +487,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(menuBtn);
 
     this.dogBuyBtn = this.add
-      .text(width * 0.15, btnY, "", btnStyle)
+      .text(width * 0.08, btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
@@ -470,21 +495,34 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(this.dogBuyBtn);
 
     this.sheepBuyBtn = this.add
-      .text(width * 0.35, btnY, "", btnStyle)
+      .text(width * 0.22, btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
     this.sheepBuyBtn.on("pointerdown", () => this.buySheep());
     this.cameras.main.ignore(this.sheepBuyBtn);
 
+    this.growBuyBtn = this.add
+      .text(width * 0.38, btnY, "", btnStyle)
+      .setOrigin(0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+    this.growBuyBtn.on("pointerdown", () => this.buyGrowUpgrade());
+    this.cameras.main.ignore(this.growBuyBtn);
+
+    this.sellBuyBtn = this.add
+      .text(width * 0.54, btnY, "", btnStyle)
+      .setOrigin(0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+    this.sellBuyBtn.on("pointerdown", () => this.buySellUpgrade());
+    this.cameras.main.ignore(this.sellBuyBtn);
+
     this.updateShopButtons();
 
-    // Wolf spawning
-    this.time.addEvent({
-      delay: WOLF_SPAWN_INTERVAL_MS,
-      loop: true,
-      callback: () => this.spawnWolf(),
-    });
+    // Wolf spawning — interval shrinks as the game progresses
+    this.wolfSpawnStartMs = this.time.now;
+    this.scheduleNextWolf();
 
     this.updateDogCountText();
 
@@ -551,6 +589,43 @@ export class ShepherdScene extends Phaser.Scene {
     this.updateShopButtons();
   }
 
+  buyGrowUpgrade(): void {
+    if (this.growUpgradeLevel >= UPGRADE_MAX_LEVEL) return;
+    if (this.coins < this.growUpgradeCost) return;
+    this.coins -= this.growUpgradeCost;
+    this.growUpgradeLevel++;
+    this.growSec = Math.max(
+      GROW_SEC_MIN,
+      GROW_SEC_BASE - this.growUpgradeLevel * GROW_UPGRADE_STEP,
+    );
+    this.growUpgradeCost = Math.ceil(this.growUpgradeCost * 2);
+    this.sound.play("pop");
+    this.updateCoinText();
+  }
+
+  buySellUpgrade(): void {
+    if (this.sellUpgradeLevel >= UPGRADE_MAX_LEVEL) return;
+    if (this.coins < this.sellUpgradeCost) return;
+    this.coins -= this.sellUpgradeCost;
+    this.sellUpgradeLevel++;
+    this.sellPrice = SELL_VALUE_BASE + this.sellUpgradeLevel * SELL_UPGRADE_STEP;
+    this.sellUpgradeCost = Math.ceil(this.sellUpgradeCost * 2);
+    this.sound.play("pop");
+    this.updateCoinText();
+  }
+
+  private scheduleNextWolf(): void {
+    if (this.gameOverTriggered) return;
+    const elapsed = Math.max(0, this.time.now - this.wolfSpawnStartMs);
+    const ramp = Math.min(elapsed / WOLF_RAMP_MS, 1);
+    const delay =
+      WOLF_SPAWN_MAX_MS - (WOLF_SPAWN_MAX_MS - WOLF_SPAWN_MIN_MS) * ramp;
+    this.time.delayedCall(delay, () => {
+      this.spawnWolf();
+      this.scheduleNextWolf();
+    });
+  }
+
   private updateDogCountText(): void {
     this.dogCountText.setText(`Dogs: ${this.dogs.length + 1}`);
   }
@@ -567,6 +642,22 @@ export class ShepherdScene extends Phaser.Scene {
       sheepAffordable ? "#2a6a2a" : "#333344",
     );
     this.sheepBuyBtn.setAlpha(sheepAffordable ? 1 : 0.55);
+
+    const growMaxed = this.growUpgradeLevel >= UPGRADE_MAX_LEVEL;
+    const growAffordable = !growMaxed && this.coins >= this.growUpgradeCost;
+    this.growBuyBtn.setText(
+      growMaxed ? "Grow MAX" : `+Grow $${this.growUpgradeCost}`,
+    );
+    this.growBuyBtn.setBackgroundColor(growAffordable ? "#2a6a2a" : "#333344");
+    this.growBuyBtn.setAlpha(growAffordable ? 1 : 0.55);
+
+    const sellMaxed = this.sellUpgradeLevel >= UPGRADE_MAX_LEVEL;
+    const sellAffordable = !sellMaxed && this.coins >= this.sellUpgradeCost;
+    this.sellBuyBtn.setText(
+      sellMaxed ? "Sell MAX" : `+Sell $${this.sellUpgradeCost}`,
+    );
+    this.sellBuyBtn.setBackgroundColor(sellAffordable ? "#2a6a2a" : "#333344");
+    this.sellBuyBtn.setAlpha(sellAffordable ? 1 : 0.55);
   }
 
   private buyDog(): void {
@@ -829,6 +920,10 @@ export class ShepherdScene extends Phaser.Scene {
       score: this.score,
       coins: this.coins,
       buySheepCost: this.buySheepCost,
+      growSec: this.growSec,
+      sellPrice: this.sellPrice,
+      growUpgradeLevel: this.growUpgradeLevel,
+      sellUpgradeLevel: this.sellUpgradeLevel,
       viewport: { width: this.scale.width, height: this.scale.height },
     };
   }
@@ -1346,11 +1441,11 @@ export class ShepherdScene extends Phaser.Scene {
       // Field growth — babies grow into adults while in the field
       if (s.stage === "baby" && this.fieldContains(s.sprite.x, s.sprite.y)) {
         s.growthT += dt;
-        const t = Math.min(1, s.growthT / GROW_SEC);
+        const t = Math.min(1, s.growthT / this.growSec);
         const scale =
           BABY_SHEEP_SCALE + (ADULT_SHEEP_SCALE - BABY_SHEEP_SCALE) * t;
         s.sprite.setScale(scale);
-        if (s.growthT >= GROW_SEC) {
+        if (s.growthT >= this.growSec) {
           s.stage = "adult";
           s.sprite.setScale(ADULT_SHEEP_SCALE);
           this.playGrownFx(s);
@@ -1364,7 +1459,7 @@ export class ShepherdScene extends Phaser.Scene {
         s.vx = 0;
         s.vy = 0;
         this.score++;
-        this.coins += SELL_SHEEP_VALUE;
+        this.coins += this.sellPrice;
         this.updateCoinText();
         this.sound.play("score");
         this.playSaleFx(s);

@@ -84,6 +84,52 @@ describe("shepherd core loop", () => {
     expect(adults.length).toBeGreaterThanOrEqual(1);
   });
 
+  it("grow upgrade reduces grow time", async () => {
+    await game.startScene("Shepherd");
+
+    const before = (await shepherdState()).growSec;
+    await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      gs.coins = 1000;
+      gs.updateCoinText();
+      gs.buyGrowUpgrade();
+    })()`);
+
+    const after = await shepherdState();
+    expect(after.growSec).toBeLessThan(before);
+    expect(after.growUpgradeLevel).toBe(1);
+  });
+
+  it("sell upgrade increases coins earned on sale", async () => {
+    await game.startScene("Shepherd");
+
+    const startCoins = (await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      gs.coins = 1000;
+      gs.updateCoinText();
+      gs.buySellUpgrade();
+      gs.buySellUpgrade();
+      const c = gs.coins;
+      // Place an adult sheep inside the market to trigger a sale
+      const sheep = gs.spawnSheep();
+      sheep.stage = 'adult';
+      sheep.growthT = 999;
+      sheep.sprite.setScale(1);
+      const m = gs.dumpState().market;
+      sheep.sprite.x = m.x;
+      sheep.sprite.y = m.y;
+      sheep.vx = 0;
+      sheep.vy = 0;
+      return c;
+    })()`)) as number;
+
+    await game.advanceTime(200);
+
+    const s = await shepherdState();
+    // Default sell price is 10; +2 levels of +5 each → 20 per sale
+    expect(s.coins - startCoins).toBeGreaterThanOrEqual(20);
+  });
+
   it("triggers game over when out of money and sheep", async () => {
     await game.startScene("Shepherd");
 
