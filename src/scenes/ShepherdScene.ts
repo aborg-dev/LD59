@@ -169,6 +169,7 @@ export class ShepherdScene extends Phaser.Scene {
   // Debug/editor state
   private debugPanel: HTMLDivElement | null = null;
   private editorActive = false;
+  private dogVisuals = false;
   private editorTool: "tree" | "spawn" = "tree";
   private editorTreeRadius = 60;
   private editorGfx!: Phaser.GameObjects.Graphics;
@@ -796,6 +797,28 @@ export class ShepherdScene extends Phaser.Scene {
       }
     }
 
+    // Update dog visuals based on mode
+    if (this.dogVisuals) {
+      const nextDog = this.dogs.find((d) => d.mode === "following") ?? null;
+      for (const dog of this.dogs) {
+        if (dog.mode === "herding") {
+          dog.sprite.setFillStyle(0x8888dd);
+          dog.sprite.setStrokeStyle(2, 0xaaaaff);
+        } else if (dog === nextDog) {
+          dog.sprite.setFillStyle(0x333355);
+          dog.sprite.setStrokeStyle(3, 0xffffff);
+        } else {
+          dog.sprite.setFillStyle(0x333355);
+          dog.sprite.setStrokeStyle(2, 0xaaaaff);
+        }
+      }
+    } else {
+      for (const dog of this.dogs) {
+        dog.sprite.setFillStyle(0x333355);
+        dog.sprite.setStrokeStyle(2, 0xaaaaff);
+      }
+    }
+
     // --- Dog AI ---
     const followingDogs = this.dogs.filter((d) => d.mode === "following");
     const fwdX = Math.cos(this.alphaDog.angle);
@@ -1340,6 +1363,19 @@ export class ShepherdScene extends Phaser.Scene {
     };
     refreshStats();
     panel.appendChild(stats);
+
+    const dogVisualsRow = document.createElement("label");
+    dogVisualsRow.style.cssText =
+      "display:flex;align-items:center;gap:6px;margin-bottom:10px;cursor:pointer;";
+    const dogVisualsCheck = document.createElement("input");
+    dogVisualsCheck.type = "checkbox";
+    dogVisualsCheck.checked = this.dogVisuals;
+    dogVisualsCheck.addEventListener("change", () => {
+      this.dogVisuals = dogVisualsCheck.checked;
+    });
+    dogVisualsRow.appendChild(dogVisualsCheck);
+    dogVisualsRow.appendChild(document.createTextNode("Dog state colours"));
+    panel.appendChild(dogVisualsRow);
 
     const params: Array<{
       label: string;
