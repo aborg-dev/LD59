@@ -36,10 +36,12 @@ let PANIC_INHERIT = 0.7;
 
 const DOG_RADIUS = 22;
 const DOG_SPEED = 350;
-const DOG_MAX_LIFETIME_SEC = 30;
 const HERD_OFFSET = 120;
 let FEAR_RADIUS = 180;
 let FLEE_FORCE = 520;
+
+const WHISTLE_RADIUS = 280;
+const WHISTLE_IMPULSE = 480;
 
 interface Sheep {
   sprite: Phaser.GameObjects.Sprite;
@@ -56,8 +58,14 @@ interface Sheep {
 interface Dog {
   sprite: Phaser.GameObjects.Arc;
   targetSheep: Sheep | null;
-  state: "herding" | "returning";
-  lifetime: number;
+}
+
+interface Pen {
+  x: number;
+  y: number;
+  r: number;
+  circle: Phaser.GameObjects.Arc;
+  label: Phaser.GameObjects.Text;
 }
 
 interface MapTree {
@@ -68,10 +76,11 @@ interface MapTree {
 
 export interface ShepherdSceneState {
   active: boolean;
-  dogs: { x: number; y: number; state: string }[];
-  dogInventory: number;
+  dogs: { x: number; y: number }[];
+  lastWhistle: { x: number; y: number } | null;
   sheep: { x: number; y: number; penned: boolean }[];
-  pen: { x: number; y: number; radius: number };
+  pens: { x: number; y: number; radius: number }[];
+  placingPen: boolean;
   score: number;
   coins: number;
   viewport: { width: number; height: number };
@@ -79,20 +88,24 @@ export interface ShepherdSceneState {
 
 export class ShepherdScene extends Phaser.Scene {
   private dogs: Dog[] = [];
-  private dogInventory = 3;
+  private lastWhistle: { x: number; y: number } | null = null;
   private sheep: Sheep[] = [];
   private score = 0;
   private coins = 0;
   private accumulator = 0;
 
-  private penX = 0;
-  private penY = 0;
-  private penR = PEN_RADIUS;
+  private pens: Pen[] = [];
 
   private coinText!: Phaser.GameObjects.Text;
   private dogCountText!: Phaser.GameObjects.Text;
   private bannerText!: Phaser.GameObjects.Text;
   private bannerTween?: Phaser.Tweens.Tween;
+  private dogBuyCost = 5;
+  private penBuyCost = 25;
+  private dogBuyBtn!: Phaser.GameObjects.Text;
+  private penBuyBtn!: Phaser.GameObjects.Text;
+  private placingPen = false;
+  private penGhost!: Phaser.GameObjects.Arc;
 
   private fieldTop = 0;
   private fieldBottom = 0;
@@ -120,11 +133,15 @@ export class ShepherdScene extends Phaser.Scene {
     this.fieldBottom = height - HUD_BOTTOM_H;
 
     this.score = 0;
-    this.coins = 0;
+    this.coins = 5;
     this.accumulator = 0;
-    this.dogInventory = 3;
     this.dogs = [];
     this.sheep = [];
+    this.pens = [];
+    this.lastWhistle = null;
+    this.placingPen = false;
+    this.dogBuyCost = 5;
+    this.penBuyCost = 25;
 
     this.hudCamera = this.cameras.add(0, 0, width, height);
 
@@ -134,26 +151,16 @@ export class ShepherdScene extends Phaser.Scene {
       .setDepth(0);
     this.hudCamera.ignore(bg);
 
-    // Pen in room (1,1)
-    this.penX = 1.5 * ROOM_W;
-    this.penY = 1.5 * ROOM_H;
+    // Initial pen in room (1,1)
+    this.createPen(1.5 * ROOM_W, 1.5 * ROOM_H);
 
-    const pen = this.add
-      .circle(this.penX, this.penY, this.penR, 0x8b5a2b, 0.25)
-      .setDepth(1);
-    pen.setStrokeStyle(4, 0xffe099);
-    this.hudCamera.ignore(pen);
-
-    const penLabel = this.add
-      .text(this.penX, this.penY, "PEN", {
-        fontFamily: FONT_UI,
-        fontSize: 24,
-        color: "#fff1c1",
-        resolution: TEXT_RESOLUTION,
-      })
-      .setOrigin(0.5)
-      .setDepth(2);
-    this.hudCamera.ignore(penLabel);
+    // Ghost preview used while placing a new pen
+    this.penGhost = this.add
+      .circle(0, 0, PEN_RADIUS, 0x8b5a2b, 0.18)
+      .setDepth(3)
+      .setVisible(false);
+    this.penGhost.setStrokeStyle(3, 0xffe099, 0.7);
+    this.hudCamera.ignore(this.penGhost);
 
     // Load map objects
     this.mapTrees = mapData.trees as MapTree[];
@@ -189,23 +196,35 @@ export class ShepherdScene extends Phaser.Scene {
       repeat: -1,
     });
 
-    // Click to deploy dog
+    // Click to whistle (pushes sheep outward), or place a pen if in placement mode
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       if (this.editorActive) {
         this.editorHandlePointerDown(p);
         return;
       }
       if (p.y > this.fieldBottom) return;
-      if (this.dogInventory <= 0) return;
+      if (p.y < this.fieldTop) return;
       const wp = this.cameras.main.getWorldPoint(p.x, p.y);
-      this.deployDog(wp.x, wp.y);
+      if (this.placingPen) {
+        if (p.button === 2) {
+          this.cancelPenPlacement();
+        } else {
+          this.placePenAt(wp.x, wp.y);
+        }
+        return;
+      }
+      this.whistle(wp.x, wp.y);
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
       const wp = this.cameras.main.getWorldPoint(p.x, p.y);
       if (this.editorActive) this.editorPointerWorld = { x: wp.x, y: wp.y };
+      if (this.placingPen) this.penGhost.setPosition(wp.x, wp.y);
     });
 
     this.input.keyboard?.on("keydown-ENTER", () => this.toggleDebugPanel());
+    this.input.keyboard?.on("keydown-ESC", () => {
+      if (this.placingPen) this.cancelPenPlacement();
+    });
 
     // --- Top HUD ---
     const hudTopBar = this.add
@@ -215,7 +234,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(hudTopBar);
 
     this.coinText = this.add
-      .text(width / 2 - 120, HUD_TOP_H / 2, "$0", {
+      .text(width / 2 - 120, HUD_TOP_H / 2, `$${this.coins}`, {
         fontFamily: FONT_UI,
         fontSize: 32,
         color: "#ffe066",
@@ -228,7 +247,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(this.coinText);
 
     this.dogCountText = this.add
-      .text(width / 2 + 120, HUD_TOP_H / 2, `Dogs: ${this.dogInventory}`, {
+      .text(width / 2 + 120, HUD_TOP_H / 2, `Dogs: ${this.dogs.length}`, {
         fontFamily: FONT_UI,
         fontSize: 32,
         color: "#ffffff",
@@ -283,6 +302,24 @@ export class ShepherdScene extends Phaser.Scene {
     });
     this.cameras.main.ignore(menuBtn);
 
+    this.dogBuyBtn = this.add
+      .text(width * 0.15, btnY, "", btnStyle)
+      .setOrigin(0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+    this.dogBuyBtn.on("pointerdown", () => this.buyDog());
+    this.cameras.main.ignore(this.dogBuyBtn);
+
+    this.penBuyBtn = this.add
+      .text(width * 0.35, btnY, "", btnStyle)
+      .setOrigin(0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+    this.penBuyBtn.on("pointerdown", () => this.startPenPlacement());
+    this.cameras.main.ignore(this.penBuyBtn);
+
+    this.updateShopButtons();
+
     // Continuous sheep spawning
     this.time.addEvent({
       delay: SPAWN_INTERVAL_MS,
@@ -303,17 +340,15 @@ export class ShepherdScene extends Phaser.Scene {
       this.spawnSheep(sp.x, sp.y);
     }
 
+    this.updateDogCountText();
+
     // Set camera zoomed out to fit entire world
     this.updateCamera();
 
-    this.showBanner("Click to deploy dogs!");
+    this.showBanner("Click to whistle!");
   }
 
-  private deployDog(x: number, y: number): void {
-    if (this.dogInventory <= 0) return;
-    this.dogInventory--;
-    this.updateDogCountText();
-
+  private spawnDog(x: number, y: number): void {
     const sprite = this.add.circle(x, y, DOG_RADIUS, 0x222222).setDepth(10);
     sprite.setStrokeStyle(2, 0xffffff);
     this.hudCamera.ignore(sprite);
@@ -321,17 +356,142 @@ export class ShepherdScene extends Phaser.Scene {
     this.dogs.push({
       sprite,
       targetSheep: null,
-      state: "herding",
-      lifetime: 0,
     });
+    this.updateDogCountText();
+  }
+
+  private whistle(x: number, y: number): void {
+    this.lastWhistle = { x, y };
+
+    for (const s of this.sheep) {
+      if (s.penned) continue;
+      const dx = s.sprite.x - x;
+      const dy = s.sprite.y - y;
+      const d = Math.hypot(dx, dy);
+      if (d >= WHISTLE_RADIUS || d < 0.01) continue;
+      const falloff = 1 - d / WHISTLE_RADIUS;
+      const kick = WHISTLE_IMPULSE * falloff;
+      s.vx += (dx / d) * kick;
+      s.vy += (dy / d) * kick;
+      s.angle = Math.atan2(dy, dx);
+      s.scaredMs = Math.max(s.scaredMs, 500 + 500 * falloff);
+    }
+
+    const ring = this.add.circle(x, y, 10, 0xffffff, 0).setDepth(6);
+    ring.setStrokeStyle(4, 0xffffff, 1);
+    this.hudCamera.ignore(ring);
+    this.tweens.add({
+      targets: ring,
+      radius: WHISTLE_RADIUS,
+      strokeAlpha: 0,
+      duration: 420,
+      ease: "Quad.easeOut",
+      onComplete: () => ring.destroy(),
+    });
+    this.sound.play("pop");
   }
 
   private updateCoinText(): void {
     this.coinText.setText(`$${this.coins}`);
+    this.updateShopButtons();
   }
 
   private updateDogCountText(): void {
-    this.dogCountText.setText(`Dogs: ${this.dogInventory}`);
+    this.dogCountText.setText(`Dogs: ${this.dogs.length}`);
+  }
+
+  private updateShopButtons(): void {
+    const dogAffordable = this.coins >= this.dogBuyCost;
+    this.dogBuyBtn.setText(`+Dog $${this.dogBuyCost}`);
+    this.dogBuyBtn.setBackgroundColor(dogAffordable ? "#2a6a2a" : "#333344");
+    this.dogBuyBtn.setAlpha(dogAffordable ? 1 : 0.55);
+
+    const penAffordable = this.coins >= this.penBuyCost;
+    const label = this.placingPen ? "Cancel" : `+Pen $${this.penBuyCost}`;
+    this.penBuyBtn.setText(label);
+    this.penBuyBtn.setBackgroundColor(
+      this.placingPen ? "#884422" : penAffordable ? "#2a6a2a" : "#333344",
+    );
+    this.penBuyBtn.setAlpha(this.placingPen || penAffordable ? 1 : 0.55);
+  }
+
+  private buyDog(): void {
+    if (this.coins < this.dogBuyCost) return;
+    this.coins -= this.dogBuyCost;
+    this.dogBuyCost = Math.ceil(this.dogBuyCost * 1.6);
+    const origin = this.pens[0];
+    const a = Math.random() * Math.PI * 2;
+    this.spawnDog(
+      origin.x + Math.cos(a) * (origin.r + 40),
+      origin.y + Math.sin(a) * (origin.r + 40),
+    );
+    this.sound.play("pop");
+    this.updateCoinText();
+  }
+
+  private nearestPen(x: number, y: number): Pen | null {
+    let best: Pen | null = null;
+    let bestDist = Infinity;
+    for (const p of this.pens) {
+      const d = Math.hypot(p.x - x, p.y - y);
+      if (d < bestDist) {
+        bestDist = d;
+        best = p;
+      }
+    }
+    return best;
+  }
+
+  private createPen(x: number, y: number): Pen {
+    const circle = this.add
+      .circle(x, y, PEN_RADIUS, 0x8b5a2b, 0.25)
+      .setDepth(1);
+    circle.setStrokeStyle(4, 0xffe099);
+    this.hudCamera.ignore(circle);
+    const label = this.add
+      .text(x, y, "PEN", {
+        fontFamily: FONT_UI,
+        fontSize: 24,
+        color: "#fff1c1",
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5)
+      .setDepth(2);
+    this.hudCamera.ignore(label);
+    const pen: Pen = { x, y, r: PEN_RADIUS, circle, label };
+    this.pens.push(pen);
+    return pen;
+  }
+
+  private startPenPlacement(): void {
+    if (this.placingPen) {
+      this.cancelPenPlacement();
+      return;
+    }
+    if (this.coins < this.penBuyCost) return;
+    this.placingPen = true;
+    this.penGhost.setVisible(true);
+    this.showBanner("Click to place pen  (ESC to cancel)");
+    this.updateShopButtons();
+  }
+
+  private cancelPenPlacement(): void {
+    this.placingPen = false;
+    this.penGhost.setVisible(false);
+    this.updateShopButtons();
+  }
+
+  private placePenAt(x: number, y: number): void {
+    if (this.coins < this.penBuyCost) {
+      this.cancelPenPlacement();
+      return;
+    }
+    this.coins -= this.penBuyCost;
+    this.penBuyCost = Math.ceil(this.penBuyCost * 1.7);
+    this.createPen(x, y);
+    this.sound.play("pop");
+    this.cancelPenPlacement();
+    this.updateCoinText();
   }
 
   spawnSheep(ox?: number, oy?: number): void {
@@ -348,8 +508,9 @@ export class ShepherdScene extends Phaser.Scene {
       sy = sp.y + Phaser.Math.Between(-jitter, jitter);
     }
 
-    const dx = sx - this.penX;
-    const dy = sy - this.penY;
+    const pen = this.nearestPen(sx, sy) ?? this.pens[0];
+    const dx = sx - pen.x;
+    const dy = sy - pen.y;
     const d = Math.hypot(dx, dy) || 1;
     const v0 = 60;
     const initAngle = Math.atan2(dy, dx);
@@ -434,15 +595,15 @@ export class ShepherdScene extends Phaser.Scene {
       dogs: this.dogs.map((d) => ({
         x: d.sprite.x,
         y: d.sprite.y,
-        state: d.state,
       })),
-      dogInventory: this.dogInventory,
+      lastWhistle: this.lastWhistle,
       sheep: this.sheep.map((s) => ({
         x: s.sprite.x,
         y: s.sprite.y,
         penned: s.penned,
       })),
-      pen: { x: this.penX, y: this.penY, radius: this.penR },
+      pens: this.pens.map((p) => ({ x: p.x, y: p.y, radius: p.r })),
+      placingPen: this.placingPen,
       score: this.score,
       coins: this.coins,
       viewport: { width: this.scale.width, height: this.scale.height },
@@ -471,94 +632,43 @@ export class ShepherdScene extends Phaser.Scene {
     const dtMs = dt * 1000;
 
     // --- Dog AI ---
-    for (let di = this.dogs.length - 1; di >= 0; di--) {
-      const dog = this.dogs[di];
-      dog.lifetime += dt;
-
-      // Safety timeout — return dog to inventory
-      if (dog.lifetime > DOG_MAX_LIFETIME_SEC) {
-        dog.state = "returning";
+    for (const dog of this.dogs) {
+      if (!dog.targetSheep || dog.targetSheep.penned) {
+        dog.targetSheep = this.findTargetSheep(dog);
       }
 
-      if (dog.state === "herding") {
-        // Find or validate target
-        if (!dog.targetSheep || dog.targetSheep.penned) {
-          dog.targetSheep = this.findTargetSheep(dog);
-        }
+      if (dog.targetSheep) {
+        const sx = dog.targetSheep.sprite.x;
+        const sy = dog.targetSheep.sprite.y;
+        const pen = this.nearestPen(sx, sy);
+        const pen_x = pen ? pen.x : sx;
+        const pen_y = pen ? pen.y : sy;
+        const dx = sx - pen_x;
+        const dy = sy - pen_y;
+        const d = Math.hypot(dx, dy) || 1;
+        const herdX = sx + (dx / d) * HERD_OFFSET;
+        const herdY = sy + (dy / d) * HERD_OFFSET;
 
-        if (dog.targetSheep) {
-          // Calculate herding position: behind sheep relative to pen
-          const sx = dog.targetSheep.sprite.x;
-          const sy = dog.targetSheep.sprite.y;
-          const dx = sx - this.penX;
-          const dy = sy - this.penY;
-          const d = Math.hypot(dx, dy) || 1;
-          const herdX = sx + (dx / d) * HERD_OFFSET;
-          const herdY = sy + (dy / d) * HERD_OFFSET;
-
-          // Move toward herding position
-          const toHerdX = herdX - dog.sprite.x;
-          const toHerdY = herdY - dog.sprite.y;
-          const toHerdD = Math.hypot(toHerdX, toHerdY);
-          if (toHerdD > 5) {
-            const move = Math.min(toHerdD, DOG_SPEED * dt);
-            dog.sprite.x += (toHerdX / toHerdD) * move;
-            dog.sprite.y += (toHerdY / toHerdD) * move;
-          }
-
-          // If target got penned, switch to returning
-          if (dog.targetSheep.penned) {
-            dog.state = "returning";
-          }
-        } else {
-          // No sheep to herd — return
-          dog.state = "returning";
+        const toHerdX = herdX - dog.sprite.x;
+        const toHerdY = herdY - dog.sprite.y;
+        const toHerdD = Math.hypot(toHerdX, toHerdY);
+        if (toHerdD > 5) {
+          const move = Math.min(toHerdD, DOG_SPEED * dt);
+          dog.sprite.x += (toHerdX / toHerdD) * move;
+          dog.sprite.y += (toHerdY / toHerdD) * move;
         }
       }
 
-      if (dog.state === "returning") {
-        const toPenX = this.penX - dog.sprite.x;
-        const toPenY = this.penY - dog.sprite.y;
-        const toPenD = Math.hypot(toPenX, toPenY);
-        if (toPenD < DOG_RADIUS * 2) {
-          // Dog returned — back to inventory
-          dog.sprite.destroy();
-          this.dogs.splice(di, 1);
-          this.dogInventory++;
-          this.updateDogCountText();
-        } else {
-          const move = Math.min(toPenD, DOG_SPEED * dt);
-          dog.sprite.x += (toPenX / toPenD) * move;
-          dog.sprite.y += (toPenY / toPenD) * move;
-        }
-      }
-
-      // Clamp dog to world bounds
-      if (dog.state !== "returning" || this.dogs[di] === dog) {
-        dog.sprite.x = Phaser.Math.Clamp(
-          dog.sprite.x,
-          DOG_RADIUS,
-          WORLD_W - DOG_RADIUS,
-        );
-        dog.sprite.y = Phaser.Math.Clamp(
-          dog.sprite.y,
-          DOG_RADIUS,
-          WORLD_H - DOG_RADIUS,
-        );
-      }
-
-      // Push dog out of trees
-      for (const t of this.mapTrees) {
-        const tdx = dog.sprite.x - t.x;
-        const tdy = dog.sprite.y - t.y;
-        const td = Math.hypot(tdx, tdy);
-        const minDist = t.r + DOG_RADIUS;
-        if (td < minDist && td > 0.01) {
-          const push = minDist - td;
-          dog.sprite.x += (tdx / td) * push;
-          dog.sprite.y += (tdy / td) * push;
-        }
-      }
+      dog.sprite.x = Phaser.Math.Clamp(
+        dog.sprite.x,
+        DOG_RADIUS,
+        WORLD_W - DOG_RADIUS,
+      );
+      dog.sprite.y = Phaser.Math.Clamp(
+        dog.sprite.y,
+        DOG_RADIUS,
+        WORLD_H - DOG_RADIUS,
+      );
     }
 
     // --- Sheep behavior ---
@@ -705,34 +815,17 @@ export class ShepherdScene extends Phaser.Scene {
         s.vy = Math.sin(s.angle) * spd;
       }
 
-      // Tree collisions
-      for (const t of this.mapTrees) {
-        const tdx = s.sprite.x - t.x;
-        const tdy = s.sprite.y - t.y;
-        const td = Math.hypot(tdx, tdy);
-        const minDist = t.r + SHEEP_RADIUS;
-        if (td < minDist && td > 0.01) {
-          const nx = tdx / td;
-          const ny = tdy / td;
-          s.sprite.x = t.x + nx * minDist;
-          s.sprite.y = t.y + ny * minDist;
-          const dot = Math.cos(s.angle) * nx + Math.sin(s.angle) * ny;
-          if (dot < 0) {
-            s.angle = Math.atan2(
-              Math.sin(s.angle) - 2 * dot * ny,
-              Math.cos(s.angle) - 2 * dot * nx,
-            );
-            const spd = Math.hypot(s.vx, s.vy) * 0.6;
-            s.vx = Math.cos(s.angle) * spd;
-            s.vy = Math.sin(s.angle) * spd;
-          }
+      // Pen check — penned if contained in any pen
+      let insidePen = false;
+      for (const p of this.pens) {
+        const pdx = s.sprite.x - p.x;
+        const pdy = s.sprite.y - p.y;
+        if (Math.hypot(pdx, pdy) + SHEEP_RADIUS <= p.r) {
+          insidePen = true;
+          break;
         }
       }
-
-      // Pen check
-      const pdx = s.sprite.x - this.penX;
-      const pdy = s.sprite.y - this.penY;
-      if (Math.hypot(pdx, pdy) + SHEEP_RADIUS <= this.penR) {
+      if (insidePen) {
         s.penned = true;
         s.vx = 0;
         s.vy = 0;
@@ -844,7 +937,7 @@ export class ShepherdScene extends Phaser.Scene {
       "margin-bottom:10px;padding:4px 6px;background:#1a1a2e;border-radius:3px;color:#fa8;";
     const refreshStats = () => {
       const unpenned = this.sheep.filter((s) => !s.penned).length;
-      stats.textContent = `sheep: ${unpenned}  dogs: ${this.dogs.length}/${this.dogs.length + this.dogInventory}`;
+      stats.textContent = `sheep: ${unpenned}  dogs: ${this.dogs.length}`;
       if (this.debugPanel) requestAnimationFrame(refreshStats);
     };
     refreshStats();

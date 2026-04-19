@@ -17,7 +17,9 @@ function levelSavePlugin() {
           return;
         }
         let body = "";
-        req.on("data", (chunk) => { body += chunk; });
+        req.on("data", (chunk) => {
+          body += chunk;
+        });
         req.on("end", () => {
           try {
             const data = JSON.parse(body);
