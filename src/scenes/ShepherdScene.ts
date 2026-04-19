@@ -49,8 +49,8 @@ const ROAD_CX = WORLD_W - ROAD_W_PX / 2 - 40;
 const DROP_X = ROAD_CX;
 const DROP_Y = 1100;
 
-const TRUCK_W = 96;
-const TRUCK_H = 56;
+const TRUCK_W = 56;
+const TRUCK_H = 96;
 const TRUCK_SPEED = 320;
 
 const BABY_SHEEP_SCALE = 0.45;
@@ -530,12 +530,6 @@ export class ShepherdScene extends Phaser.Scene {
 
     this.input.keyboard?.on("keydown-SPACE", () => this.dispatchFollower());
     this.input.keyboard?.on("keydown-ENTER", () => this.toggleDebugPanel());
-    this.input.keyboard?.on("keydown-M", () => {
-      this.coins += 100;
-      this.updateCoinText();
-      this.sound.play("pop");
-      this.showBanner("+$100");
-    });
 
     // --- Top HUD ---
     const hudTopBar = this.add
