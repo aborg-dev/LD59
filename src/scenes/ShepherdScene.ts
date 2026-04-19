@@ -5,7 +5,7 @@ import mapData from "./shepherd-map.json";
 const GRID_COLS = 4;
 const GRID_ROWS = 4;
 const ROOM_W = 800;
-const ROOM_H = 400;
+const ROOM_H = 450;
 const WORLD_W = ROOM_W * GRID_COLS;
 const WORLD_H = ROOM_H * GRID_ROWS;
 
@@ -1256,6 +1256,14 @@ export class ShepherdScene extends Phaser.Scene {
         s.sprite.destroy();
         this.sheep.splice(i, 1);
         i--;
+        for (const dog of this.dogs) {
+          if (dog.targetSheep === s) { dog.targetSheep = null; dog.mode = "following"; }
+        }
+        if (this.alphaDog.targetSheep === s) { this.alphaDog.targetSheep = null; this.alphaDog.mode = "following"; }
+        for (const wolf of this.wolves) {
+          if (wolf.targetSheep === s) wolf.targetSheep = null;
+        }
+        if (this.facingSheep === s) this.facingSheep = null;
         continue;
       }
 
