@@ -122,7 +122,7 @@ interface Sheep {
 }
 
 interface Wolf {
-  sprite: Phaser.GameObjects.Rectangle;
+  sprite: Phaser.GameObjects.Image;
   targetSheep: Sheep | null;
   vx: number;
   vy: number;
@@ -664,9 +664,8 @@ export class ShepherdScene extends Phaser.Scene {
     }
 
     const sprite = this.add
-      .rectangle(x, y, WOLF_W, WOLF_H, 0x7a1a1a)
+      .image(x, y, "wolf")
       .setDepth(9);
-    sprite.setStrokeStyle(2, 0xff5555);
     this.hudCamera.ignore(sprite);
     this.wolves.push({
       sprite,
@@ -1388,7 +1387,7 @@ export class ShepherdScene extends Phaser.Scene {
           d.mode === "herding" &&
           d.targetSheep &&
           Math.hypot(d.targetSheep.sprite.x - sx, d.targetSheep.sprite.y - sy) <
-            HIGHLIGHT_CLUSTER_R,
+          HIGHLIGHT_CLUSTER_R,
       );
       const myIdx = clusterDogs.indexOf(dog);
       const count = clusterDogs.length;
@@ -1510,7 +1509,7 @@ export class ShepherdScene extends Phaser.Scene {
         // Fleeing — maintain flee velocity (slight damping so it doesn't accelerate forever)
         wolf.sprite.x += wolf.vx * dt;
         wolf.sprite.y += wolf.vy * dt;
-        wolf.sprite.rotation = wolf.angle;
+        wolf.sprite.rotation = wolf.angle + Math.PI / 2;
       } else {
         // Normal: turn toward nearest sheep and move. With a fence built,
         // sheep inside the field are protected and wolves ignore them.
@@ -1584,7 +1583,7 @@ export class ShepherdScene extends Phaser.Scene {
         wolf.vy = Math.sin(wolf.angle) * WOLF_NORMAL_SPEED;
         wolf.sprite.x += wolf.vx * dt;
         wolf.sprite.y += wolf.vy * dt;
-        wolf.sprite.rotation = wolf.angle;
+        wolf.sprite.rotation = wolf.angle + Math.PI / 2;
       }
 
       // Field fence — with a fence, wolves can't enter. Push any wolf inside
@@ -1676,9 +1675,9 @@ export class ShepherdScene extends Phaser.Scene {
         s.grazing = alignN === 0 ? !s.grazing : false;
         s.modeT = s.grazing
           ? SHEEP_GRAZE_MIN_SEC +
-            Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
+          Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
           : SHEEP_WALK_MIN_SEC +
-            Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
+          Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
         if (!s.grazing) s.wanderAngle = Math.random() * Math.PI * 2;
       }
       if (!s.grazing && alignN === 0) {

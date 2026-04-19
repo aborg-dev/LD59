@@ -41,6 +41,7 @@ export class Preloader extends Scene {
     this.load.image("tree2", "1755_TreeSmall_3.png");
     this.load.image("tree3", "1809_Tree_Big_1.png");
     this.load.image("tree4", "1809_Tree_Big_2.png");
+    this.load.image("wolf", "1838_Wolf_Thick_Alt_Head.png");
   }
 
   create() {
