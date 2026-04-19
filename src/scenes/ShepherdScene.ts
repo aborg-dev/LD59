@@ -46,7 +46,7 @@ const DOG_SPEED = 950;
 let FEAR_RADIUS = 180;
 let FLEE_FORCE = 520;
 interface Sheep {
-  sprite: Phaser.GameObjects.Rectangle;
+  sprite: Phaser.GameObjects.Sprite;
   vx: number;
   vy: number;
   angle: number;
@@ -299,6 +299,13 @@ export class ShepherdScene extends Phaser.Scene {
       .setAlpha(0);
     this.cameras.main.ignore(this.bannerText);
 
+    this.anims.create({
+      key: "sheep-walk",
+      frames: this.anims.generateFrameNumbers("sheep", { start: 0, end: 3 }),
+      frameRate: 8,
+      repeat: -1,
+    });
+
     this.showBanner(`Wave ${this.waveNumber} — prep`);
 
     // --- Bottom HUD: HAY | MENU ---
@@ -347,11 +354,9 @@ export class ShepherdScene extends Phaser.Scene {
     const v0 = 60;
 
     const initAngle = Math.atan2(dy, dx);
-    const s = this.add
-      .rectangle(sx, sy, SHEEP_RADIUS * 2, SHEEP_RADIUS, 0xfafafa)
-      .setDepth(5);
-    s.setStrokeStyle(2, 0x2b2b2b);
-    s.rotation = initAngle;
+    const s = this.add.sprite(sx, sy, "sheep").setDepth(5);
+    s.rotation = initAngle + Math.PI / 2;
+    s.play("sheep-walk");
     this.hudCamera.ignore(s);
     this.sheep.push({
       sprite: s,
@@ -536,10 +541,10 @@ export class ShepherdScene extends Phaser.Scene {
       duration: 260,
       onUpdate: (tween) => {
         const t = tween.getValue() ?? 0;
-        const r = Math.round(250 + (255 - 250) * t); // 0xfa → 0xff
-        const g = Math.round(250 + (224 - 250) * t); // 0xfa → 0xe0
-        const b = Math.round(250 + (153 - 250) * t); // 0xfa → 0x99
-        s.sprite.setFillStyle((r << 16) | (g << 8) | b);
+        const r = Math.round(255);
+        const g = Math.round(255 + (224 - 255) * t); // 0xff → 0xe0
+        const b = Math.round(255 + (153 - 255) * t); // 0xff → 0x99
+        s.sprite.setTint((r << 16) | (g << 8) | b);
       },
     });
     // Scale pop — brief squash-and-stretch as the sheep settles.
@@ -774,7 +779,7 @@ export class ShepherdScene extends Phaser.Scene {
 
       s.sprite.x += s.vx * dt;
       s.sprite.y += s.vy * dt;
-      s.sprite.rotation = s.angle;
+      s.sprite.rotation = s.angle + Math.PI / 2;
 
       // World bounds — reflect angle off edges
       if (s.sprite.x < SHEEP_RADIUS) {
