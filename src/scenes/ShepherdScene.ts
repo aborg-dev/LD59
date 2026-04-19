@@ -1409,8 +1409,20 @@ export class ShepherdScene extends Phaser.Scene {
     this.facingWolf = this.findFacingWolf();
     this.facingSheep = this.facingWolf ? null : this.findFacingSheep();
 
-    // Return herding/defending dogs whose target is gone back to following
+    // Return herding/defending dogs whose target is gone back to following.
+    // Herding dogs also peel off to defend if a wolf starts hunting their sheep.
     for (const dog of this.dogs) {
+      if (dog.mode === "herding" && dog.targetSheep) {
+        const attacker = this.wolves.find(
+          (w) => w.targetSheep === dog.targetSheep,
+        );
+        if (attacker) {
+          dog.mode = "defending";
+          dog.targetWolf = attacker;
+          dog.targetSheep = null;
+          continue;
+        }
+      }
       if (
         dog.mode === "herding" &&
         (!dog.targetSheep || dog.targetSheep.sold || dog.targetSheep.waiting)

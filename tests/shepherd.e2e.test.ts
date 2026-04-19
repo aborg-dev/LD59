@@ -49,6 +49,42 @@ describe("shepherd core loop", () => {
     expect(after.coins).toBeLessThan(100);
   });
 
+  it("herding dog peels off to defend when a wolf targets its sheep", async () => {
+    await game.startScene("Shepherd");
+
+    await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      gs.coins = 200;
+      gs.updateCoinText();
+      gs.buyDog();
+
+      // Put a sheep on the map and dispatch the AI dog to herd it
+      const sheep = gs.spawnSheep();
+      sheep.sprite.x = 1600;
+      sheep.sprite.y = 1000;
+      sheep.vx = 0; sheep.vy = 0;
+
+      const dog = gs.dogs[0];
+      dog.mode = 'herding';
+      dog.targetSheep = sheep;
+
+      // Wolf hunting that same sheep
+      const wolfSprite = gs.add.rectangle(1400, 1000, 42, 22, 0x7a1a1a).setDepth(9);
+      gs.hudCamera.ignore(wolfSprite);
+      const wolf = { sprite: wolfSprite, targetSheep: sheep, vx: 0, vy: 0, angle: 0, scaredMs: 0 };
+      gs.wolves.push(wolf);
+    })()`);
+
+    // One step is enough for the mode transition
+    await game.advanceTime(50);
+
+    const mode = (await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      return gs.dogs[0].mode;
+    })()`)) as string;
+    expect(mode).toBe("defending");
+  });
+
   it("buying a guard dog spawns at a field post and scares nearby wolves", async () => {
     await game.startScene("Shepherd");
 
