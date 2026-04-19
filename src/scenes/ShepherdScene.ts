@@ -665,6 +665,7 @@ export class ShepherdScene extends Phaser.Scene {
 
     const sprite = this.add
       .image(x, y, "wolf")
+      .setScale(1.75)
       .setDepth(9);
     this.hudCamera.ignore(sprite);
     this.wolves.push({
