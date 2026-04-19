@@ -161,7 +161,8 @@ interface Truck {
   targetAngle: number;
   state: "arriving" | "dropping" | "leaving";
   dropTimer: number;
-  hasDropped: boolean;
+  sheepCount: number;
+  sheepDropped: number;
 }
 
 const TRUCK_TURN_RATE = 7.0; // rad/s — how fast the truck rotates into a new heading
@@ -1245,7 +1246,13 @@ export class ShepherdScene extends Phaser.Scene {
     if (this.coins < this.buySheepCost) return;
     if (this.sheep.length >= MAX_SHEEP) return;
     this.coins -= this.buySheepCost;
-    this.spawnTruck();
+    const TRUCK_CAPACITY = 10;
+    const arriving = this.trucks.findLast((t) => t.state === "arriving" && t.sheepCount < TRUCK_CAPACITY);
+    if (arriving) {
+      arriving.sheepCount++;
+    } else {
+      this.spawnTruck();
+    }
     this.sound.play("money");
     this.updateCoinText();
   }
@@ -1367,7 +1374,8 @@ export class ShepherdScene extends Phaser.Scene {
       targetAngle: initAngle,
       state: "arriving",
       dropTimer: 0,
-      hasDropped: false,
+      sheepCount: 1,
+      sheepDropped: 0,
     };
     sprite.setRotation(initAngle);
     this.trucks.push(t);
@@ -1414,12 +1422,14 @@ export class ShepherdScene extends Phaser.Scene {
       const t = this.trucks[i];
       if (t.state === "dropping") {
         t.dropTimer += dt;
-        if (!t.hasDropped && t.dropTimer >= 0.2) {
+        const DROP_INTERVAL = 0.3;
+        const nextDropAt = 0.2 + t.sheepDropped * DROP_INTERVAL;
+        if (t.sheepDropped < t.sheepCount && t.dropTimer >= nextDropAt) {
           this.spawnSheep(t.sprite.x - TRUCK_W / 2 - 40, t.sprite.y);
           this.sound.play("sheep-bleat", { volume: 0.25 });
-          t.hasDropped = true;
+          t.sheepDropped++;
         }
-        if (t.dropTimer >= 1.0) {
+        if (t.sheepDropped >= t.sheepCount && t.dropTimer >= 0.2 + t.sheepCount * DROP_INTERVAL + 0.2) {
           t.state = "leaving";
         }
       } else if (t.wpIdx >= ROAD_WAYPOINTS.length) {
