@@ -105,8 +105,8 @@ describe("shepherd core loop", () => {
       gs.buySheep();
     })()`);
 
-    // Let the lead truck reach the drop zone and the followers queue up
-    await game.advanceTime(4000);
+    // Let the lead truck reach the drop zone (takes ~6.4s) and followers queue up
+    await game.advanceTime(7000);
 
     const trucks = (await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Shepherd');

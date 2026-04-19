@@ -43,15 +43,22 @@ const SHEAR_SEC = 4;
 const MARKET_W_PX = 260;
 const MARKET_H_PX = 200;
 
-// Road on the right edge — truck drives here
-const ROAD_W_PX = 160;
-const ROAD_CX = WORLD_W - ROAD_W_PX / 2 - 40;
-const DROP_X = ROAD_CX;
-const DROP_Y = 1100;
-
+// Country road — top-left → turns → center → bottom-right
+const ROAD_W_PX = 140;
 const TRUCK_W = 288;
 const TRUCK_H = 400;
 const TRUCK_SPEED = 320;
+const ROAD_WAYPOINTS: readonly { x: number; y: number }[] = [
+  { x: 350, y: -TRUCK_H },           // [0] spawn off-screen, top-left area
+  { x: 350, y: 250 },                 // [1] turn east
+  { x: 1500, y: 250 },               // [2] turn south (crosses through center)
+  { x: 1500, y: 1350 },              // [3] turn east
+  { x: 2850, y: 1350 },              // [4] turn south
+  { x: 2850, y: WORLD_H + TRUCK_H }, // [5] exit bottom-right area
+];
+const DROP_SEGMENT_WP_IDX = 3; // wpIdx when truck is on the center vertical segment
+const DROP_X = 1500;
+const DROP_Y = 800;
 
 const BABY_SHEEP_SCALE = 0.45;
 const ADULT_SHEEP_SCALE = 1.0;
@@ -148,8 +155,7 @@ interface Dog {
 
 interface Truck {
   sprite: Phaser.GameObjects.Image;
-  vx: number;
-  vy: number;
+  wpIdx: number;
   state: "arriving" | "dropping" | "leaving";
   dropTimer: number;
   hasDropped: boolean;
@@ -333,11 +339,7 @@ export class ShepherdScene extends Phaser.Scene {
     }
     this.hudCamera.ignore(grassLayer);
 
-    // Road along the right edge (dirt)
-    const road = this.add
-      .rectangle(ROAD_CX, WORLD_H / 2, ROAD_W_PX, WORLD_H, 0x8a6a3a)
-      .setDepth(0.5);
-    this.hudCamera.ignore(road);
+    this.drawRoad();
 
     // Field — baby sheep grow here. Fence is a paid upgrade.
     this.fieldRect = this.add
@@ -1187,22 +1189,89 @@ export class ShepherdScene extends Phaser.Scene {
     this.updateCoinText();
   }
 
+  private drawRoad(): void {
+    const gfx = this.add.graphics().setDepth(0.5);
+    this.hudCamera.ignore(gfx);
+
+    const halfOuter = ROAD_W_PX / 2;        // 70 — full shoulder half-width
+    const halfPaved = Math.round(ROAD_W_PX * 0.28); // ~39 — gray center half-width
+
+    // Draw each segment: shoulder then paved center
+    for (let i = 0; i + 1 < ROAD_WAYPOINTS.length; i++) {
+      const p0 = ROAD_WAYPOINTS[i];
+      const p1 = ROAD_WAYPOINTS[i + 1];
+      const horiz = p0.y === p1.y;
+      const minX = Math.min(p0.x, p1.x) - (horiz ? 0 : halfOuter);
+      const minY = Math.min(p0.y, p1.y) - (horiz ? halfOuter : 0);
+      const w = Math.abs(p1.x - p0.x) + (horiz ? 0 : ROAD_W_PX);
+      const h = Math.abs(p1.y - p0.y) + (horiz ? ROAD_W_PX : 0);
+
+      gfx.fillStyle(0xc4a07a);
+      gfx.fillRect(minX, minY, w, h);
+
+      gfx.fillStyle(0x888880);
+      if (horiz) {
+        gfx.fillRect(minX, p0.y - halfPaved, w, halfPaved * 2);
+      } else {
+        gfx.fillRect(p0.x - halfPaved, minY, halfPaved * 2, h);
+      }
+    }
+
+    // Corner fills at each internal waypoint
+    for (let i = 1; i + 1 < ROAD_WAYPOINTS.length; i++) {
+      const p = ROAD_WAYPOINTS[i];
+      gfx.fillStyle(0xc4a07a);
+      gfx.fillRect(p.x - halfOuter, p.y - halfOuter, ROAD_W_PX, ROAD_W_PX);
+      gfx.fillStyle(0x888880);
+      gfx.fillRect(p.x - halfPaved, p.y - halfPaved, halfPaved * 2, halfPaved * 2);
+    }
+
+    // Rough edge blobs along each segment
+    gfx.fillStyle(0x7a5630);
+    for (let i = 0; i + 1 < ROAD_WAYPOINTS.length; i++) {
+      const p0 = ROAD_WAYPOINTS[i];
+      const p1 = ROAD_WAYPOINTS[i + 1];
+      const horiz = p0.y === p1.y;
+      const len = Math.abs(horiz ? p1.x - p0.x : p1.y - p0.y);
+      const dirX = horiz ? Math.sign(p1.x - p0.x) : 0;
+      const dirY = horiz ? 0 : Math.sign(p1.y - p0.y);
+      const count = Math.floor(len / 20);
+
+      for (let j = 0; j < count; j++) {
+        const t = (j + 0.5) * 20;
+        const cx = p0.x + dirX * t;
+        const cy = p0.y + dirY * t;
+        const r = 5 + Math.random() * 11;
+        const off = halfOuter - 4 + Math.random() * 10;
+        const jitter = (Math.random() - 0.5) * 18;
+        if (horiz) {
+          gfx.fillCircle(cx + jitter, cy - off, r);
+          gfx.fillCircle(cx + jitter, cy + off, r);
+        } else {
+          gfx.fillCircle(cx - off, cy + jitter, r);
+          gfx.fillCircle(cx + off, cy + jitter, r);
+        }
+      }
+    }
+  }
+
   private spawnTruck(): void {
+    const start = ROAD_WAYPOINTS[0];
     const sprite = this.add
-      .image(ROAD_CX, -TRUCK_H, "truck")
+      .image(start.x, start.y, "truck")
       .setDisplaySize(TRUCK_W, TRUCK_H)
       .setScale(2.0)
-      .setAngle(180)
       .setDepth(7);
     this.hudCamera.ignore(sprite);
-    this.trucks.push({
+    const t: Truck = {
       sprite,
-      vx: 0,
-      vy: TRUCK_SPEED,
+      wpIdx: 1,
       state: "arriving",
       dropTimer: 0,
       hasDropped: false,
-    });
+    };
+    this.trucks.push(t);
+    this.setTruckRotation(t);
     if (this.truckSfxFade) {
       this.truckSfxFade.stop();
       this.truckSfxFade = undefined;
@@ -1215,6 +1284,14 @@ export class ShepherdScene extends Phaser.Scene {
       this.truckSfx = this.sound.add("truck", { loop: true, volume: 0.7 });
       this.truckSfx.play();
     }
+  }
+
+  private setTruckRotation(t: Truck): void {
+    if (t.wpIdx < 1 || t.wpIdx >= ROAD_WAYPOINTS.length) return;
+    const prev = ROAD_WAYPOINTS[t.wpIdx - 1];
+    const next = ROAD_WAYPOINTS[t.wpIdx];
+    const angle = Math.atan2(next.y - prev.y, next.x - prev.x);
+    t.sprite.setRotation(angle + Math.PI / 2);
   }
 
   private checkGameOver(): void {
@@ -1236,23 +1313,8 @@ export class ShepherdScene extends Phaser.Scene {
     const truckGap = 0;
     for (let i = this.trucks.length - 1; i >= 0; i--) {
       const t = this.trucks[i];
-      if (t.state === "arriving") {
-        // Queue behind any truck ahead on the road (not yet leaving)
-        let maxY = DROP_Y;
-        for (const other of this.trucks) {
-          if (other === t) continue;
-          if (other.state === "leaving") continue;
-          if (other.sprite.y > t.sprite.y) {
-            maxY = Math.min(maxY, other.sprite.y - TRUCK_H - truckGap);
-          }
-        }
-        t.sprite.y = Math.min(t.sprite.y + t.vy * dt, maxY);
-        if (t.sprite.y >= DROP_Y) {
-          t.sprite.y = DROP_Y;
-          t.state = "dropping";
-          t.dropTimer = 0;
-        }
-      } else if (t.state === "dropping") {
+
+      if (t.state === "dropping") {
         t.dropTimer += dt;
         if (!t.hasDropped && t.dropTimer >= 0.2) {
           this.spawnSheep(t.sprite.x - TRUCK_W / 2 - 40, t.sprite.y);
@@ -1262,12 +1324,60 @@ export class ShepherdScene extends Phaser.Scene {
         if (t.dropTimer >= 1.0) {
           t.state = "leaving";
         }
-      } else {
-        t.sprite.y += TRUCK_SPEED * dt;
-        if (t.sprite.y > WORLD_H + TRUCK_H) {
-          t.sprite.destroy();
-          this.trucks.splice(i, 1);
+        continue;
+      }
+
+      if (t.wpIdx >= ROAD_WAYPOINTS.length) {
+        t.sprite.destroy();
+        this.trucks.splice(i, 1);
+        continue;
+      }
+
+      const target = ROAD_WAYPOINTS[t.wpIdx];
+      const dx = target.x - t.sprite.x;
+      const dy = target.y - t.sprite.y;
+      const distToWp = Math.hypot(dx, dy);
+      const step = TRUCK_SPEED * dt;
+
+      // On the drop segment, queue behind other trucks and stop at DROP_Y
+      if (t.state === "arriving" && t.wpIdx === DROP_SEGMENT_WP_IDX) {
+        const myIdx = this.trucks.indexOf(t);
+        let maxY = DROP_Y;
+        for (const other of this.trucks) {
+          if (other === t || other.state === "leaving") continue;
+          if (other.state === "dropping") {
+            maxY = Math.min(maxY, DROP_Y - TRUCK_H - truckGap);
+          } else if (other.wpIdx === DROP_SEGMENT_WP_IDX) {
+            // Use spawn-order as tiebreaker when trucks are at the same position
+            const otherIdx = this.trucks.indexOf(other);
+            const ahead = other.sprite.y > t.sprite.y ||
+              (other.sprite.y === t.sprite.y && otherIdx < myIdx);
+            if (ahead) {
+              maxY = Math.min(maxY, other.sprite.y - TRUCK_H - truckGap);
+            }
+          }
         }
+        const advance = Math.min(step, maxY - t.sprite.y);
+        if (advance > 0) t.sprite.y += advance;
+        if (t.sprite.y >= DROP_Y) {
+          t.sprite.y = DROP_Y;
+          t.state = "dropping";
+          t.dropTimer = 0;
+        }
+        continue;
+      }
+
+      // Generic waypoint following for all other segments
+      if (distToWp <= step) {
+        t.sprite.x = target.x;
+        t.sprite.y = target.y;
+        t.wpIdx++;
+        if (t.wpIdx < ROAD_WAYPOINTS.length) {
+          this.setTruckRotation(t);
+        }
+      } else {
+        t.sprite.x += (dx / distToWp) * step;
+        t.sprite.y += (dy / distToWp) * step;
       }
     }
     if (
