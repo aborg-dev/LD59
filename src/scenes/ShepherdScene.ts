@@ -4,8 +4,8 @@ import mapData from "./shepherd-map.json";
 
 const GRID_COLS = 4;
 const GRID_ROWS = 4;
-const ROOM_W = 1600;
-const ROOM_H = 800;
+const ROOM_W = 800;
+const ROOM_H = 400;
 const WORLD_W = ROOM_W * GRID_COLS;
 const WORLD_H = ROOM_H * GRID_ROWS;
 
@@ -13,7 +13,7 @@ const HUD_TOP_H = 70;
 const HUD_BOTTOM_H = 80;
 
 const PEN_RADIUS = 120;
-const SHEEP_RADIUS = 36;
+const SHEEP_RADIUS = 18;
 const MAX_SHEEP = 30;
 const SPAWN_INTERVAL_MS = 3000;
 
@@ -515,7 +515,7 @@ export class ShepherdScene extends Phaser.Scene {
     const v0 = 60;
     const initAngle = Math.atan2(dy, dx);
 
-    const s = this.add.sprite(sx, sy, "sheep").setDepth(5).setScale(0.5);
+    const s = this.add.sprite(sx, sy, "sheep").setDepth(5);
     s.rotation = initAngle + Math.PI / 2;
     s.play("sheep-walk");
     this.hudCamera.ignore(s);
