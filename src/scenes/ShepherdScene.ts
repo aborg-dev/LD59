@@ -36,8 +36,8 @@ const SALE_PRICE_MAX = 10;
 // Shear shed — pay $SHEAR_VALUE to shear an adult back into a baby
 const SHEAR_CX = 1200;
 const SHEAR_CY = 440;
-const SHEAR_W_PX = 288;
-const SHEAR_H_PX = 288;
+const SHEAR_W_PX = 236;
+const SHEAR_H_PX = 164;
 const SHEAR_VALUE = 3;
 const SHEAR_SEC = 4;
 const MARKET_W_PX = 236;
@@ -1352,7 +1352,7 @@ export class ShepherdScene extends Phaser.Scene {
           for (const other of this.trucks) {
             if (other === t || other.state === "leaving") continue;
             if (other.state === "dropping") {
-              maxY = Math.min(maxY, DROP_Y - TRUCK_H - truckGap);
+              maxY = Math.min(maxY, DROP_Y - other.sprite.displayHeight - truckGap);
             } else if (other.wpIdx === DROP_SEGMENT_WP_IDX) {
               const otherIdx = this.trucks.indexOf(other);
               const ahead = other.sprite.y > t.sprite.y ||
@@ -1382,7 +1382,30 @@ export class ShepherdScene extends Phaser.Scene {
             t.targetAngle = dir + Math.PI / 2;
           }
 
-          if (distToWp <= step) {
+          // Maintain spacing with the truck ahead (lower index = spawned earlier = further along)
+          const truckAhead = i > 0 ? this.trucks[i - 1] : null;
+          if (truckAhead && truckAhead.state !== "leaving") {
+            const gap = Math.hypot(
+              truckAhead.sprite.x - t.sprite.x,
+              truckAhead.sprite.y - t.sprite.y,
+            );
+            if (gap < t.sprite.displayHeight + truckGap) {
+              // Too close — skip movement this frame
+            } else {
+              const clampedStep = Math.min(step, gap - t.sprite.displayHeight - truckGap);
+              if (distToWp <= clampedStep) {
+                t.sprite.x = target.x;
+                t.sprite.y = target.y;
+                t.wpIdx++;
+                if (t.wpIdx < ROAD_WAYPOINTS.length) {
+                  this.setTruckRotation(t);
+                }
+              } else {
+                t.sprite.x += (dx / distToWp) * clampedStep;
+                t.sprite.y += (dy / distToWp) * clampedStep;
+              }
+            }
+          } else if (distToWp <= step) {
             t.sprite.x = target.x;
             t.sprite.y = target.y;
             t.wpIdx++;
