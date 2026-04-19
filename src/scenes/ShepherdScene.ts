@@ -155,6 +155,7 @@ interface MapTree {
   x: number;
   y: number;
   r: number;
+  variant: number; // 0–4 maps to tree0…tree4
 }
 
 export interface ShepherdSceneState {
@@ -390,24 +391,19 @@ export class ShepherdScene extends Phaser.Scene {
       .setDepth(2);
     this.hudCamera.ignore(shearLabel);
 
-    // Load map objects
-    this.mapTrees = mapData.trees as MapTree[];
+    // Load map objects — assign variant if missing (seeded by position for stability)
+    this.mapTrees = (mapData.trees as MapTree[]).map((t, i) => ({
+      ...t,
+      variant: t.variant ?? (i * 3 + Math.round(t.x * 0.07 + t.y * 0.05)) % 5,
+    }));
     this.mapSpawns = mapData.spawns;
 
     // Render trees
-    const treeColors = [0x3a8228, 0x4a9a30, 0x357020];
-    const treeGfx = this.add.graphics().setDepth(2);
-    for (let i = 0; i < this.mapTrees.length; i++) {
-      const t = this.mapTrees[i];
-      const col = treeColors[i % treeColors.length];
-      treeGfx.fillStyle(0x1e4a10, 0.5);
-      treeGfx.fillCircle(t.x + t.r * 0.25, t.y + t.r * 0.25, t.r);
-      treeGfx.fillStyle(col, 1);
-      treeGfx.fillCircle(t.x, t.y, t.r);
-      treeGfx.fillStyle(0x7acc50, 0.45);
-      treeGfx.fillCircle(t.x - t.r * 0.28, t.y - t.r * 0.28, t.r * 0.45);
+    for (const t of this.mapTrees) {
+      const key = `tree${t.variant % 5}`;
+      const spr = this.add.image(t.x, t.y, key).setDepth(2);
+      this.hudCamera.ignore(spr);
     }
-    this.hudCamera.ignore(treeGfx);
 
     this.editorGfx = this.add.graphics().setDepth(60);
     this.hudCamera.ignore(this.editorGfx);
@@ -2278,6 +2274,7 @@ export class ShepherdScene extends Phaser.Scene {
         x: Math.round(wp.x),
         y: Math.round(wp.y),
         r: this.editorTreeRadius,
+        variant: Math.floor(Math.random() * 5),
       });
     } else {
       this.mapSpawns.push({ x: Math.round(wp.x), y: Math.round(wp.y) });

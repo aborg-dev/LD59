@@ -36,6 +36,11 @@ export class Preloader extends Scene {
     });
     this.load.image("grass1", "1723_Gras_HighDetail_1.png");
     this.load.image("grass2", "1723_Gras_HighDetail_2.png");
+    this.load.image("tree0", "1755_TreeSmall_1.png");
+    this.load.image("tree1", "1755_TreeSmall_2.png");
+    this.load.image("tree2", "1755_TreeSmall_3.png");
+    this.load.image("tree3", "1809_Tree_Big_1.png");
+    this.load.image("tree4", "1809_Tree_Big_2.png");
   }
 
   create() {
