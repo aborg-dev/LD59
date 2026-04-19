@@ -18,15 +18,17 @@ afterAll(async () => {
   await game.close();
 });
 
-describe("shepherd wave-based herding", () => {
-  it("starts in prep and transitions to active, spawning wave sheep", async () => {
+describe("shepherd idle clicker", () => {
+  it("starts in prep with 3 deployed dogs and no sheep", async () => {
     await game.startScene("Shepherd");
     const initial = await shepherdState();
     expect(initial.wave.phase).toBe("prep");
     expect(initial.wave.number).toBe(1);
     expect(initial.sheep.length).toBe(0);
+    expect(initial.aiDogs.length).toBe(3);
+    expect(initial.coins).toBe(0);
+    expect(initial.nextDogCost).toBeGreaterThan(0);
 
-    // 5s prep + 2s active → some sheep should have spawned
     await game.advanceTime(7000);
     const active = await shepherdState();
     expect(active.wave.phase).toBe("active");
@@ -66,7 +68,7 @@ describe("shepherd wave-based herding", () => {
       s.sprite.y = 400;
       s.vx = 0;
       s.vy = 0;
-      s.angle = 0; // already facing +x so the turn-rate limit doesn't block
+      s.angle = 0;
       s.wanderAngle = 0;
       s.modeT = 999;
       s.grazing = true;
@@ -75,7 +77,7 @@ describe("shepherd wave-based herding", () => {
     const before = (await shepherdState()).sheep.at(-1);
     if (!before) throw new Error("no sheep");
 
-    // Whistle at (150, 400) — sheep at 200 should be shoved further right.
+    // Bark at (150, 400) — sheep at 200 should be shoved further right.
     await game.eval_(`(() => {
       window.game.scene.getScene('Shepherd').whistle(150, 400);
     })()`);
@@ -86,49 +88,73 @@ describe("shepherd wave-based herding", () => {
     expect(after.x).toBeGreaterThan(before.x);
   });
 
-  it("places a belt and pushes sheep in the belt's direction", async () => {
+  it("buying a dog costs coins and spawns an AI dog", async () => {
+    await game.startScene("Shepherd");
+
+    const result = await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      gs.coins = 50;
+      const before = gs.dumpState().nextDogCost;
+      const ok = gs.tryBuyDog();
+      const after = gs.dumpState();
+      return { ok, before, coins: after.coins, dogs: after.aiDogs.length, nextCost: after.nextDogCost };
+    })()`);
+    const r = result as {
+      ok: boolean;
+      before: number;
+      coins: number;
+      dogs: number;
+      nextCost: number;
+    };
+    expect(r.ok).toBe(true);
+    // 3 starter dogs + 1 just bought.
+    expect(r.dogs).toBe(4);
+    expect(r.coins).toBe(50 - r.before);
+    // Cost grows once we're past the free starters.
+    expect(r.nextCost).toBeGreaterThan(r.before);
+  });
+
+  it("an AI dog herds a sheep toward the pen", async () => {
     await game.startScene("Shepherd");
 
     await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Shepherd');
       for (const s of gs.sheep) s.sprite.destroy();
       gs.sheep = [];
-      gs.coins = 10;
-      gs.placing = 'right';
-      const bx = 250;
-      const by = 400;
-      gs.tryPlaceBelt(bx, by, 'right');
+      // One sheep parked east of the pen.
       gs.spawnSheep();
-      const s = gs.sheep[gs.sheep.length - 1];
-      s.sprite.x = bx;
-      s.sprite.y = by;
+      const s = gs.sheep[0];
+      s.sprite.x = gs.penX + 240;
+      s.sprite.y = gs.penY;
       s.vx = 0;
       s.vy = 0;
-      s.angle = 0; // already facing +x so the belt can push without a turn delay
+      s.angle = Math.PI; // facing west, toward the pen
+      s.wanderAngle = Math.PI;
       s.modeT = 999;
       s.grazing = true;
+      // Park the starter dogs east/north/south of the sheep so flee pushes west.
+      gs.aiDogs[0].sprite.x = gs.penX + 380;
+      gs.aiDogs[0].sprite.y = gs.penY;
+      // Tuck the other starters far away so they don't interfere.
+      for (let i = 1; i < gs.aiDogs.length; i++) {
+        gs.aiDogs[i].sprite.x = 40;
+        gs.aiDogs[i].sprite.y = 40;
+      }
     })()`);
 
-    const st0 = await shepherdState();
-    expect(st0.belts.length).toBe(1);
-    expect(st0.belts[0].dir).toBe("right");
-    expect(st0.coins).toBe(5);
-
-    const sheepBefore = st0.sheep.at(-1);
-    if (!sheepBefore) throw new Error("no sheep");
-
-    await game.advanceTime(100);
-
-    const sheepAfter = (await shepherdState()).sheep.at(-1);
-    if (!sheepAfter) throw new Error("no sheep");
-    expect(sheepAfter.x).toBeGreaterThan(sheepBefore.x);
+    const before = (await shepherdState()).sheep[0];
+    await game.advanceTime(1500);
+    const after = (await shepherdState()).sheep[0];
+    if (!before || !after) throw new Error("sheep missing");
+    // Sheep should have moved west (closer to the pen).
+    const beforeDist = Math.hypot(before.x - 640, before.y - 295);
+    const afterDist = Math.hypot(after.x - 640, after.y - 295);
+    expect(afterDist).toBeLessThan(beforeDist);
   });
 
   it("clearing a wave advances wave number and awards coin bonus", async () => {
     await game.startScene("Shepherd");
 
-    // Jump into active phase with a single unpenned sheep inside the pen,
-    // so the wave clears on the next physics step.
     await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Shepherd');
       for (const s of gs.sheep) s.sprite.destroy();
@@ -149,8 +175,78 @@ describe("shepherd wave-based herding", () => {
     const s = await shepherdState();
     expect(s.wave.number).toBe(2);
     expect(s.wave.phase).toBe("prep");
-    // 1 coin from penning + 3 wave-clear bonus
     expect(s.coins).toBeGreaterThanOrEqual(4);
+  });
+
+  it("a wolf eats a sheep when no dogs are nearby", async () => {
+    await game.startScene("Shepherd");
+
+    await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      // Move the starter dogs far away so they don't scare the wolf.
+      for (const d of gs.aiDogs) {
+        d.sprite.x = 40;
+        d.sprite.y = 40;
+      }
+      // One sheep parked east of the pen.
+      for (const s of gs.sheep) s.sprite.destroy();
+      gs.sheep = [];
+      gs.spawnSheep();
+      const s = gs.sheep[0];
+      s.sprite.x = gs.penX + 240;
+      s.sprite.y = gs.penY;
+      s.vx = 0;
+      s.vy = 0;
+      s.angle = 0;
+      s.modeT = 999;
+      s.grazing = true;
+      // Spawn a wolf right next to the sheep.
+      gs.spawnWolf();
+      const w = gs.wolves[gs.wolves.length - 1];
+      w.sprite.x = gs.penX + 220;
+      w.sprite.y = gs.penY;
+      w.retreatMs = 0;
+    })()`);
+
+    await game.advanceTime(800);
+
+    const dump = await shepherdState();
+    // The sheep should be eaten.
+    expect(dump.sheep.length).toBe(0);
+    // Wolf is now retreating (or already despawned).
+    if (dump.wolves.length > 0) {
+      expect(dump.wolves[0].retreating).toBe(true);
+    }
+  });
+
+  it("a dog scares a wolf away from the flock", async () => {
+    await game.startScene("Shepherd");
+
+    const result = await game.eval_(`(() => {
+      const gs = window.game.scene.getScene('Shepherd');
+      // Park a wolf next to a dog. The wolf should be flushed away.
+      for (const d of gs.aiDogs) { d.sprite.x = 40; d.sprite.y = 40; }
+      gs.aiDogs[0].sprite.x = gs.penX;
+      gs.aiDogs[0].sprite.y = gs.penY;
+      gs.spawnWolf();
+      const w = gs.wolves[gs.wolves.length - 1];
+      w.sprite.x = gs.penX + 80;
+      w.sprite.y = gs.penY;
+      w.retreatMs = 0;
+      return { x: w.sprite.x, dogX: gs.aiDogs[0].sprite.x };
+    })()`);
+    const before = result as { x: number; dogX: number };
+
+    await game.advanceTime(400);
+
+    const dump = await shepherdState();
+    // Either the wolf has been pushed eastward (away from the dog) or it has
+    // already left the field.
+    if (dump.wolves.length > 0) {
+      const w = dump.wolves[0];
+      expect(w.x).toBeGreaterThan(before.x);
+      expect(w.retreating).toBe(true);
+    }
   });
 
   it("ends game when wave timer expires with unpenned sheep", async () => {
@@ -163,8 +259,8 @@ describe("shepherd wave-based herding", () => {
       gs.wavePhase = 'active';
       gs.waveSize = 1;
       gs.sheepToSpawn = 0;
-      gs.spawnSheep();           // one sheep, unpenned, at a random edge
-      gs.phaseTimeLeftMs = 40;   // about to expire
+      gs.spawnSheep();
+      gs.phaseTimeLeftMs = 40;
     })()`);
     await game.advanceTime(200);
 
