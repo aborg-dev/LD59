@@ -806,8 +806,9 @@ export class ShepherdScene extends Phaser.Scene {
       let desiredVx = 0;
       let desiredVy = 0;
       if (toHerdD > 5) {
-        desiredVx = (toHerdX / toHerdD) * DOG_SPEED;
-        desiredVy = (toHerdY / toHerdD) * DOG_SPEED;
+        const approachSpeed = Math.min(toHerdD * 3.5, DOG_SPEED);
+        desiredVx = (toHerdX / toHerdD) * approachSpeed;
+        desiredVy = (toHerdY / toHerdD) * approachSpeed;
       }
       this.moveDog(dog, desiredVx, desiredVy, dt);
     }
@@ -1038,11 +1039,11 @@ export class ShepherdScene extends Phaser.Scene {
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
       dog.angle += Math.max(-DOG_TURN_RATE * dt, Math.min(DOG_TURN_RATE * dt, diff));
-      dog.vx = Math.cos(dog.angle) * DOG_SPEED;
-      dog.vy = Math.sin(dog.angle) * DOG_SPEED;
+      dog.vx = Math.cos(dog.angle) * desiredSpd;
+      dog.vy = Math.sin(dog.angle) * desiredSpd;
     } else {
-      dog.vx *= 0.85;
-      dog.vy *= 0.85;
+      dog.vx = 0;
+      dog.vy = 0;
     }
     dog.sprite.x += dog.vx * dt;
     dog.sprite.y += dog.vy * dt;
