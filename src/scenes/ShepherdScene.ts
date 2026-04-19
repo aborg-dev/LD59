@@ -1551,11 +1551,17 @@ export class ShepherdScene extends Phaser.Scene {
           const dy = wolf.targetSheep.sprite.y - wolf.sprite.y;
           const d = Math.hypot(dx, dy);
           if (d < WOLF_EAT_RANGE) {
-            const idx = this.sheep.indexOf(wolf.targetSheep);
+            const eaten = wolf.targetSheep;
+            const idx = this.sheep.indexOf(eaten);
             if (idx !== -1) {
               this.sheep[idx].readyIcon?.destroy();
               this.sheep[idx].sprite.destroy();
               this.sheep.splice(idx, 1);
+              for (const dog of this.dogs) {
+                if (dog.targetSheep === eaten) { dog.targetSheep = null; dog.mode = "following"; }
+              }
+              if (this.alphaDog.targetSheep === eaten) { this.alphaDog.targetSheep = null; this.alphaDog.mode = "following"; }
+              if (this.facingSheep === eaten) this.facingSheep = null;
             }
             wolf.targetSheep = null;
           } else {
