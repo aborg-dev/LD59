@@ -270,6 +270,9 @@ export class ShepherdScene extends Phaser.Scene {
   private mapTrees: MapTree[] = [];
   private mapSpawns: { x: number; y: number }[] = [];
 
+  private grassLayer!: Phaser.GameObjects.Layer;
+  private grassMode: 0 | 1 | 2 = 0; // 0=original, 1=random, 2=noise
+
   // Debug/editor state
   private debugPanel: HTMLDivElement | null = null;
   private editorActive = false;
@@ -321,29 +324,7 @@ export class ShepherdScene extends Phaser.Scene {
     }));
     this.mapSpawns = mapData.spawns;
 
-    // Grass background — wavy boundary between high-detail (left) and low-detail (right)
-    // Boundary x oscillates with a sine wave; soft blend zone on either side
-    const tile = 64;
-    const baseBoundary = WORLD_W / 3;
-    const waveAmp = 220;           // px world units of horizontal oscillation
-    const waveFreq = (Math.PI) / 900; // ~1 full cycles over world height
-    const blendHalf = 96;          // half-width of soft transition zone (px)
-    const lowKeys = ["grassLow1", "grassLow2", "grassLow3", "grassLow4"];
-    const highKeys = ["grass1", "grass2"];
-    const grassLayer = this.add.layer().setDepth(0);
-    for (let yy = 0; yy < WORLD_H; yy += tile) {
-      const boundary = baseBoundary + Math.cos(yy * waveFreq) * waveAmp;
-      for (let xx = 0; xx < WORLD_W; xx += tile) {
-        const dist = (xx + tile / 2) - boundary;
-        // highProb: 1 left of zone, 0 right of zone, linear in between
-        const highProb = dist < -blendHalf ? 1 : dist > blendHalf ? 0 : (blendHalf - dist) / (blendHalf * 2);
-        const pool = Math.random() < highProb ? highKeys : lowKeys;
-        const key = pool[Math.floor(Math.random() * pool.length)];
-        const img = this.add.image(xx, yy, key).setOrigin(0, 0).setScale(2.0);
-        grassLayer.add(img);
-      }
-    }
-    this.hudCamera.ignore(grassLayer);
+    this.buildGrass();
 
     this.drawRoad();
 
@@ -1255,6 +1236,46 @@ export class ShepherdScene extends Phaser.Scene {
     }
     this.sound.play("money");
     this.updateCoinText();
+  }
+
+  private buildGrass(): void {
+    if (this.grassLayer) {
+      this.grassLayer.destroy(true);
+    }
+    const tile = 64;
+    const highKeys = ["grass1", "grass2"];
+    const lowKeys = ["grassLow1", "grassLow2", "grassLow3", "grassLow4"];
+    this.grassLayer = this.add.layer().setDepth(0);
+    for (let yy = 0; yy < WORLD_H; yy += tile) {
+      for (let xx = 0; xx < WORLD_W; xx += tile) {
+        let key: string;
+        if (this.grassMode === 0) {
+          // Original: wavy boundary — high-detail left, low-detail right
+          const baseBoundary = WORLD_W / 3;
+          const waveAmp = 220;
+          const waveFreq = Math.PI / 900;
+          const blendHalf = 96;
+          const boundary = baseBoundary + Math.cos(yy * waveFreq) * waveAmp;
+          const dist = (xx + tile / 2) - boundary;
+          const highProb = dist < -blendHalf ? 1 : dist > blendHalf ? 0 : (blendHalf - dist) / (blendHalf * 2);
+          const pool = Math.random() < highProb ? highKeys : lowKeys;
+          key = pool[Math.floor(Math.random() * pool.length)];
+        } else if (this.grassMode === 1) {
+          // Random: uniform across all variants
+          const all = [...highKeys, ...lowKeys];
+          key = all[Math.floor(Math.random() * all.length)];
+        } else {
+          // Noise: two-frequency sine sum drives high vs low probability
+          const n = Math.sin(xx * 0.013 + Math.cos(yy * 0.009 + 1.3))
+                  + Math.sin(yy * 0.011 + Math.cos(xx * 0.007 + 0.7));
+          const t = (n + 2) / 4;
+          const pool = Math.random() < t ? highKeys : lowKeys;
+          key = pool[Math.floor(Math.random() * pool.length)];
+        }
+        this.grassLayer.add(this.add.image(xx, yy, key).setOrigin(0, 0).setScale(2.0));
+      }
+    }
+    this.hudCamera.ignore(this.grassLayer);
   }
 
   private drawRoad(): void {
@@ -2759,6 +2780,22 @@ export class ShepherdScene extends Phaser.Scene {
       "background:#334;color:#ddd;cursor:pointer;font:12px monospace;border-radius:3px;";
     editBtn.addEventListener("click", () => this.enterEditorMode());
     panel.appendChild(editBtn);
+
+    const grassModeLabels = ["Original", "Random", "Noise"];
+    const grassBtn = document.createElement("button");
+    const updateGrassBtn = () => {
+      grassBtn.textContent = `Grass: ${grassModeLabels[this.grassMode]}`;
+    };
+    updateGrassBtn();
+    grassBtn.style.cssText =
+      "width:100%;padding:6px;margin-bottom:10px;border:1px solid #486;" +
+      "background:#243;color:#afa;cursor:pointer;font:12px monospace;border-radius:3px;";
+    grassBtn.addEventListener("click", () => {
+      this.grassMode = ((this.grassMode + 1) % 3) as 0 | 1 | 2;
+      this.buildGrass();
+      updateGrassBtn();
+    });
+    panel.appendChild(grassBtn);
 
     const moneyBtn = document.createElement("button");
     moneyBtn.textContent = "+$99999";
