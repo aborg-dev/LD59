@@ -91,6 +91,7 @@ const DOG_H = 16;
 
 const DOG_SPEED = 350;
 const DOG_TURN_RATE = 6.5;
+const DOG_ARRIVAL_RADIUS = 150; // distance at which cursor-following reaches full speed
 const HERD_OFFSET = 120;
 const HERD_INTERCEPT_THREAT_RANGE = 260;
 const HERD_INTERCEPT_MAX_LEASH = 180;
@@ -1826,6 +1827,7 @@ export class ShepherdScene extends Phaser.Scene {
       }
       let desiredVx = 0;
       let desiredVy = 0;
+      let arrivalScale = 1;
       if (kx !== 0 || ky !== 0) {
         const klen = Math.hypot(kx, ky);
         desiredVx = (kx / klen) * this.alphaDogSpeed;
@@ -1837,6 +1839,7 @@ export class ShepherdScene extends Phaser.Scene {
         const ddy = this.alphaDogTargetY - this.alphaDog.sprite.y;
         const dDist = Math.hypot(ddx, ddy);
         if (dDist > 5) {
+          arrivalScale = Math.min(1, dDist / DOG_ARRIVAL_RADIUS);
           desiredVx = (ddx / dDist) * this.alphaDogSpeed;
           desiredVy = (ddy / dDist) * this.alphaDogSpeed;
         }
@@ -1855,7 +1858,7 @@ export class ShepherdScene extends Phaser.Scene {
       }
       this.updateDogAnim(this.alphaDog, this.alphaDog.angle - prevAlphaAngle, dt);
       const speed =
-        desiredSpd > 2 ? this.alphaDogSpeed * Math.max(0, Math.cos(diff)) : 0;
+        desiredSpd > 2 ? this.alphaDogSpeed * arrivalScale * Math.max(0, Math.cos(diff)) : 0;
       this.alphaDog.vx = Math.cos(this.alphaDog.angle) * speed;
       this.alphaDog.vy = Math.sin(this.alphaDog.angle) * speed;
       this.alphaDog.sprite.x += this.alphaDog.vx * dt;
