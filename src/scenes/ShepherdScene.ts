@@ -143,7 +143,7 @@ interface Wolf {
 }
 
 interface Dog {
-  sprite: Phaser.GameObjects.Rectangle | Phaser.GameObjects.Image;
+  sprite: Phaser.GameObjects.Sprite;
   targetSheep: Sheep | null;
   targetWolf: Wolf | null;
   vx: number;
@@ -477,10 +477,22 @@ export class ShepherdScene extends Phaser.Scene {
     // Alpha dog — player-controlled, starts between field and market
     const alphaStartX = (FIELD_CX + MARKET_CX) / 2;
     const alphaStartY = FIELD_CY + FIELD_H_PX / 2 + 60;
+    for (const key of ["dog_straight", "dog_bend_min", "dog_bend_mid", "dog_bend_max"]) {
+      if (!this.anims.exists(key)) {
+        this.anims.create({
+          key,
+          frames: this.anims.generateFrameNumbers(key, { start: 0, end: 11 }),
+          frameRate: 12,
+          repeat: -1,
+        });
+      }
+    }
+
     const alphaSprite = this.add
-      .image(alphaStartX, alphaStartY, "alpha_dog")
+      .sprite(alphaStartX, alphaStartY, "dog_straight")
       .setOrigin(0.5, 0.25)
-      .setDepth(11);
+      .setDepth(11)
+      .play("dog_straight");
     this.hudCamera.ignore(alphaSprite);
     this.alphaDog = {
       sprite: alphaSprite,
@@ -715,9 +727,10 @@ export class ShepherdScene extends Phaser.Scene {
 
   private spawnDog(x: number, y: number): void {
     const sprite = this.add
-      .rectangle(x, y, DOG_W, DOG_H, 0x333355)
-      .setDepth(10);
-    sprite.setStrokeStyle(2, 0xaaaaff);
+      .sprite(x, y, "dog_straight")
+      .setOrigin(0.5, 0.25)
+      .setDepth(10)
+      .play("dog_straight");
     this.hudCamera.ignore(sprite);
 
     this.dogs.push({
@@ -1056,9 +1069,11 @@ export class ShepherdScene extends Phaser.Scene {
 
   private spawnGuardDog(x: number, y: number): void {
     const sprite = this.add
-      .rectangle(x, y, DOG_W, DOG_H, 0x5a2e88)
-      .setDepth(10);
-    sprite.setStrokeStyle(2, 0xccaaff);
+      .sprite(x, y, "dog_straight")
+      .setOrigin(0.5, 0.25)
+      .setDepth(10)
+      .setTint(0xcc99ff)
+      .play("dog_straight");
     this.hudCamera.ignore(sprite);
     this.dogs.push({
       sprite,
@@ -1821,6 +1836,7 @@ export class ShepherdScene extends Phaser.Scene {
       }
       const desiredSpd = Math.hypot(desiredVx, desiredVy);
       let diff = 0;
+      const prevAlphaAngle = this.alphaDog.angle;
       if (desiredSpd > 2) {
         diff = Math.atan2(desiredVy, desiredVx) - this.alphaDog.angle;
         while (diff > Math.PI) diff -= Math.PI * 2;
@@ -1830,6 +1846,7 @@ export class ShepherdScene extends Phaser.Scene {
           Math.min(DOG_TURN_RATE * dt, diff),
         );
       }
+      this.updateDogAnim(this.alphaDog, this.alphaDog.angle - prevAlphaAngle, dt);
       const speed =
         desiredSpd > 2 ? this.alphaDogSpeed * Math.max(0, Math.cos(diff)) : 0;
       this.alphaDog.vx = Math.cos(this.alphaDog.angle) * speed;
@@ -1882,36 +1899,10 @@ export class ShepherdScene extends Phaser.Scene {
       }
     }
 
-    // Update dog visuals based on mode (follower dogs are always rectangles)
-    if (this.dogVisuals) {
-      const nextDog = this.dogs.find((d) => d.mode === "following") ?? null;
-      for (const dog of this.dogs) {
-        const r = dog.sprite as Phaser.GameObjects.Rectangle;
-        if (dog.mode === "guarding") {
-          r.setFillStyle(0x5a2e88);
-          r.setStrokeStyle(2, 0xccaaff);
-        } else if (dog.mode === "herding") {
-          r.setFillStyle(0x8888dd);
-          r.setStrokeStyle(2, 0xaaaaff);
-        } else if (dog === nextDog) {
-          r.setFillStyle(0x333355);
-          r.setStrokeStyle(3, 0xffffff);
-        } else {
-          r.setFillStyle(0x333355);
-          r.setStrokeStyle(2, 0xaaaaff);
-        }
-      }
-    } else {
-      for (const dog of this.dogs) {
-        const r = dog.sprite as Phaser.GameObjects.Rectangle;
-        if (dog.mode === "guarding") {
-          r.setFillStyle(0x5a2e88);
-          r.setStrokeStyle(2, 0xccaaff);
-        } else {
-          r.setFillStyle(0x333355);
-          r.setStrokeStyle(2, 0xaaaaff);
-        }
-      }
+    // Guard dogs keep a purple tint; follower/herding dogs are untinted
+    for (const dog of this.dogs) {
+      if (dog.mode === "guarding") dog.sprite.setTint(0xcc99ff);
+      else dog.sprite.clearTint();
     }
 
     // --- Dog AI ---
@@ -2603,6 +2594,17 @@ export class ShepherdScene extends Phaser.Scene {
     }
   }
 
+  private updateDogAnim(dog: Dog, angleDelta: number, dt: number): void {
+    const turnRate = dt > 0 ? Math.abs(angleDelta) / dt : 0;
+    let key: string;
+    if (turnRate < DOG_TURN_RATE * 0.2) key = "dog_straight";
+    else if (turnRate < DOG_TURN_RATE * 0.5) key = "dog_bend_min";
+    else if (turnRate < DOG_TURN_RATE * 0.8) key = "dog_bend_mid";
+    else key = "dog_bend_max";
+    if (dog.sprite.anims.currentAnim?.key !== key) dog.sprite.play(key, true);
+    dog.sprite.setFlipX(angleDelta < -0.0001);
+  }
+
   private moveDog(
     dog: Dog,
     desiredVx: number,
@@ -2610,6 +2612,7 @@ export class ShepherdScene extends Phaser.Scene {
     dt: number,
   ): void {
     const desiredSpd = Math.hypot(desiredVx, desiredVy);
+    const prevAngle = dog.angle;
     if (desiredSpd > 2) {
       let diff = Math.atan2(desiredVy, desiredVx) - dog.angle;
       while (diff > Math.PI) diff -= Math.PI * 2;
@@ -2624,6 +2627,7 @@ export class ShepherdScene extends Phaser.Scene {
       dog.vx = 0;
       dog.vy = 0;
     }
+    this.updateDogAnim(dog, dog.angle - prevAngle, dt);
     dog.sprite.x += dog.vx * dt;
     dog.sprite.y += dog.vy * dt;
     dog.sprite.rotation = dog.angle;

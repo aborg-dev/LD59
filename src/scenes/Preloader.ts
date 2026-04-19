@@ -59,7 +59,10 @@ export class Preloader extends Scene {
     this.load.image("tree3", "1809_Tree_Big_1.png");
     this.load.image("tree4", "1809_Tree_Big_2.png");
     this.load.image("wolf", "1826_Wolf_110.png");
-    this.load.image("alpha_dog", "1952_Goodboy.png");
+    this.load.spritesheet("dog_straight", "sprite_dog_straigt.png", { frameWidth: 110, frameHeight: 110 });
+    this.load.spritesheet("dog_bend_min", "sprite_dog_bending_minimum.png", { frameWidth: 110, frameHeight: 110 });
+    this.load.spritesheet("dog_bend_mid", "dog_bending_medium.png", { frameWidth: 110, frameHeight: 110 });
+    this.load.spritesheet("dog_bend_max", "dog_bending_maximum.png", { frameWidth: 110, frameHeight: 110 });
   }
 
   create() {
