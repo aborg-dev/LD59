@@ -57,10 +57,10 @@ const WOLF_H = 22;
 const WOLF_TURN_RATE = 3.5;
 const WOLF_NORMAL_SPEED = 190;
 const WOLF_EAT_RANGE = 32;
-const WOLF_CONTACT_RANGE = 44;
+const WOLF_CONTACT_RANGE = 80;
 const WOLF_FLEE_SPEED = 650;
 const WOLF_SCARED_MS = 1800;
-const WOLF_SPAWN_INTERVAL_MS = 12000;
+const WOLF_SPAWN_INTERVAL_MS = 20000;
 
 
 
@@ -1111,25 +1111,17 @@ export class ShepherdScene extends Phaser.Scene {
       s.sprite.y += s.vy * dt;
       s.sprite.rotation = s.angle + Math.PI / 2;
 
-      // World bounds
-      if (s.sprite.x < SHEEP_RADIUS) {
-        s.sprite.x = SHEEP_RADIUS;
-        s.angle = Math.PI - s.angle;
-      } else if (s.sprite.x > WORLD_W - SHEEP_RADIUS) {
-        s.sprite.x = WORLD_W - SHEEP_RADIUS;
-        s.angle = Math.PI - s.angle;
-      }
-      if (s.sprite.y < SHEEP_RADIUS) {
-        s.sprite.y = SHEEP_RADIUS;
-        s.angle = -s.angle;
-      } else if (s.sprite.y > WORLD_H - SHEEP_RADIUS) {
-        s.sprite.y = WORLD_H - SHEEP_RADIUS;
-        s.angle = -s.angle;
-      }
-      {
-        const spd = Math.hypot(s.vx, s.vy);
-        s.vx = Math.cos(s.angle) * spd;
-        s.vy = Math.sin(s.angle) * spd;
+      // Delete sheep that have fully left the world
+      if (
+        s.sprite.x < -SHEEP_RADIUS * 2 ||
+        s.sprite.x > WORLD_W + SHEEP_RADIUS * 2 ||
+        s.sprite.y < -SHEEP_RADIUS * 2 ||
+        s.sprite.y > WORLD_H + SHEEP_RADIUS * 2
+      ) {
+        s.sprite.destroy();
+        this.sheep.splice(i, 1);
+        i--;
+        continue;
       }
 
       if (TREE_COLLISION) for (const t of this.mapTrees) {
