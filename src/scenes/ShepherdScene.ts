@@ -49,8 +49,8 @@ const ROAD_CX = WORLD_W - ROAD_W_PX / 2 - 40;
 const DROP_X = ROAD_CX;
 const DROP_Y = 1100;
 
-const TRUCK_W = 56;
-const TRUCK_H = 96;
+const TRUCK_W = 288;
+const TRUCK_H = 400;
 const TRUCK_SPEED = 320;
 
 const BABY_SHEEP_SCALE = 0.45;
@@ -147,7 +147,7 @@ interface Dog {
 }
 
 interface Truck {
-  sprite: Phaser.GameObjects.Rectangle;
+  sprite: Phaser.GameObjects.Image;
   vx: number;
   vy: number;
   state: "arriving" | "dropping" | "leaving";
@@ -246,7 +246,8 @@ export class ShepherdScene extends Phaser.Scene {
   private guardBuyBtn!: Phaser.GameObjects.Text;
   private fieldLabel!: Phaser.GameObjects.Text;
   private marketCountText!: Phaser.GameObjects.Text;
-  private fieldRect!: Phaser.GameObjects.Rectangle;
+  private fieldRect!: Phaser.GameObjects.Image;
+  private fieldBorderGfx!: Phaser.GameObjects.Graphics;
   private fenceGfx!: Phaser.GameObjects.Graphics;
   private fenceBuilt = false;
 
@@ -339,10 +340,16 @@ export class ShepherdScene extends Phaser.Scene {
 
     // Field — baby sheep grow here. Fence is a paid upgrade.
     this.fieldRect = this.add
-      .rectangle(FIELD_CX, FIELD_CY, FIELD_W_PX, FIELD_H_PX, 0x6ec04a, 0.55)
+      .image(FIELD_CX, FIELD_CY, "farm")
+      .setDisplaySize(FIELD_W_PX, FIELD_H_PX)
       .setDepth(1);
-    this.fieldRect.setStrokeStyle(4, 0x3a2814);
     this.hudCamera.ignore(this.fieldRect);
+    this.fieldBorderGfx = this.add.graphics().setDepth(1.1);
+    this.fieldBorderGfx.lineStyle(4, 0x3a2814, 1);
+    this.fieldBorderGfx.strokeRect(
+      FIELD_CX - FIELD_W_PX / 2, FIELD_CY - FIELD_H_PX / 2, FIELD_W_PX, FIELD_H_PX,
+    );
+    this.hudCamera.ignore(this.fieldBorderGfx);
     this.fenceGfx = this.add.graphics().setDepth(1.2).setVisible(false);
     this.hudCamera.ignore(this.fenceGfx);
     this.fieldLabel = this.add
@@ -360,35 +367,11 @@ export class ShepherdScene extends Phaser.Scene {
     this.drawFencePosts();
 
     // Market — adult sheep sold here
-    const marketRect = this.add
-      .rectangle(MARKET_CX, MARKET_CY, MARKET_W_PX, MARKET_H_PX, 0xb26b3a, 1)
+    const marketImg = this.add
+      .image(MARKET_CX, MARKET_CY, "market")
+      .setDisplaySize(MARKET_W_PX, MARKET_H_PX)
       .setDepth(1);
-    marketRect.setStrokeStyle(5, 0x3a2814);
-    this.hudCamera.ignore(marketRect);
-    const roofTopY = MARKET_CY - MARKET_H_PX / 2;
-    const roofLeftX = MARKET_CX - MARKET_W_PX / 2 - 14;
-    const roofRightX = MARKET_CX + MARKET_W_PX / 2 + 14;
-    const roofPeakY = roofTopY - 80;
-    const roofGfx = this.add.graphics().setDepth(1.5);
-    roofGfx.fillStyle(0x6b3a1a, 1);
-    roofGfx.fillTriangle(
-      roofLeftX,
-      roofTopY,
-      roofRightX,
-      roofTopY,
-      MARKET_CX,
-      roofPeakY,
-    );
-    roofGfx.lineStyle(5, 0x3a2814);
-    roofGfx.strokeTriangle(
-      roofLeftX,
-      roofTopY,
-      roofRightX,
-      roofTopY,
-      MARKET_CX,
-      roofPeakY,
-    );
-    this.hudCamera.ignore(roofGfx);
+    this.hudCamera.ignore(marketImg);
     const marketLabel = this.add
       .text(MARKET_CX, MARKET_CY - MARKET_H_PX / 2 - 110, "MARKET", {
         fontFamily: FONT_UI,
@@ -432,35 +415,11 @@ export class ShepherdScene extends Phaser.Scene {
     this.hudCamera.ignore(this.marketCountText);
 
     // Shear shed — adults can be shorn here for a smaller, repeatable payout
-    const shearRect = this.add
-      .rectangle(SHEAR_CX, SHEAR_CY, SHEAR_W_PX, SHEAR_H_PX, 0x9a9a9a, 1)
+    const shearImg = this.add
+      .image(SHEAR_CX, SHEAR_CY, "shear")
+      .setDisplaySize(SHEAR_W_PX, SHEAR_H_PX)
       .setDepth(1);
-    shearRect.setStrokeStyle(5, 0x3a2814);
-    this.hudCamera.ignore(shearRect);
-    const shearTopY = SHEAR_CY - SHEAR_H_PX / 2;
-    const shearLeftX = SHEAR_CX - SHEAR_W_PX / 2 - 14;
-    const shearRightX = SHEAR_CX + SHEAR_W_PX / 2 + 14;
-    const shearPeakY = shearTopY - 72;
-    const shearRoofGfx = this.add.graphics().setDepth(1.5);
-    shearRoofGfx.fillStyle(0x9a3a2a, 1);
-    shearRoofGfx.fillTriangle(
-      shearLeftX,
-      shearTopY,
-      shearRightX,
-      shearTopY,
-      SHEAR_CX,
-      shearPeakY,
-    );
-    shearRoofGfx.lineStyle(5, 0x3a2814);
-    shearRoofGfx.strokeTriangle(
-      shearLeftX,
-      shearTopY,
-      shearRightX,
-      shearTopY,
-      SHEAR_CX,
-      shearPeakY,
-    );
-    this.hudCamera.ignore(shearRoofGfx);
+    this.hudCamera.ignore(shearImg);
     const shearLabel = this.add
       .text(SHEAR_CX, SHEAR_CY - SHEAR_H_PX / 2 - 100, "SHEAR", {
         fontFamily: FONT_UI,
@@ -811,7 +770,11 @@ export class ShepherdScene extends Phaser.Scene {
     if (this.coins < FENCE_COST) return;
     this.coins -= FENCE_COST;
     this.fenceBuilt = true;
-    this.fieldRect.setStrokeStyle(6, 0x8b5a2b);
+    this.fieldBorderGfx.clear();
+    this.fieldBorderGfx.lineStyle(6, 0x8b5a2b, 1);
+    this.fieldBorderGfx.strokeRect(
+      FIELD_CX - FIELD_W_PX / 2, FIELD_CY - FIELD_H_PX / 2, FIELD_W_PX, FIELD_H_PX,
+    );
     this.fenceGfx.setVisible(true);
     this.playBuildSound();
     this.showBanner("Fence built — wolves can't enter the field");
@@ -1225,9 +1188,11 @@ export class ShepherdScene extends Phaser.Scene {
 
   private spawnTruck(): void {
     const sprite = this.add
-      .rectangle(ROAD_CX, -TRUCK_H, TRUCK_W, TRUCK_H, 0x553322)
+      .image(ROAD_CX, -TRUCK_H, "truck")
+      .setDisplaySize(TRUCK_W, TRUCK_H)
+      .setScale(2.0)
+      .setAngle(180)
       .setDepth(7);
-    sprite.setStrokeStyle(3, 0xcc9966);
     this.hudCamera.ignore(sprite);
     this.trucks.push({
       sprite,
@@ -1259,7 +1224,7 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private updateTrucks(dt: number): void {
-    const truckGap = 20;
+    const truckGap = 0;
     for (let i = this.trucks.length - 1; i >= 0; i--) {
       const t = this.trucks[i];
       if (t.state === "arriving") {
