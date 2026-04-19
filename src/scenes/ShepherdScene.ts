@@ -20,6 +20,8 @@ const FIELD_CX = 1800;
 const FIELD_CY = 900;
 const FIELD_W_PX = 420;
 const FIELD_H_PX = 420;
+const FIELD_CAPACITY = 10;
+const FENCE_COST = 100;
 const GROW_SEC_BASE = 12;
 const GROW_SEC_MIN = 4;
 const GROW_UPGRADE_STEP = 2;
@@ -150,7 +152,7 @@ export interface ShepherdSceneState {
   dogs: { x: number; y: number }[];
   sheep: { x: number; y: number; stage: "baby" | "adult"; growthT: number }[];
   trucks: { x: number; y: number; state: string }[];
-  field: { x: number; y: number; w: number; h: number };
+  field: { x: number; y: number; w: number; h: number; capacity: number; growing: number };
   market: { x: number; y: number; w: number; h: number };
   score: number;
   coins: number;
@@ -208,6 +210,11 @@ export class ShepherdScene extends Phaser.Scene {
   private sheepBuyBtn!: Phaser.GameObjects.Text;
   private growBuyBtn!: Phaser.GameObjects.Text;
   private sellBuyBtn!: Phaser.GameObjects.Text;
+  private fenceBuyBtn!: Phaser.GameObjects.Text;
+  private fieldLabel!: Phaser.GameObjects.Text;
+  private fieldRect!: Phaser.GameObjects.Rectangle;
+  private fenceGfx!: Phaser.GameObjects.Graphics;
+  private fenceBuilt = false;
 
   private fieldTop = 0;
   private fieldBottom = 0;
@@ -251,6 +258,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.sellUpgradeLevel = 0;
     this.growUpgradeCost = 10;
     this.sellUpgradeCost = 10;
+    this.fenceBuilt = false;
 
     this.hudCamera = this.cameras.add(0, 0, width, height);
 
@@ -266,13 +274,15 @@ export class ShepherdScene extends Phaser.Scene {
       .setDepth(0.5);
     this.hudCamera.ignore(road);
 
-    // Field — baby sheep grow here
-    const fieldRect = this.add
+    // Field — baby sheep grow here. Fence is a paid upgrade.
+    this.fieldRect = this.add
       .rectangle(FIELD_CX, FIELD_CY, FIELD_W_PX, FIELD_H_PX, 0x6ec04a, 0.55)
       .setDepth(1);
-    fieldRect.setStrokeStyle(5, 0x3a2814);
-    this.hudCamera.ignore(fieldRect);
-    const fieldLabel = this.add
+    this.fieldRect.setStrokeStyle(4, 0x3a2814);
+    this.hudCamera.ignore(this.fieldRect);
+    this.fenceGfx = this.add.graphics().setDepth(1.2).setVisible(false);
+    this.hudCamera.ignore(this.fenceGfx);
+    this.fieldLabel = this.add
       .text(FIELD_CX, FIELD_CY - FIELD_H_PX / 2 - 26, "FIELD", {
         fontFamily: FONT_UI,
         fontSize: 30,
@@ -283,7 +293,8 @@ export class ShepherdScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(2);
-    this.hudCamera.ignore(fieldLabel);
+    this.hudCamera.ignore(this.fieldLabel);
+    this.drawFencePosts();
 
     // Market — adult sheep sold here
     const marketRect = this.add
@@ -511,12 +522,20 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(this.growBuyBtn);
 
     this.sellBuyBtn = this.add
-      .text(width * 0.54, btnY, "", btnStyle)
+      .text(width * 0.5, btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
     this.sellBuyBtn.on("pointerdown", () => this.buySellUpgrade());
     this.cameras.main.ignore(this.sellBuyBtn);
+
+    this.fenceBuyBtn = this.add
+      .text(width * 0.66, btnY, "", btnStyle)
+      .setOrigin(0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+    this.fenceBuyBtn.on("pointerdown", () => this.buyFence());
+    this.cameras.main.ignore(this.fenceBuyBtn);
 
     this.updateShopButtons();
 
@@ -603,6 +622,50 @@ export class ShepherdScene extends Phaser.Scene {
     this.updateCoinText();
   }
 
+  buyFence(): void {
+    if (this.fenceBuilt) return;
+    if (this.coins < FENCE_COST) return;
+    this.coins -= FENCE_COST;
+    this.fenceBuilt = true;
+    this.fieldRect.setStrokeStyle(6, 0x8b5a2b);
+    this.fenceGfx.setVisible(true);
+    this.sound.play("pop");
+    this.showBanner("Fence built — wolves can't enter the field");
+    this.updateCoinText();
+  }
+
+  private drawFencePosts(): void {
+    const g = this.fenceGfx;
+    g.clear();
+    g.fillStyle(0x6b3a1a, 1);
+    const postHalf = 6;
+    const postYs = [FIELD_CY - FIELD_H_PX / 2, FIELD_CY + FIELD_H_PX / 2];
+    const postXs = [
+      FIELD_CX - FIELD_W_PX / 2,
+      FIELD_CX - FIELD_W_PX / 4,
+      FIELD_CX,
+      FIELD_CX + FIELD_W_PX / 4,
+      FIELD_CX + FIELD_W_PX / 2,
+    ];
+    for (const py of postYs) {
+      for (const px of postXs) {
+        g.fillRect(px - postHalf, py - postHalf, postHalf * 2, postHalf * 2);
+      }
+    }
+    for (const px of [
+      FIELD_CX - FIELD_W_PX / 2,
+      FIELD_CX + FIELD_W_PX / 2,
+    ]) {
+      for (const py of [
+        FIELD_CY - FIELD_H_PX / 4,
+        FIELD_CY,
+        FIELD_CY + FIELD_H_PX / 4,
+      ]) {
+        g.fillRect(px - postHalf, py - postHalf, postHalf * 2, postHalf * 2);
+      }
+    }
+  }
+
   buySellUpgrade(): void {
     if (this.sellUpgradeLevel >= UPGRADE_MAX_LEVEL) return;
     if (this.coins < this.sellUpgradeCost) return;
@@ -658,6 +721,15 @@ export class ShepherdScene extends Phaser.Scene {
     );
     this.sellBuyBtn.setBackgroundColor(sellAffordable ? "#2a6a2a" : "#333344");
     this.sellBuyBtn.setAlpha(sellAffordable ? 1 : 0.55);
+
+    const fenceAffordable = !this.fenceBuilt && this.coins >= FENCE_COST;
+    this.fenceBuyBtn.setText(
+      this.fenceBuilt ? "Fenced" : `+Fence $${FENCE_COST}`,
+    );
+    this.fenceBuyBtn.setBackgroundColor(
+      this.fenceBuilt ? "#444444" : fenceAffordable ? "#2a6a2a" : "#333344",
+    );
+    this.fenceBuyBtn.setAlpha(this.fenceBuilt || fenceAffordable ? 1 : 0.55);
   }
 
   private buyDog(): void {
@@ -689,6 +761,44 @@ export class ShepherdScene extends Phaser.Scene {
       y > MARKET_CY - MARKET_H_PX / 2 &&
       y < MARKET_CY + MARKET_H_PX / 2
     );
+  }
+
+  private babiesGrowing(): number {
+    let n = 0;
+    for (const s of this.sheep) {
+      if (s.sold) continue;
+      if (s.stage === "baby" && s.growthT > 0) n++;
+    }
+    return n;
+  }
+
+  private pushOutOfField(
+    sprite: { x: number; y: number },
+    mover?: { vx: number; vy: number },
+  ): void {
+    if (!this.fieldContains(sprite.x, sprite.y)) return;
+    const leftX = FIELD_CX - FIELD_W_PX / 2;
+    const rightX = FIELD_CX + FIELD_W_PX / 2;
+    const topY = FIELD_CY - FIELD_H_PX / 2;
+    const bottomY = FIELD_CY + FIELD_H_PX / 2;
+    const leftD = sprite.x - leftX;
+    const rightD = rightX - sprite.x;
+    const topD = sprite.y - topY;
+    const bottomD = bottomY - sprite.y;
+    const minD = Math.min(leftD, rightD, topD, bottomD);
+    if (minD === leftD) {
+      sprite.x = leftX - 1;
+      if (mover) mover.vx = -Math.abs(mover.vx);
+    } else if (minD === rightD) {
+      sprite.x = rightX + 1;
+      if (mover) mover.vx = Math.abs(mover.vx);
+    } else if (minD === topD) {
+      sprite.y = topY - 1;
+      if (mover) mover.vy = -Math.abs(mover.vy);
+    } else {
+      sprite.y = bottomY + 1;
+      if (mover) mover.vy = Math.abs(mover.vy);
+    }
   }
 
   private sheepGoal(s: Sheep): { x: number; y: number } {
@@ -915,7 +1025,14 @@ export class ShepherdScene extends Phaser.Scene {
         y: t.sprite.y,
         state: t.state,
       })),
-      field: { x: FIELD_CX, y: FIELD_CY, w: FIELD_W_PX, h: FIELD_H_PX },
+      field: {
+        x: FIELD_CX,
+        y: FIELD_CY,
+        w: FIELD_W_PX,
+        h: FIELD_H_PX,
+        capacity: FIELD_CAPACITY,
+        growing: this.babiesGrowing(),
+      },
       market: { x: MARKET_CX, y: MARKET_CY, w: MARKET_W_PX, h: MARKET_H_PX },
       score: this.score,
       coins: this.coins,
@@ -952,6 +1069,7 @@ export class ShepherdScene extends Phaser.Scene {
 
     this.updateTrucks(dt);
     this.checkGameOver();
+    this.fieldLabel.setText(`FIELD  ${this.babiesGrowing()}/${FIELD_CAPACITY}`);
 
     // --- Alpha dog (player-controlled) ---
     {
@@ -1195,12 +1313,22 @@ export class ShepherdScene extends Phaser.Scene {
         wolf.sprite.y += wolf.vy * dt;
         wolf.sprite.rotation = wolf.angle;
       } else {
-        // Normal: turn toward nearest sheep and move
-        if (!wolf.targetSheep || wolf.targetSheep.sold) {
+        // Normal: turn toward nearest sheep and move. With a fence built,
+        // sheep inside the field are protected and wolves ignore them.
+        const targetSafe =
+          wolf.targetSheep &&
+          this.fenceBuilt &&
+          this.fieldContains(
+            wolf.targetSheep.sprite.x,
+            wolf.targetSheep.sprite.y,
+          );
+        if (!wolf.targetSheep || wolf.targetSheep.sold || targetSafe) {
           let best: Sheep | null = null;
           let bestDist = Infinity;
           for (const s of this.sheep) {
             if (s.sold) continue;
+            if (this.fenceBuilt && this.fieldContains(s.sprite.x, s.sprite.y))
+              continue;
             const d = Math.hypot(
               s.sprite.x - wolf.sprite.x,
               s.sprite.y - wolf.sprite.y,
@@ -1252,6 +1380,10 @@ export class ShepherdScene extends Phaser.Scene {
         wolf.sprite.y += wolf.vy * dt;
         wolf.sprite.rotation = wolf.angle;
       }
+
+      // Field fence — with a fence, wolves can't enter. Push any wolf inside
+      // the field out to the nearest edge and reflect its velocity.
+      if (this.fenceBuilt) this.pushOutOfField(wolf.sprite, wolf);
     }
 
     // --- Sheep behavior ---
@@ -1436,6 +1568,17 @@ export class ShepherdScene extends Phaser.Scene {
           s.sprite.y = maxY;
           s.vy = -Math.abs(s.vy);
         }
+      }
+
+      // Field capacity — field is full, new babies are bounced off the fence.
+      // Sheep already growing (growthT > 0) are handled by the containment
+      // clamp above, so this only affects newcomers trying to enter.
+      if (
+        s.stage === "baby" &&
+        s.growthT === 0 &&
+        this.babiesGrowing() >= FIELD_CAPACITY
+      ) {
+        this.pushOutOfField(s.sprite, s);
       }
 
       // Field growth — babies grow into adults while in the field
