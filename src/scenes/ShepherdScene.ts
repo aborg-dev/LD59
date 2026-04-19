@@ -1080,6 +1080,38 @@ export class ShepherdScene extends Phaser.Scene {
     );
   }
 
+  private playEatFx(x: number, y: number): void {
+    // Expanding red ring
+    const ring = this.add.circle(x, y, 6, 0x000000, 0).setDepth(11);
+    ring.setStrokeStyle(4, 0xaa2222, 1);
+    this.hudCamera.ignore(ring);
+    this.tweens.add({
+      targets: ring,
+      radius: 60,
+      strokeAlpha: 0,
+      duration: 450,
+      ease: "Quad.easeOut",
+      onComplete: () => ring.destroy(),
+    });
+    // Dark splatter bits flying outward
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2 + Math.random() * 0.4;
+      const speed = 40 + Math.random() * 70;
+      const bit = this.add.circle(x, y, 4, 0x5a1010, 1).setDepth(11);
+      this.hudCamera.ignore(bit);
+      this.tweens.add({
+        targets: bit,
+        x: x + Math.cos(angle) * speed,
+        y: y + Math.sin(angle) * speed,
+        alpha: 0,
+        scale: 0.4,
+        duration: 500,
+        ease: "Quad.easeOut",
+        onComplete: () => bit.destroy(),
+      });
+    }
+  }
+
   private playShearFx(s: Sheep): void {
     const puff = this.add
       .circle(s.sprite.x, s.sprite.y, 6, 0xffffff, 0.65)
@@ -1211,6 +1243,7 @@ export class ShepherdScene extends Phaser.Scene {
         t.dropTimer += dt;
         if (!t.hasDropped && t.dropTimer >= 0.2) {
           this.spawnSheep(t.sprite.x - TRUCK_W / 2 - 40, t.sprite.y);
+          this.sound.play("bounce");
           t.hasDropped = true;
         }
         if (t.dropTimer >= 1.0) {
@@ -1759,6 +1792,7 @@ export class ShepherdScene extends Phaser.Scene {
         const ddy = wolf.sprite.y - src.y;
         const dd = Math.hypot(ddx, ddy);
         if (dd < WOLF_CONTACT_RANGE && dd > 0.01) {
+          if (wolf.scaredMs <= 0) this.sound.play("pop");
           wolf.scaredMs = WOLF_SCARED_MS;
           wolf.vx = (ddx / dd) * WOLF_FLEE_SPEED;
           wolf.vy = (ddy / dd) * WOLF_FLEE_SPEED;
@@ -1816,6 +1850,8 @@ export class ShepherdScene extends Phaser.Scene {
             const eaten = wolf.targetSheep;
             const idx = this.sheep.indexOf(eaten);
             if (idx !== -1) {
+              this.playEatFx(eaten.sprite.x, eaten.sprite.y);
+              this.sound.play("bounce");
               this.sheep[idx].readyIcon?.destroy();
               this.sheep[idx].sprite.destroy();
               this.sheep.splice(idx, 1);
@@ -2127,6 +2163,7 @@ export class ShepherdScene extends Phaser.Scene {
         if (s.growthT >= GROW_SEC) {
           s.stage = "adult";
           s.sprite.setScale(ADULT_SHEEP_SCALE);
+          this.sound.play("score");
           this.playGrownFx(s);
           this.attachReadyIcon(s);
         }
