@@ -101,6 +101,7 @@ interface Sheep {
   modeT: number;
   wanderAngle: number;
   scaredMs: number;
+  readyIcon?: Phaser.GameObjects.Text;
 }
 
 interface Wolf {
@@ -711,6 +712,23 @@ export class ShepherdScene extends Phaser.Scene {
     });
   }
 
+  private attachReadyIcon(s: Sheep): void {
+    if (s.readyIcon) return;
+    const icon = this.add
+      .text(s.sprite.x, s.sprite.y - 36, "$", {
+        fontFamily: FONT_UI,
+        fontSize: 44,
+        color: "#ffd700",
+        stroke: "#000000",
+        strokeThickness: 5,
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(6);
+    this.hudCamera.ignore(icon);
+    s.readyIcon = icon;
+  }
+
   private playGrownFx(s: Sheep): void {
     this.tweens.add({
       targets: s.sprite,
@@ -1091,6 +1109,7 @@ export class ShepherdScene extends Phaser.Scene {
           if (d < WOLF_EAT_RANGE) {
             const idx = this.sheep.indexOf(wolf.targetSheep);
             if (idx !== -1) {
+              this.sheep[idx].readyIcon?.destroy();
               this.sheep[idx].sprite.destroy();
               this.sheep.splice(idx, 1);
             }
@@ -1245,6 +1264,11 @@ export class ShepherdScene extends Phaser.Scene {
       s.sprite.y += s.vy * dt;
       s.sprite.rotation = s.angle + Math.PI / 2;
 
+      if (s.readyIcon) {
+        const bob = Math.sin(Date.now() / 180) * 4;
+        s.readyIcon.setPosition(s.sprite.x, s.sprite.y - 32 + bob);
+      }
+
       // Delete sheep that have fully left the world
       if (
         s.sprite.x < -SHEEP_RADIUS * 2 ||
@@ -1252,6 +1276,7 @@ export class ShepherdScene extends Phaser.Scene {
         s.sprite.y < -SHEEP_RADIUS * 2 ||
         s.sprite.y > WORLD_H + SHEEP_RADIUS * 2
       ) {
+        s.readyIcon?.destroy();
         s.sprite.destroy();
         this.sheep.splice(i, 1);
         i--;
@@ -1289,6 +1314,7 @@ export class ShepherdScene extends Phaser.Scene {
           s.stage = "adult";
           s.sprite.setScale(ADULT_SHEEP_SCALE);
           this.playGrownFx(s);
+          this.attachReadyIcon(s);
         }
       }
 
@@ -1303,6 +1329,16 @@ export class ShepherdScene extends Phaser.Scene {
         this.sound.play("score");
         this.playSaleFx(s);
 
+        if (s.readyIcon) {
+          this.tweens.add({
+            targets: s.readyIcon,
+            alpha: 0,
+            y: s.readyIcon.y - 40,
+            duration: 500,
+            onComplete: () => s.readyIcon?.destroy(),
+          });
+          s.readyIcon = undefined;
+        }
         this.time.delayedCall(400, () => {
           if (s.sprite.active) {
             this.tweens.add({
