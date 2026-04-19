@@ -31,7 +31,7 @@ const MARKET_CY = 900;
 const SALE_INTERVAL_MIN_MS = 5000;
 const SALE_INTERVAL_MAX_MS = 10000;
 const MARKET_WANDER_SPEED = 40;
-const SALE_PRICE_MIN = 2;
+const SALE_PRICE_MIN = 3;
 const SALE_PRICE_MAX = 5;
 
 // Shear shed — pay $SHEAR_VALUE to shear an adult back into a baby
