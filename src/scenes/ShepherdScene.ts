@@ -34,6 +34,8 @@ let SHEEP_TURN_RATE = 4.5;
 const PANIC_RADIUS = 90;
 let PANIC_INHERIT = 0.7;
 
+const TREE_COLLISION = false;
+
 const DOG_RADIUS = 20;
 const DOG_W = 34;
 const DOG_H = 16;
@@ -720,7 +722,7 @@ export class ShepherdScene extends Phaser.Scene {
         DOG_RADIUS,
         WORLD_H - DOG_RADIUS,
       );
-      for (const t of this.mapTrees) {
+      if (TREE_COLLISION) for (const t of this.mapTrees) {
         const tdx = this.alphaDog.sprite.x - t.x;
         const tdy = this.alphaDog.sprite.y - t.y;
         const td = Math.hypot(tdx, tdy);
@@ -957,8 +959,7 @@ export class ShepherdScene extends Phaser.Scene {
         s.vy = Math.sin(s.angle) * spd;
       }
 
-      // Tree collision
-      for (const t of this.mapTrees) {
+      if (TREE_COLLISION) for (const t of this.mapTrees) {
         const tdx = s.sprite.x - t.x;
         const tdy = s.sprite.y - t.y;
         const td = Math.hypot(tdx, tdy);
@@ -1050,7 +1051,7 @@ export class ShepherdScene extends Phaser.Scene {
     dog.sprite.rotation = dog.angle;
     dog.sprite.x = Phaser.Math.Clamp(dog.sprite.x, DOG_RADIUS, WORLD_W - DOG_RADIUS);
     dog.sprite.y = Phaser.Math.Clamp(dog.sprite.y, DOG_RADIUS, WORLD_H - DOG_RADIUS);
-    for (const t of this.mapTrees) {
+    if (TREE_COLLISION) for (const t of this.mapTrees) {
       const tdx = dog.sprite.x - t.x;
       const tdy = dog.sprite.y - t.y;
       const td = Math.hypot(tdx, tdy);
