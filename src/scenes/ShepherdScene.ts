@@ -85,6 +85,8 @@ const DOG_H = 16;
 const DOG_SPEED = 350;
 const DOG_TURN_RATE = 6.5;
 const HERD_OFFSET = 120;
+const HERD_INTERCEPT_THREAT_RANGE = 260;
+const HERD_INTERCEPT_MAX_LEASH = 180;
 const FOLLOW_DIST = 55;
 const FOLLOW_SPREAD = 40;
 const FACING_CONE = Math.PI / 3;
@@ -1410,19 +1412,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.facingSheep = this.facingWolf ? null : this.findFacingSheep();
 
     // Return herding/defending dogs whose target is gone back to following.
-    // Herding dogs also peel off to defend if a wolf starts hunting their sheep.
     for (const dog of this.dogs) {
-      if (dog.mode === "herding" && dog.targetSheep) {
-        const attacker = this.wolves.find(
-          (w) => w.targetSheep === dog.targetSheep,
-        );
-        if (attacker) {
-          dog.mode = "defending";
-          dog.targetWolf = attacker;
-          dog.targetSheep = null;
-          continue;
-        }
-      }
       if (
         dog.mode === "herding" &&
         (!dog.targetSheep || dog.targetSheep.sold || dog.targetSheep.waiting)
@@ -1510,29 +1500,58 @@ export class ShepherdScene extends Phaser.Scene {
 
       const sx = dog.targetSheep.sprite.x;
       const sy = dog.targetSheep.sprite.y;
-      const goal = this.sheepGoal(dog.targetSheep);
-      const towardGoalDx = goal.x - sx;
-      const towardGoalDy = goal.y - sy;
-      // base herd position: behind sheep away from goal
-      const baseAngle = Math.atan2(-towardGoalDy, -towardGoalDx);
 
-      // Fan-out: find other herding dogs targeting sheep in the same cluster
-      const clusterDogs = this.dogs.filter(
-        (d) =>
-          d.mode === "herding" &&
-          d.targetSheep &&
-          Math.hypot(d.targetSheep.sprite.x - sx, d.targetSheep.sprite.y - sy) <
-          HIGHLIGHT_CLUSTER_R,
+      // If a wolf close to my sheep is hunting it, stand between the sheep
+      // and the wolf to scare it off without abandoning the sheep.
+      const threat = this.wolves.find(
+        (w) =>
+          w.targetSheep === dog.targetSheep &&
+          w.scaredMs === 0 &&
+          Math.hypot(w.sprite.x - sx, w.sprite.y - sy) <
+            HERD_INTERCEPT_THREAT_RANGE,
       );
-      const myIdx = clusterDogs.indexOf(dog);
-      const count = clusterDogs.length;
-      const fanSpread = Math.PI / 4;
-      const fanAngle =
-        count > 1 ? (myIdx / (count - 1) - 0.5) * fanSpread * 2 : 0;
 
-      const herdAngle = baseAngle + fanAngle;
-      const herdX = sx + Math.cos(herdAngle) * HERD_OFFSET;
-      const herdY = sy + Math.sin(herdAngle) * HERD_OFFSET;
+      let herdX: number;
+      let herdY: number;
+      if (threat) {
+        // Head straight for the wolf, but stay within a leash of the sheep
+        const dx = threat.sprite.x - sx;
+        const dy = threat.sprite.y - sy;
+        const d = Math.hypot(dx, dy) || 1;
+        if (d <= HERD_INTERCEPT_MAX_LEASH) {
+          herdX = threat.sprite.x;
+          herdY = threat.sprite.y;
+        } else {
+          herdX = sx + (dx / d) * HERD_INTERCEPT_MAX_LEASH;
+          herdY = sy + (dy / d) * HERD_INTERCEPT_MAX_LEASH;
+        }
+      } else {
+        const goal = this.sheepGoal(dog.targetSheep);
+        const towardGoalDx = goal.x - sx;
+        const towardGoalDy = goal.y - sy;
+        // base herd position: behind sheep away from goal
+        const baseAngle = Math.atan2(-towardGoalDy, -towardGoalDx);
+
+        // Fan-out: find other herding dogs targeting sheep in the same cluster
+        const clusterDogs = this.dogs.filter(
+          (d) =>
+            d.mode === "herding" &&
+            d.targetSheep &&
+            Math.hypot(
+              d.targetSheep.sprite.x - sx,
+              d.targetSheep.sprite.y - sy,
+            ) < HIGHLIGHT_CLUSTER_R,
+        );
+        const myIdx = clusterDogs.indexOf(dog);
+        const count = clusterDogs.length;
+        const fanSpread = Math.PI / 4;
+        const fanAngle =
+          count > 1 ? (myIdx / (count - 1) - 0.5) * fanSpread * 2 : 0;
+
+        const herdAngle = baseAngle + fanAngle;
+        herdX = sx + Math.cos(herdAngle) * HERD_OFFSET;
+        herdY = sy + Math.sin(herdAngle) * HERD_OFFSET;
+      }
 
       const toHerdX = herdX - dog.sprite.x;
       const toHerdY = herdY - dog.sprite.y;
@@ -1627,6 +1646,14 @@ export class ShepherdScene extends Phaser.Scene {
         if (
           (dog.mode === "defending" || dog.mode === "guarding") &&
           dog.targetWolf === wolf
+        ) {
+          scareSources.push(dog.sprite);
+        }
+        // Herding dog also scares a wolf that's hunting its sheep
+        if (
+          dog.mode === "herding" &&
+          dog.targetSheep &&
+          wolf.targetSheep === dog.targetSheep
         ) {
           scareSources.push(dog.sprite);
         }

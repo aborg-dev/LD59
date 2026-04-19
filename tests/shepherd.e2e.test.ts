@@ -49,7 +49,7 @@ describe("shepherd core loop", () => {
     expect(after.coins).toBeLessThan(100);
   });
 
-  it("herding dog peels off to defend when a wolf targets its sheep", async () => {
+  it("herding dog scares a nearby wolf hunting its sheep without leaving", async () => {
     await game.startScene("Shepherd");
 
     await game.eval_(`(() => {
@@ -58,31 +58,39 @@ describe("shepherd core loop", () => {
       gs.updateCoinText();
       gs.buyDog();
 
-      // Put a sheep on the map and dispatch the AI dog to herd it
+      // Sheep outside the field; dog already positioned between sheep and wolf
       const sheep = gs.spawnSheep();
-      sheep.sprite.x = 1600;
-      sheep.sprite.y = 1000;
+      sheep.sprite.x = 1200; sheep.sprite.y = 1300;
       sheep.vx = 0; sheep.vy = 0;
+      sheep.stage = 'adult'; sheep.growthT = 999;
 
       const dog = gs.dogs[0];
       dog.mode = 'herding';
       dog.targetSheep = sheep;
+      dog.sprite.x = 1140; dog.sprite.y = 1300;
+      dog.vx = 0; dog.vy = 0;
+      dog.angle = Math.PI; // already facing the wolf
 
-      // Wolf hunting that same sheep
-      const wolfSprite = gs.add.rectangle(1400, 1000, 42, 22, 0x7a1a1a).setDepth(9);
+      const wolfSprite = gs.add.image(950, 1300, 'wolf');
       gs.hudCamera.ignore(wolfSprite);
-      const wolf = { sprite: wolfSprite, targetSheep: sheep, vx: 0, vy: 0, angle: 0, scaredMs: 0 };
-      gs.wolves.push(wolf);
+      gs.wolves.push({ sprite: wolfSprite, targetSheep: sheep, vx: 0, vy: 0, angle: 0, scaredMs: 0 });
     })()`);
 
-    // One step is enough for the mode transition
-    await game.advanceTime(50);
+    await game.advanceTime(1200);
 
-    const mode = (await game.eval_(`(() => {
+    const result = (await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Shepherd');
-      return gs.dogs[0].mode;
-    })()`)) as string;
-    expect(mode).toBe("defending");
+      const dog = gs.dogs[0];
+      const wolf = gs.wolves[0];
+      return { mode: dog.mode, scaredMs: wolf.scaredMs, sheepLeft: gs.sheep.length };
+    })()`)) as { mode: string; scaredMs: number; sheepLeft: number };
+
+    // Dog must stay in herding mode, not switch to defending
+    expect(result.mode).toBe("herding");
+    // Sheep must still be alive (the whole point of the change)
+    expect(result.sheepLeft).toBe(1);
+    // Wolf must have been scared at some point
+    expect(result.scaredMs).toBeGreaterThan(0);
   });
 
   it("buying a guard dog spawns at a field post and scares nearby wolves", async () => {
