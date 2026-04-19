@@ -1425,7 +1425,7 @@ export class ShepherdScene extends Phaser.Scene {
         const DROP_INTERVAL = 0.3;
         const nextDropAt = 0.2 + t.sheepDropped * DROP_INTERVAL;
         if (t.sheepDropped < t.sheepCount && t.dropTimer >= nextDropAt) {
-          this.spawnSheep(t.sprite.x - TRUCK_W / 2 - 40, t.sprite.y);
+          this.spawnSheep(t.sprite.x + TRUCK_W / 2 + 20, t.sprite.y);
           this.sound.play("sheep-bleat", { volume: 0.25 });
           t.sheepDropped++;
         }
@@ -1570,7 +1570,7 @@ export class ShepherdScene extends Phaser.Scene {
       sx = ox + Phaser.Math.Between(-jitter, jitter);
       sy = oy + Phaser.Math.Between(-jitter, jitter);
     } else {
-      sx = DROP_X - TRUCK_W / 2 - 40;
+      sx = DROP_X + TRUCK_W / 2 + 20;
       sy = DROP_Y;
     }
 
