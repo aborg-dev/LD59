@@ -149,6 +149,7 @@ interface Dog {
   vx: number;
   vy: number;
   angle: number;
+  smoothedTurnRate: number;
   mode: "following" | "herding" | "defending" | "guarding";
   postX?: number;
   postY?: number;
@@ -501,6 +502,7 @@ export class ShepherdScene extends Phaser.Scene {
       vx: 0,
       vy: 0,
       angle: 0,
+      smoothedTurnRate: 0,
       mode: "following",
     };
     this.alphaDogTargetX = alphaSprite.x;
@@ -741,6 +743,7 @@ export class ShepherdScene extends Phaser.Scene {
       vx: 0,
       vy: 0,
       angle: 0,
+      smoothedTurnRate: 0,
       targetWolf: null,
       mode: "following",
     });
@@ -1085,6 +1088,7 @@ export class ShepherdScene extends Phaser.Scene {
       vx: 0,
       vy: 0,
       angle: 0,
+      smoothedTurnRate: 0,
       mode: "guarding",
       postX: x,
       postY: y,
@@ -2593,13 +2597,20 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private updateDogAnim(dog: Dog, angleDelta: number, dt: number): void {
-    const turnRate = dt > 0 ? Math.abs(angleDelta) / dt : 0;
+    const rawRate = dt > 0 ? Math.abs(angleDelta) / dt : 0;
+    const alpha = 1 - Math.exp(-dt / 0.12); // ~0.12s time constant
+    dog.smoothedTurnRate += (rawRate - dog.smoothedTurnRate) * alpha;
+    const r = dog.smoothedTurnRate;
     let key: string;
-    if (turnRate < DOG_TURN_RATE * 0.2) key = "dog_straight";
-    else if (turnRate < DOG_TURN_RATE * 0.5) key = "dog_bend_min";
-    else if (turnRate < DOG_TURN_RATE * 0.8) key = "dog_bend_mid";
+    if (r < DOG_TURN_RATE * 0.2) key = "dog_straight";
+    else if (r < DOG_TURN_RATE * 0.5) key = "dog_bend_min";
+    else if (r < DOG_TURN_RATE * 0.8) key = "dog_bend_mid";
     else key = "dog_bend_max";
-    if (dog.sprite.anims.currentAnim?.key !== key) dog.sprite.play(key, true);
+    if (dog.sprite.anims.currentAnim?.key !== key) {
+      const progress = dog.sprite.anims.getProgress();
+      dog.sprite.play(key, true);
+      dog.sprite.anims.setProgress(progress);
+    }
     dog.sprite.setFlipX(angleDelta < -0.0001);
   }
 
