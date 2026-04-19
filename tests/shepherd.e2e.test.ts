@@ -225,7 +225,7 @@ describe("shepherd core loop", () => {
   it("field capacity caps sheep at 10 growing at once", async () => {
     await game.startScene("Shepherd");
 
-    const overflowOutside = (await game.eval_(`(() => {
+    const overflowOutside = await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Shepherd');
       const f = gs.dumpState().field;
       // Put 10 growing sheep inside the field
@@ -243,7 +243,7 @@ describe("shepherd core loop", () => {
       extra.vx = 0; extra.vy = 0;
       extra.growthT = 0;
       return extra;
-    })()`));
+    })()`);
 
     await game.advanceTime(100);
     const dump = await shepherdState();

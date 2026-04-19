@@ -33,6 +33,11 @@ const UPGRADE_MAX_LEVEL = 4;
 // Market — adults are sold here for coins
 const MARKET_CX = 520;
 const MARKET_CY = 900;
+const SALE_INTERVAL_MIN_MS = 4000;
+const SALE_INTERVAL_MAX_MS = 8000;
+const SALE_BATCH_MIN = 1;
+const SALE_BATCH_MAX = 3;
+const MARKET_WANDER_SPEED = 40;
 
 // Shear shed — pay $SHEAR_VALUE to shear an adult back into a baby
 const SHEAR_CX = 1200;
@@ -114,6 +119,7 @@ interface Sheep {
   stage: "baby" | "adult";
   growthT: number;
   sold: boolean;
+  waiting: boolean;
   grazing: boolean;
   modeT: number;
   wanderAngle: number;
@@ -164,8 +170,15 @@ export interface ShepherdSceneState {
   dogs: { x: number; y: number }[];
   sheep: { x: number; y: number; stage: "baby" | "adult"; growthT: number }[];
   trucks: { x: number; y: number; state: string }[];
-  field: { x: number; y: number; w: number; h: number; capacity: number; growing: number };
-  market: { x: number; y: number; w: number; h: number };
+  field: {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    capacity: number;
+    growing: number;
+  };
+  market: { x: number; y: number; w: number; h: number; waiting: number };
   shear: { x: number; y: number; w: number; h: number };
   score: number;
   coins: number;
@@ -227,6 +240,7 @@ export class ShepherdScene extends Phaser.Scene {
   private fenceBuyBtn!: Phaser.GameObjects.Text;
   private guardBuyBtn!: Phaser.GameObjects.Text;
   private fieldLabel!: Phaser.GameObjects.Text;
+  private marketCountText!: Phaser.GameObjects.Text;
   private fieldRect!: Phaser.GameObjects.Rectangle;
   private fenceGfx!: Phaser.GameObjects.Graphics;
   private fenceBuilt = false;
@@ -331,9 +345,23 @@ export class ShepherdScene extends Phaser.Scene {
     const roofPeakY = roofTopY - 80;
     const roofGfx = this.add.graphics().setDepth(1.5);
     roofGfx.fillStyle(0x6b3a1a, 1);
-    roofGfx.fillTriangle(roofLeftX, roofTopY, roofRightX, roofTopY, MARKET_CX, roofPeakY);
+    roofGfx.fillTriangle(
+      roofLeftX,
+      roofTopY,
+      roofRightX,
+      roofTopY,
+      MARKET_CX,
+      roofPeakY,
+    );
     roofGfx.lineStyle(5, 0x3a2814);
-    roofGfx.strokeTriangle(roofLeftX, roofTopY, roofRightX, roofTopY, MARKET_CX, roofPeakY);
+    roofGfx.strokeTriangle(
+      roofLeftX,
+      roofTopY,
+      roofRightX,
+      roofTopY,
+      MARKET_CX,
+      roofPeakY,
+    );
     this.hudCamera.ignore(roofGfx);
     const marketLabel = this.add
       .text(MARKET_CX, MARKET_CY - MARKET_H_PX / 2 - 110, "MARKET", {
@@ -347,6 +375,18 @@ export class ShepherdScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2);
     this.hudCamera.ignore(marketLabel);
+    this.marketCountText = this.add
+      .text(MARKET_CX, MARKET_CY - MARKET_H_PX / 2 - 70, "Waiting: 0", {
+        fontFamily: FONT_UI,
+        fontSize: 44,
+        color: "#fff1c1",
+        stroke: "#000000",
+        strokeThickness: 6,
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5)
+      .setDepth(2);
+    this.hudCamera.ignore(this.marketCountText);
 
     // Shear shed — adults can be shorn here for a smaller, repeatable payout
     const shearRect = this.add
@@ -618,6 +658,9 @@ export class ShepherdScene extends Phaser.Scene {
     this.wolfSpawnStartMs = this.time.now;
     this.scheduleNextWolf();
 
+    // Market batch-sale timer
+    this.scheduleNextSale();
+
     this.updateDogCountText();
 
     // Set camera zoomed out to fit entire world
@@ -727,10 +770,7 @@ export class ShepherdScene extends Phaser.Scene {
         g.fillRect(px - postHalf, py - postHalf, postHalf * 2, postHalf * 2);
       }
     }
-    for (const px of [
-      FIELD_CX - FIELD_W_PX / 2,
-      FIELD_CX + FIELD_W_PX / 2,
-    ]) {
+    for (const px of [FIELD_CX - FIELD_W_PX / 2, FIELD_CX + FIELD_W_PX / 2]) {
       for (const py of [
         FIELD_CY - FIELD_H_PX / 4,
         FIELD_CY,
@@ -746,10 +786,67 @@ export class ShepherdScene extends Phaser.Scene {
     if (this.coins < this.sellUpgradeCost) return;
     this.coins -= this.sellUpgradeCost;
     this.sellUpgradeLevel++;
-    this.sellPrice = SELL_VALUE_BASE + this.sellUpgradeLevel * SELL_UPGRADE_STEP;
+    this.sellPrice =
+      SELL_VALUE_BASE + this.sellUpgradeLevel * SELL_UPGRADE_STEP;
     this.sellUpgradeCost = Math.ceil(this.sellUpgradeCost * 2);
     this.sound.play("pop");
     this.updateCoinText();
+  }
+
+  private updateMarketCountText(): void {
+    const n = this.sheep.filter((s) => s.waiting && !s.sold).length;
+    this.marketCountText.setText(`Waiting: ${n}`);
+  }
+
+  private sellSheep(s: Sheep): void {
+    s.sold = true;
+    this.score++;
+    this.coins += this.sellPrice;
+    this.updateCoinText();
+    this.sound.play("score");
+    this.playSaleFx(s);
+    this.updateMarketCountText();
+    this.time.delayedCall(400, () => {
+      if (s.sprite.active) {
+        this.tweens.add({
+          targets: s.sprite,
+          alpha: 0,
+          scale: 0.3,
+          duration: 400,
+          onComplete: () => {
+            s.sprite.destroy();
+            const idx = this.sheep.indexOf(s);
+            if (idx >= 0) this.sheep.splice(idx, 1);
+          },
+        });
+      }
+    });
+  }
+
+  private sellBatch(): void {
+    const pool = this.sheep.filter((s) => s.waiting && !s.sold);
+    if (pool.length === 0) return;
+    const n = Math.min(
+      pool.length,
+      SALE_BATCH_MIN +
+        Math.floor(Math.random() * (SALE_BATCH_MAX - SALE_BATCH_MIN + 1)),
+    );
+    for (let i = 0; i < n; i++) {
+      const j = i + Math.floor(Math.random() * (pool.length - i));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+      this.sellSheep(pool[i]);
+    }
+    this.updateMarketCountText();
+  }
+
+  private scheduleNextSale(): void {
+    const delay =
+      SALE_INTERVAL_MIN_MS +
+      Math.random() * (SALE_INTERVAL_MAX_MS - SALE_INTERVAL_MIN_MS);
+    this.time.delayedCall(delay, () => {
+      this.sellBatch();
+      this.scheduleNextSale();
+    });
   }
 
   private scheduleNextWolf(): void {
@@ -830,10 +927,22 @@ export class ShepherdScene extends Phaser.Scene {
   private guardPosts(): { x: number; y: number }[] {
     const off = 40;
     return [
-      { x: FIELD_CX - FIELD_W_PX / 2 - off, y: FIELD_CY - FIELD_H_PX / 2 - off },
-      { x: FIELD_CX + FIELD_W_PX / 2 + off, y: FIELD_CY - FIELD_H_PX / 2 - off },
-      { x: FIELD_CX + FIELD_W_PX / 2 + off, y: FIELD_CY + FIELD_H_PX / 2 + off },
-      { x: FIELD_CX - FIELD_W_PX / 2 - off, y: FIELD_CY + FIELD_H_PX / 2 + off },
+      {
+        x: FIELD_CX - FIELD_W_PX / 2 - off,
+        y: FIELD_CY - FIELD_H_PX / 2 - off,
+      },
+      {
+        x: FIELD_CX + FIELD_W_PX / 2 + off,
+        y: FIELD_CY - FIELD_H_PX / 2 - off,
+      },
+      {
+        x: FIELD_CX + FIELD_W_PX / 2 + off,
+        y: FIELD_CY + FIELD_H_PX / 2 + off,
+      },
+      {
+        x: FIELD_CX - FIELD_W_PX / 2 - off,
+        y: FIELD_CY + FIELD_H_PX / 2 + off,
+      },
     ];
   }
 
@@ -1056,6 +1165,7 @@ export class ShepherdScene extends Phaser.Scene {
       stage: "baby",
       growthT: 0,
       sold: false,
+      waiting: false,
       grazing: false,
       modeT: SHEEP_WALK_MIN_SEC + Math.random() * SHEEP_WALK_MAX_SEC,
       wanderAngle: initAngle,
@@ -1180,7 +1290,13 @@ export class ShepherdScene extends Phaser.Scene {
         capacity: FIELD_CAPACITY,
         growing: this.babiesGrowing(),
       },
-      market: { x: MARKET_CX, y: MARKET_CY, w: MARKET_W_PX, h: MARKET_H_PX },
+      market: {
+        x: MARKET_CX,
+        y: MARKET_CY,
+        w: MARKET_W_PX,
+        h: MARKET_H_PX,
+        waiting: this.sheep.filter((s) => s.waiting && !s.sold).length,
+      },
       shear: { x: SHEAR_CX, y: SHEAR_CY, w: SHEAR_W_PX, h: SHEAR_H_PX },
       score: this.score,
       coins: this.coins,
@@ -1293,7 +1409,7 @@ export class ShepherdScene extends Phaser.Scene {
     for (const dog of this.dogs) {
       if (
         dog.mode === "herding" &&
-        (!dog.targetSheep || dog.targetSheep.sold)
+        (!dog.targetSheep || dog.targetSheep.sold || dog.targetSheep.waiting)
       ) {
         dog.mode = "following";
         dog.targetSheep = null;
@@ -1428,7 +1544,10 @@ export class ShepherdScene extends Phaser.Scene {
     // --- Guard dogs — stay at post, charge any wolf within range ---
     for (const dog of this.dogs) {
       if (dog.mode !== "guarding") continue;
-      const post = { x: dog.postX ?? dog.sprite.x, y: dog.postY ?? dog.sprite.y };
+      const post = {
+        x: dog.postX ?? dog.sprite.x,
+        y: dog.postY ?? dog.sprite.y,
+      };
 
       let nearest: Wolf | null = null;
       let bestD = GUARD_RANGE;
@@ -1516,16 +1635,22 @@ export class ShepherdScene extends Phaser.Scene {
         // sheep inside the field are protected and wolves ignore them.
         const targetSafe =
           wolf.targetSheep &&
-          this.fenceBuilt &&
-          this.fieldContains(
-            wolf.targetSheep.sprite.x,
-            wolf.targetSheep.sprite.y,
-          );
-        if (!wolf.targetSheep || wolf.targetSheep.sold || targetSafe) {
+          (wolf.targetSheep.waiting ||
+            (this.fenceBuilt &&
+              this.fieldContains(
+                wolf.targetSheep.sprite.x,
+                wolf.targetSheep.sprite.y,
+              )));
+        if (
+          !wolf.targetSheep ||
+          wolf.targetSheep.sold ||
+          wolf.targetSheep.waiting ||
+          targetSafe
+        ) {
           let best: Sheep | null = null;
           let bestDist = Infinity;
           for (const s of this.sheep) {
-            if (s.sold) continue;
+            if (s.sold || s.waiting) continue;
             if (this.fenceBuilt && this.fieldContains(s.sprite.x, s.sprite.y))
               continue;
             const d = Math.hypot(
@@ -1554,9 +1679,15 @@ export class ShepherdScene extends Phaser.Scene {
               this.sheep[idx].sprite.destroy();
               this.sheep.splice(idx, 1);
               for (const dog of this.dogs) {
-                if (dog.targetSheep === eaten) { dog.targetSheep = null; dog.mode = "following"; }
+                if (dog.targetSheep === eaten) {
+                  dog.targetSheep = null;
+                  dog.mode = "following";
+                }
               }
-              if (this.alphaDog.targetSheep === eaten) { this.alphaDog.targetSheep = null; this.alphaDog.mode = "following"; }
+              if (this.alphaDog.targetSheep === eaten) {
+                this.alphaDog.targetSheep = null;
+                this.alphaDog.mode = "following";
+              }
               for (const w of this.wolves) {
                 if (w.targetSheep === eaten) w.targetSheep = null;
               }
@@ -1597,6 +1728,36 @@ export class ShepherdScene extends Phaser.Scene {
       const s = this.sheep[i];
       if (s.sold) continue;
 
+      // Waiting sheep wander slowly, confined to market rect
+      if (s.waiting) {
+        s.wanderAngle += (Math.random() - 0.5) * 0.3;
+        const wvx = Math.cos(s.wanderAngle) * MARKET_WANDER_SPEED;
+        const wvy = Math.sin(s.wanderAngle) * MARKET_WANDER_SPEED;
+        s.sprite.x += wvx * dt;
+        s.sprite.y += wvy * dt;
+        s.angle = s.wanderAngle;
+        s.sprite.rotation = s.angle + Math.PI / 2;
+        const minX = MARKET_CX - MARKET_W_PX / 2 + SHEEP_RADIUS;
+        const maxX = MARKET_CX + MARKET_W_PX / 2 - SHEEP_RADIUS;
+        const minY = MARKET_CY - MARKET_H_PX / 2 + SHEEP_RADIUS;
+        const maxY = MARKET_CY + MARKET_H_PX / 2 - SHEEP_RADIUS;
+        if (s.sprite.x < minX) {
+          s.sprite.x = minX;
+          s.wanderAngle = Math.PI - s.wanderAngle;
+        } else if (s.sprite.x > maxX) {
+          s.sprite.x = maxX;
+          s.wanderAngle = Math.PI - s.wanderAngle;
+        }
+        if (s.sprite.y < minY) {
+          s.sprite.y = minY;
+          s.wanderAngle = -s.wanderAngle;
+        } else if (s.sprite.y > maxY) {
+          s.sprite.y = maxY;
+          s.wanderAngle = -s.wanderAngle;
+        }
+        continue;
+      }
+
       let ax = 0;
       let ay = 0;
 
@@ -1617,7 +1778,7 @@ export class ShepherdScene extends Phaser.Scene {
       for (let j = 0; j < this.sheep.length; j++) {
         if (i === j) continue;
         const o = this.sheep[j];
-        if (o.sold) continue;
+        if (o.sold || o.waiting) continue;
         const odx = s.sprite.x - o.sprite.x;
         const ody = s.sprite.y - o.sprite.y;
         const od = Math.hypot(odx, ody);
@@ -1638,7 +1799,7 @@ export class ShepherdScene extends Phaser.Scene {
       for (let j = 0; j < this.sheep.length; j++) {
         if (i === j) continue;
         const o = this.sheep[j];
-        if (o.sold) continue;
+        if (o.sold || o.waiting) continue;
         const odx = o.sprite.x - s.sprite.x;
         const ody = o.sprite.y - s.sprite.y;
         const od = Math.hypot(odx, ody);
@@ -1732,9 +1893,15 @@ export class ShepherdScene extends Phaser.Scene {
         this.sheep.splice(i, 1);
         i--;
         for (const dog of this.dogs) {
-          if (dog.targetSheep === s) { dog.targetSheep = null; dog.mode = "following"; }
+          if (dog.targetSheep === s) {
+            dog.targetSheep = null;
+            dog.mode = "following";
+          }
         }
-        if (this.alphaDog.targetSheep === s) { this.alphaDog.targetSheep = null; this.alphaDog.mode = "following"; }
+        if (this.alphaDog.targetSheep === s) {
+          this.alphaDog.targetSheep = null;
+          this.alphaDog.mode = "following";
+        }
         for (const wolf of this.wolves) {
           if (wolf.targetSheep === s) wolf.targetSheep = null;
         }
@@ -1820,17 +1987,15 @@ export class ShepherdScene extends Phaser.Scene {
         s.readyIcon = undefined;
       }
 
-      // Market sale — adults entering the market are sold
-      if (s.stage === "adult" && this.marketContains(s.sprite.x, s.sprite.y)) {
-        s.sold = true;
-        s.vx = 0;
-        s.vy = 0;
-        this.score++;
-        this.coins += this.sellPrice;
-        this.updateCoinText();
-        this.sound.play("score");
-        this.playSaleFx(s);
-
+      // Market — adults entering the market queue up for batch sale
+      if (
+        s.stage === "adult" &&
+        !s.waiting &&
+        this.marketContains(s.sprite.x, s.sprite.y)
+      ) {
+        s.waiting = true;
+        s.vx *= 0.2;
+        s.vy *= 0.2;
         if (s.readyIcon) {
           this.tweens.add({
             targets: s.readyIcon,
@@ -1841,21 +2006,7 @@ export class ShepherdScene extends Phaser.Scene {
           });
           s.readyIcon = undefined;
         }
-        this.time.delayedCall(400, () => {
-          if (s.sprite.active) {
-            this.tweens.add({
-              targets: s.sprite,
-              alpha: 0,
-              scale: 0.3,
-              duration: 400,
-              onComplete: () => {
-                s.sprite.destroy();
-                const idx = this.sheep.indexOf(s);
-                if (idx >= 0) this.sheep.splice(idx, 1);
-              },
-            });
-          }
-        });
+        this.updateMarketCountText();
       }
     }
 
@@ -1863,10 +2014,10 @@ export class ShepherdScene extends Phaser.Scene {
     const minSep = SHEEP_RADIUS * 2;
     for (let i = 0; i < this.sheep.length; i++) {
       const a = this.sheep[i];
-      if (a.sold) continue;
+      if (a.sold || a.waiting) continue;
       for (let j = i + 1; j < this.sheep.length; j++) {
         const b = this.sheep[j];
-        if (b.sold) continue;
+        if (b.sold || b.waiting) continue;
         const dx = b.sprite.x - a.sprite.x;
         const dy = b.sprite.y - a.sprite.y;
         const dist = Math.hypot(dx, dy);
@@ -1955,7 +2106,7 @@ export class ShepherdScene extends Phaser.Scene {
     let best: Sheep | null = null;
     let bestDot = Math.cos(FACING_CONE);
     for (const s of this.sheep) {
-      if (s.sold) continue;
+      if (s.sold || s.waiting) continue;
       const dx = s.sprite.x - this.alphaDog.sprite.x;
       const dy = s.sprite.y - this.alphaDog.sprite.y;
       const dist = Math.hypot(dx, dy);
@@ -2060,6 +2211,18 @@ export class ShepherdScene extends Phaser.Scene {
       "background:#334;color:#ddd;cursor:pointer;font:12px monospace;border-radius:3px;";
     editBtn.addEventListener("click", () => this.enterEditorMode());
     panel.appendChild(editBtn);
+
+    const moneyBtn = document.createElement("button");
+    moneyBtn.textContent = "+$99999";
+    moneyBtn.style.cssText =
+      "width:100%;padding:6px;margin-bottom:10px;border:1px solid #6a4;" +
+      "background:#243;color:#afa;cursor:pointer;font:12px monospace;border-radius:3px;";
+    moneyBtn.addEventListener("click", () => {
+      this.coins += 99999;
+      this.updateCoinText();
+      this.updateShopButtons();
+    });
+    panel.appendChild(moneyBtn);
 
     const stats = document.createElement("div");
     stats.style.cssText =
