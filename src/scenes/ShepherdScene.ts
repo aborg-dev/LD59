@@ -11,7 +11,7 @@ const SHEEP_RADIUS = 18;
 const MAX_SHEEP = 30;
 
 // Field — babies grow here into adults
-const FIELD_CX = 1800;
+const FIELD_CX = 2088;
 const FIELD_CY = 900;
 const FIELD_W_PX = 288;
 const FIELD_H_PX = 168;
@@ -25,8 +25,8 @@ const SPEED_UPGRADE_STEP = 60;
 const UPGRADE_MAX_LEVEL = 4;
 
 // Market — adults are sold here for coins
-const MARKET_CX = 520;
-const MARKET_CY = 900;
+const MARKET_CX = 876;
+const MARKET_CY = 840;
 const SALE_INTERVAL_MIN_MS = 5000;
 const SALE_INTERVAL_MAX_MS = 10000;
 const MARKET_WANDER_SPEED = 40;
@@ -34,7 +34,7 @@ const SALE_PRICE_MIN = 5;
 const SALE_PRICE_MAX = 10;
 
 // Shear shed — pay $SHEAR_VALUE to shear an adult back into a baby
-const SHEAR_CX = 1200;
+const SHEAR_CX = 1960;
 const SHEAR_CY = 440;
 const SHEAR_W_PX = 236;
 const SHEAR_H_PX = 164;
