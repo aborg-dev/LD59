@@ -312,7 +312,7 @@ export class ShepherdScene extends Phaser.Scene {
         const highProb = dist < -blendHalf ? 1 : dist > blendHalf ? 0 : (blendHalf - dist) / (blendHalf * 2);
         const pool = Math.random() < highProb ? highKeys : lowKeys;
         const key = pool[Math.floor(Math.random() * pool.length)];
-        const img = this.add.image(xx, yy, key).setOrigin(0, 0);
+        const img = this.add.image(xx, yy, key).setOrigin(0, 0).setScale(2.0);
         grassLayer.add(img);
       }
     }
@@ -447,7 +447,7 @@ export class ShepherdScene extends Phaser.Scene {
     // Render trees
     for (const t of this.mapTrees) {
       const key = `tree${t.variant % 5}`;
-      const spr = this.add.image(t.x, t.y, key).setDepth(2);
+      const spr = this.add.image(t.x, t.y, key).setScale(2.0).setDepth(2);
       this.hudCamera.ignore(spr);
     }
 
