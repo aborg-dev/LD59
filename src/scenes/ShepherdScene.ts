@@ -1926,13 +1926,14 @@ export class ShepherdScene extends Phaser.Scene {
 
       wolf.scaredMs = Math.max(0, wolf.scaredMs - dtMs);
 
-      // Howl once when the wolf first gets within alarm range of the field
+      // Howl once when the wolf first enters the visible world bounds
       if (!wolf.howled) {
-        const dFld = Math.hypot(
-          wolf.sprite.x - FIELD_CX,
-          wolf.sprite.y - FIELD_CY,
-        );
-        if (dFld < 700) {
+        if (
+          wolf.sprite.x >= 0 &&
+          wolf.sprite.x <= WORLD_W &&
+          wolf.sprite.y >= 0 &&
+          wolf.sprite.y <= WORLD_H
+        ) {
           wolf.howled = true;
           this.sound.play("howl", { volume: 0.12 });
         }
