@@ -196,11 +196,12 @@ describe("shepherd core loop", () => {
       return c;
     })()`)) as number;
 
-    await game.advanceTime(200);
+    // Market sale is delayed 5-10s; wait past the upper bound
+    await game.advanceTime(11000);
 
     const s = await shepherdState();
-    // Default sell price is 10; +2 levels of +5 each → 20 per sale
-    expect(s.coins - startCoins).toBeGreaterThanOrEqual(20);
+    // Sale pays random $2-$5 + $5 per upgrade level → with 2 levels, at least $12
+    expect(s.coins - startCoins).toBeGreaterThanOrEqual(12);
   });
 
   it("fence costs $100 and must be purchased to block wolves", async () => {
@@ -384,7 +385,8 @@ describe("shepherd core loop", () => {
       return gs.coins;
     })()`)) as number;
 
-    await game.advanceTime(200);
+    // Market sale is delayed 5-10s; wait past the upper bound
+    await game.advanceTime(11000);
 
     const s = await shepherdState();
     expect(s.score).toBeGreaterThanOrEqual(1);

@@ -2016,7 +2016,8 @@ export class ShepherdScene extends Phaser.Scene {
         s.vy *= 0.2;
         s.salePrice =
           SALE_PRICE_MIN +
-          Math.floor(Math.random() * (SALE_PRICE_MAX - SALE_PRICE_MIN + 1));
+          Math.floor(Math.random() * (SALE_PRICE_MAX - SALE_PRICE_MIN + 1)) +
+          this.sellUpgradeLevel * SELL_UPGRADE_STEP;
         if (s.readyIcon) {
           this.tweens.add({
             targets: s.readyIcon,
