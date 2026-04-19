@@ -150,7 +150,7 @@ interface Dog {
   vx: number;
   vy: number;
   angle: number;
-  smoothedTurnRate: number;
+  smoothedAngularVel: number;
   mode: "following" | "herding" | "defending" | "guarding";
   postX?: number;
   postY?: number;
@@ -503,7 +503,7 @@ export class ShepherdScene extends Phaser.Scene {
       vx: 0,
       vy: 0,
       angle: 0,
-      smoothedTurnRate: 0,
+      smoothedAngularVel: 0,
       mode: "following",
     };
     this.alphaDogTargetX = alphaSprite.x;
@@ -744,7 +744,7 @@ export class ShepherdScene extends Phaser.Scene {
       vx: 0,
       vy: 0,
       angle: 0,
-      smoothedTurnRate: 0,
+      smoothedAngularVel: 0,
       targetWolf: null,
       mode: "following",
     });
@@ -1089,7 +1089,7 @@ export class ShepherdScene extends Phaser.Scene {
       vx: 0,
       vy: 0,
       angle: 0,
-      smoothedTurnRate: 0,
+      smoothedAngularVel: 0,
       mode: "guarding",
       postX: x,
       postY: y,
@@ -2600,10 +2600,10 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private updateDogAnim(dog: Dog, angleDelta: number, dt: number): void {
-    const rawRate = dt > 0 ? Math.abs(angleDelta) / dt : 0;
+    const rawVel = dt > 0 ? angleDelta / dt : 0; // signed rad/s
     const alpha = 1 - Math.exp(-dt / 0.12); // ~0.12s time constant
-    dog.smoothedTurnRate += (rawRate - dog.smoothedTurnRate) * alpha;
-    const r = dog.smoothedTurnRate;
+    dog.smoothedAngularVel += (rawVel - dog.smoothedAngularVel) * alpha;
+    const r = Math.abs(dog.smoothedAngularVel);
     let key: string;
     if (r < DOG_TURN_RATE * 0.2) key = "dog_straight";
     else if (r < DOG_TURN_RATE * 0.5) key = "dog_bend_min";
@@ -2614,7 +2614,7 @@ export class ShepherdScene extends Phaser.Scene {
       dog.sprite.play(key, true);
       dog.sprite.anims.setProgress(progress);
     }
-    dog.sprite.setFlipX(angleDelta < -0.0001);
+    dog.sprite.setFlipX(dog.smoothedAngularVel < 0);
   }
 
   private moveDog(
