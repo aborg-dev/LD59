@@ -807,10 +807,10 @@ export class ShepherdScene extends Phaser.Scene {
       fontFamily: FONT_UI,
       fontStyle: "bold",
       fontSize: 26,
-      color: "#000000",
-      padding: { left: 10, right: 10, top: 8, bottom: 8 },
+      color: "#4a2c1a",
+      padding: { left: 10, right: 50, top: 6, bottom: 10 },
       fixedWidth: SHOP_BTN_WIDTH,
-      align: "left",
+      align: "center",
       resolution: TEXT_RESOLUTION,
     };
     const costStyle = {
@@ -1126,61 +1126,88 @@ export class ShepherdScene extends Phaser.Scene {
     t.setX(t.getData("baseX") - costShiftLeft(n));
   }
 
+  private setBtnAffordable(
+    btn: Phaser.GameObjects.Text,
+    cost: Phaser.GameObjects.Text,
+    affordable: boolean,
+  ): void {
+    btn.setColor(affordable ? "#4a2c1a" : "#a08a72");
+    cost.setColor(affordable ? "#ffd700" : "#7a6a3a");
+  }
+
   private updateShopButtons(): void {
     const dogAffordable = this.coins >= this.dogBuyCost;
     this.dogBuyBtn.setText("Dog");
     this.setCostText(this.dogCostText, this.dogBuyCost);
-    this.dogBuyBtn.setAlpha(dogAffordable ? 1 : 0.55);
-    this.dogCostText.setAlpha(dogAffordable ? 1 : 0.55);
+    this.setBtnAffordable(this.dogBuyBtn, this.dogCostText, dogAffordable);
 
     const guardAffordable = this.coins >= this.guardBuyCost;
     this.guardBuyBtn.setText("Guard");
     this.setCostText(this.guardCostText, this.guardBuyCost);
-    this.guardBuyBtn.setAlpha(guardAffordable ? 1 : 0.55);
-    this.guardCostText.setAlpha(guardAffordable ? 1 : 0.55);
+    this.setBtnAffordable(
+      this.guardBuyBtn,
+      this.guardCostText,
+      guardAffordable,
+    );
 
     const sheepAffordable = this.coins >= this.buySheepCost;
     this.sheepBuyBtn.setText("Sheep");
     this.setCostText(this.sheepCostText, this.buySheepCost);
-    this.sheepBuyBtn.setAlpha(sheepAffordable ? 1 : 0.55);
-    this.sheepCostText.setAlpha(sheepAffordable ? 1 : 0.55);
+    this.setBtnAffordable(
+      this.sheepBuyBtn,
+      this.sheepCostText,
+      sheepAffordable,
+    );
 
     const speedMaxed = this.speedUpgradeLevel >= UPGRADE_MAX_LEVEL;
     const speedAffordable = !speedMaxed && this.coins >= this.speedUpgradeCost;
     this.speedBuyBtn.setText("Speed");
     if (speedMaxed) this.speedCostText.setText("MAX");
     else this.setCostText(this.speedCostText, this.speedUpgradeCost);
-    this.speedBuyBtn.setAlpha(speedAffordable ? 1 : 0.55);
-    this.speedCostText.setAlpha(speedMaxed || speedAffordable ? 1 : 0.55);
+    this.setBtnAffordable(
+      this.speedBuyBtn,
+      this.speedCostText,
+      speedMaxed || speedAffordable,
+    );
 
     const capMaxed = this.capacityUpgradeLevel >= UPGRADE_MAX_LEVEL;
     const capAffordable = !capMaxed && this.coins >= this.capacityUpgradeCost;
-    this.capacityBuyBtn.setText("Cap");
+    this.capacityBuyBtn.setText("Capacity");
     if (capMaxed) this.capacityCostText.setText("MAX");
     else this.setCostText(this.capacityCostText, this.capacityUpgradeCost);
-    this.capacityBuyBtn.setAlpha(capAffordable ? 1 : 0.55);
-    this.capacityCostText.setAlpha(capMaxed || capAffordable ? 1 : 0.55);
+    this.setBtnAffordable(
+      this.capacityBuyBtn,
+      this.capacityCostText,
+      capMaxed || capAffordable,
+    );
 
     const goldSheepAffordable =
       this.coins >= GOLDEN_SHEEP_COST && this.sheep.length < MAX_SHEEP;
     this.goldSheepBuyBtn.setText("Golden");
     this.setCostText(this.goldSheepCostText, GOLDEN_SHEEP_COST);
-    this.goldSheepBuyBtn.setAlpha(goldSheepAffordable ? 1 : 0.55);
-    this.goldSheepCostText.setAlpha(goldSheepAffordable ? 1 : 0.55);
+    this.setBtnAffordable(
+      this.goldSheepBuyBtn,
+      this.goldSheepCostText,
+      goldSheepAffordable,
+    );
 
     const rifleAffordable = !this.riflePurchased && this.coins >= RIFLE_COST;
     this.rifleBuyBtn.setText(this.riflePurchased ? "Owned" : "Rifle");
     this.rifleCostText.setText(this.riflePurchased ? "" : `$${RIFLE_COST}`);
-    this.rifleBuyBtn.setAlpha(
-      this.riflePurchased || !rifleAffordable ? 0.55 : 1,
+    this.setBtnAffordable(
+      this.rifleBuyBtn,
+      this.rifleCostText,
+      this.riflePurchased || rifleAffordable,
     );
-    this.rifleCostText.setAlpha(rifleAffordable ? 1 : 0.55);
 
     const retireAffordable = this.coins >= RETIRE_COST;
     this.retireBtn.setText("Retire");
     this.setCostText(this.retireCostText, RETIRE_COST);
-    this.retireBtn.setAlpha(retireAffordable ? 1 : 0.55);
-    this.retireCostText.setAlpha(retireAffordable ? 1 : 0.55);
+    this.setBtnAffordable(
+      this.retireBtn,
+      this.retireCostText,
+      retireAffordable,
+    );
   }
 
   private buyDog(): void {
