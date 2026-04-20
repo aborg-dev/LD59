@@ -610,6 +610,10 @@ export class ShepherdScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown-SPACE", () => this.dispatchFollower());
     this.input.keyboard?.on("keydown-ESC", () => this.cancelGuardPlacement());
     this.input.keyboard?.on("keydown-ENTER", () => this.toggleDebugPanel());
+    this.input.keyboard?.on("keydown-BACKSPACE", () => {
+      if (this.tutorialStep >= 0)
+        this.showTutorialStep(Number.MAX_SAFE_INTEGER);
+    });
 
     // --- Top HUD ---
     const hudBars = this.add.graphics().setDepth(100);
@@ -1457,12 +1461,7 @@ export class ShepherdScene extends Phaser.Scene {
       "road_block_d",
     ] as const;
 
-    const place = (
-      x: number,
-      y: number,
-      key: string,
-      rotation = 0,
-    ): void => {
+    const place = (x: number, y: number, key: string, rotation = 0): void => {
       const img = this.add.image(x, y, key).setScale(2.0).setDepth(0.5);
       if (rotation !== 0) img.setRotation(rotation);
       this.hudCamera.ignore(img);
@@ -1479,7 +1478,12 @@ export class ShepherdScene extends Phaser.Scene {
     ): void => {
       let i = 0;
       for (let pos = from; pos <= to + 0.5; pos += TILE, i++) {
-        place(isHorizontal ? pos : fixed, isHorizontal ? fixed : pos, BLOCKS[i % 4], rotation);
+        place(
+          isHorizontal ? pos : fixed,
+          isHorizontal ? fixed : pos,
+          BLOCKS[i % 4],
+          rotation,
+        );
       }
     };
 
@@ -1493,7 +1497,13 @@ export class ShepherdScene extends Phaser.Scene {
 
     // Segment before WP[1]: vertical, x=350, extends off-screen top.
     // Anchor to WP[1].y and step upward in TILE increments.
-    placeSegment(false, WP[1].x, WP[1].y - 4 * TILE, WP[1].y - TILE, Math.PI / 2);
+    placeSegment(
+      false,
+      WP[1].x,
+      WP[1].y - 4 * TILE,
+      WP[1].y - TILE,
+      Math.PI / 2,
+    );
 
     // Segment WP[1]→WP[2]: horizontal, y=250.
     placeSegment(true, WP[1].y, WP[1].x + TILE, WP[2].x - TILE, 0);
@@ -1505,8 +1515,13 @@ export class ShepherdScene extends Phaser.Scene {
     placeSegment(true, WP[3].y, WP[3].x + TILE, WP[4].x - TILE, 0);
 
     // Segment after WP[4]: vertical, x=2850, extends off-screen bottom.
-    placeSegment(false, WP[4].x, WP[4].y + TILE, WP[4].y + 5 * TILE, Math.PI / 2);
-
+    placeSegment(
+      false,
+      WP[4].x,
+      WP[4].y + TILE,
+      WP[4].y + 5 * TILE,
+      Math.PI / 2,
+    );
 
     // fill in gaps
     place(WP[2].x - 144, WP[2].y, "road_h");
