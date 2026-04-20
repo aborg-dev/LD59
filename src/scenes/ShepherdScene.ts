@@ -292,6 +292,8 @@ export class ShepherdScene extends Phaser.Scene {
   private tutorialOverlay?: Phaser.GameObjects.Graphics;
   private tutorialLabel?: Phaser.GameObjects.Text;
   private tutorialNextBtn?: Phaser.GameObjects.Text;
+  private dogTutorialShown = false;
+  private wolfTutorialShown = false;
 
   private fieldTop = 0;
   private fieldBottom = 0;
@@ -1146,6 +1148,12 @@ export class ShepherdScene extends Phaser.Scene {
     );
     this.playBarkSound();
     this.updateCoinText();
+    if (!this.dogTutorialShown) {
+      this.dogTutorialShown = true;
+      this.showHint(
+        "Move your dog near a sheep and BARK (click or SPACE)\nto signal the herding dog to follow that sheep.",
+      );
+    }
   }
 
   private playBarkSound(): void {
@@ -2306,6 +2314,59 @@ export class ShepherdScene extends Phaser.Scene {
     }
   }
 
+  private showHint(text: string): void {
+    this.tutorialOverlay?.destroy();
+    this.tutorialLabel?.destroy();
+    this.tutorialNextBtn?.destroy();
+
+    const { width, height } = this.scale;
+    this.paused = true;
+
+    const gfx = this.add.graphics().setDepth(200);
+    this.cameras.main.ignore(gfx);
+    gfx.fillStyle(0x000000, 0.75);
+    gfx.fillRect(0, 0, width, height);
+    this.tutorialOverlay = gfx;
+
+    const label = this.add
+      .text(width / 2, height / 2 - 60, text, {
+        fontSize: "28px",
+        color: "#ffffff",
+        align: "center",
+        wordWrap: { width: width * 0.6 },
+        stroke: "#000000",
+        strokeThickness: 5,
+        backgroundColor: "#00000066",
+        padding: { left: 20, right: 20, top: 14, bottom: 14 },
+      })
+      .setOrigin(0.5)
+      .setDepth(201);
+    this.cameras.main.ignore(label);
+    this.tutorialLabel = label;
+
+    const btn = this.add
+      .text(width / 2, label.y + label.height / 2 + 24, "Got it!", {
+        fontSize: "22px",
+        color: "#ffffff",
+        backgroundColor: "#2a6a2a",
+        padding: { left: 24, right: 24, top: 10, bottom: 10 },
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(201)
+      .setInteractive({ useHandCursor: true });
+    btn.on("pointerdown", () => {
+      this.tutorialOverlay?.destroy();
+      this.tutorialLabel?.destroy();
+      this.tutorialNextBtn?.destroy();
+      this.tutorialOverlay = undefined;
+      this.tutorialLabel = undefined;
+      this.tutorialNextBtn = undefined;
+      this.paused = false;
+    });
+    this.cameras.main.ignore(btn);
+    this.tutorialNextBtn = btn;
+  }
+
   dumpState(): ShepherdSceneState {
     return {
       active: this.scene.isActive(),
@@ -2685,6 +2746,24 @@ export class ShepherdScene extends Phaser.Scene {
         wolf.sprite.destroy();
         this.wolves.splice(i, 1);
         continue;
+      }
+
+      // Wolf tutorial: first wolf fully on-screen after the player owns a dog
+      if (!this.wolfTutorialShown && this.dogTutorialShown) {
+        const sp = this.worldToScreen(wolf.sprite.x, wolf.sprite.y);
+        const margin = 80;
+        const { width } = this.scale;
+        if (
+          sp.x > margin &&
+          sp.x < width - margin &&
+          sp.y > this.fieldTop + margin &&
+          sp.y < this.fieldBottom - margin
+        ) {
+          this.wolfTutorialShown = true;
+          this.showHint(
+            "A wolf is nearby!\nBark (click or SPACE) near it to scare it off.\nYour herding dogs will also intercept wolves near their sheep.",
+          );
+        }
       }
 
       const wasScared = wolf.scaredMs > 0;
