@@ -62,7 +62,7 @@ const DROP_SEGMENT_WP_IDX = 3; // wpIdx when truck is on the center vertical seg
 const DROP_X = 1500;
 const DROP_Y = 800;
 
-const BABY_SHEEP_SCALE = 0.45;
+const BABY_SHEEP_SCALE = 0.65;
 const ADULT_SHEEP_SCALE = 1.0;
 
 const BUY_SHEEP_BASE_COST = 3;
@@ -105,12 +105,12 @@ let FLEE_FORCE = 520;
 const WOLF_W = 42;
 const WOLF_H = 22;
 const WOLF_TURN_RATE = 3.5;
-const WOLF_NORMAL_SPEED = 190;
+const WOLF_NORMAL_SPEED = 160;
 const WOLF_BUILDING_AVOIDANCE_RADIUS = 180;
 const WOLF_BUILDING_AVOIDANCE_FORCE = WOLF_NORMAL_SPEED * 4;
 const WOLF_EAT_RANGE = 32;
 const WOLF_CONTACT_RANGE = 80;
-const WOLF_FLEE_SPEED = 650;
+const WOLF_FLEE_SPEED = 550;
 const WOLF_SCARED_MS = 1800;
 const WOLF_SPAWN_MAX_MS = 20000;
 const WOLF_SPAWN_MIN_MS = 5000;
