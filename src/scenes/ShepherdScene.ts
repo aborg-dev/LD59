@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import { FONT_BODY, FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
+import { FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
 import mapData from "./shepherd-map.json";
 
 const HUD_TOP_H = 70;
@@ -261,6 +261,14 @@ export class ShepherdScene extends Phaser.Scene {
   private fenceBuyBtn!: Phaser.GameObjects.Text;
   private guardBuyBtn!: Phaser.GameObjects.Text;
   private retireBtn!: Phaser.GameObjects.Text;
+  private tbdBtn!: Phaser.GameObjects.Text;
+  private dogCostText!: Phaser.GameObjects.Text;
+  private sheepCostText!: Phaser.GameObjects.Text;
+  private speedCostText!: Phaser.GameObjects.Text;
+  private capacityCostText!: Phaser.GameObjects.Text;
+  private fenceCostText!: Phaser.GameObjects.Text;
+  private guardCostText!: Phaser.GameObjects.Text;
+  private retireCostText!: Phaser.GameObjects.Text;
   private fieldCountText!: Phaser.GameObjects.Text;
   private marketCountText!: Phaser.GameObjects.Text;
   private fieldRect!: Phaser.GameObjects.Image;
@@ -605,11 +613,10 @@ export class ShepherdScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown-ENTER", () => this.toggleDebugPanel());
 
     // --- Top HUD ---
-    const hudTopBar = this.add
-      .rectangle(width / 2, 0, width, HUD_TOP_H, 0x111122)
-      .setOrigin(0.5, 0)
-      .setDepth(100);
-    this.cameras.main.ignore(hudTopBar);
+    const hudBars = this.add.graphics().setDepth(100);
+    this.cameras.main.ignore(hudBars);
+    this.drawWoodStrip(hudBars, 0, 0, width, HUD_TOP_H);
+    this.drawWoodStrip(hudBars, 0, height - HUD_BOTTOM_H, width, HUD_BOTTOM_H);
 
     this.coinText = this.add
       .text(22, HUD_TOP_H / 2, `$${this.coins}`, {
@@ -626,11 +633,11 @@ export class ShepherdScene extends Phaser.Scene {
 
     // --- Top-right control buttons (pause, menu, mute) ---
     const topBtnStyle = {
-      fontFamily: FONT_BODY,
-      fontSize: 22,
+      fontFamily: FONT_UI,
+      fontSize: 20,
       color: "#ffffff",
-      backgroundColor: "#333344",
-      padding: { left: 16, right: 16, top: 10, bottom: 10 },
+      backgroundColor: "#555566",
+      padding: { left: 14, right: 14, top: 10, bottom: 10 },
       resolution: TEXT_RESOLUTION,
     };
     const topBtnY = HUD_TOP_H / 2;
@@ -703,28 +710,38 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(this.bannerText);
 
     // --- Bottom HUD ---
-    const hudBottomBar = this.add
-      .rectangle(width / 2, height, width, HUD_BOTTOM_H, 0x111122)
-      .setOrigin(0.5, 1)
-      .setDepth(100);
-    this.cameras.main.ignore(hudBottomBar);
-
     const btnY = this.fieldBottom + HUD_BOTTOM_H / 2;
-    const SHOP_BTN_WIDTH = 200;
-    const SHOP_BTN_COUNT = 7;
+    const SHOP_BTN_WIDTH = 180;
+    const SHOP_BTN_COUNT = 8;
     const shopPad = 22;
     const shopStep =
       (width - 2 * shopPad - SHOP_BTN_WIDTH) / (SHOP_BTN_COUNT - 1);
     const shopX = (i: number) => shopPad + SHOP_BTN_WIDTH / 2 + i * shopStep;
     const btnStyle = {
-      fontFamily: FONT_BODY,
-      fontSize: 22,
+      fontFamily: FONT_UI,
+      fontSize: 20,
       color: "#ffffff",
       backgroundColor: "#333344",
-      padding: { left: 16, right: 16, top: 10, bottom: 10 },
+      padding: { left: 14, right: 14, top: 10, bottom: 10 },
       fixedWidth: SHOP_BTN_WIDTH,
-      align: "center",
+      align: "left",
       resolution: TEXT_RESOLUTION,
+    };
+    const costStyle = {
+      fontFamily: FONT_UI,
+      fontSize: 20,
+      color: "#ffd700",
+      stroke: "#000000",
+      strokeThickness: 3,
+      resolution: TEXT_RESOLUTION,
+    };
+    const makeCost = (i: number) => {
+      const t = this.add
+        .text(shopX(i) + SHOP_BTN_WIDTH / 2 - 14, btnY, "", costStyle)
+        .setOrigin(1, 0.5)
+        .setDepth(102);
+      this.cameras.main.ignore(t);
+      return t;
     };
 
     // Shop buttons, ordered left→right by ascending cost.
@@ -735,6 +752,7 @@ export class ShepherdScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     this.sheepBuyBtn.on("pointerdown", () => this.buySheep());
     this.cameras.main.ignore(this.sheepBuyBtn);
+    this.sheepCostText = makeCost(0);
 
     this.dogBuyBtn = this.add
       .text(shopX(1), btnY, "", btnStyle)
@@ -743,6 +761,7 @@ export class ShepherdScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     this.dogBuyBtn.on("pointerdown", () => this.buyDog());
     this.cameras.main.ignore(this.dogBuyBtn);
+    this.dogCostText = makeCost(1);
 
     this.speedBuyBtn = this.add
       .text(shopX(2), btnY, "", btnStyle)
@@ -751,6 +770,7 @@ export class ShepherdScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     this.speedBuyBtn.on("pointerdown", () => this.buySpeedUpgrade());
     this.cameras.main.ignore(this.speedBuyBtn);
+    this.speedCostText = makeCost(2);
 
     this.capacityBuyBtn = this.add
       .text(shopX(3), btnY, "", btnStyle)
@@ -759,6 +779,7 @@ export class ShepherdScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     this.capacityBuyBtn.on("pointerdown", () => this.buyCapacityUpgrade());
     this.cameras.main.ignore(this.capacityBuyBtn);
+    this.capacityCostText = makeCost(3);
 
     this.guardBuyBtn = this.add
       .text(shopX(4), btnY, "", btnStyle)
@@ -770,6 +791,7 @@ export class ShepherdScene extends Phaser.Scene {
       else this.buyGuardDog();
     });
     this.cameras.main.ignore(this.guardBuyBtn);
+    this.guardCostText = makeCost(4);
 
     this.fenceBuyBtn = this.add
       .text(shopX(5), btnY, "", btnStyle)
@@ -778,6 +800,7 @@ export class ShepherdScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     this.fenceBuyBtn.on("pointerdown", () => this.buyFence());
     this.cameras.main.ignore(this.fenceBuyBtn);
+    this.fenceCostText = makeCost(5);
 
     this.retireBtn = this.add
       .text(shopX(6), btnY, "", btnStyle)
@@ -786,6 +809,14 @@ export class ShepherdScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     this.retireBtn.on("pointerdown", () => this.retire());
     this.cameras.main.ignore(this.retireBtn);
+    this.retireCostText = makeCost(6);
+
+    this.tbdBtn = this.add
+      .text(shopX(7), btnY, "TBD", { ...btnStyle, align: "center" })
+      .setOrigin(0.5)
+      .setDepth(101);
+    this.tbdBtn.setAlpha(0.55);
+    this.cameras.main.ignore(this.tbdBtn);
 
     this.updateShopButtons();
 
@@ -901,6 +932,37 @@ export class ShepherdScene extends Phaser.Scene {
     });
   }
 
+  private drawWoodStrip(
+    g: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ): void {
+    // Base plank color
+    g.fillStyle(0x8b5a2b, 1);
+    g.fillRect(x, y, w, h);
+
+    // Dark grain streaks (horizontal)
+    g.fillStyle(0x5a3818, 0.4);
+    for (const t of [0.12, 0.28, 0.47, 0.63, 0.81]) {
+      g.fillRect(x, y + Math.floor(h * t), w, 1);
+    }
+
+    // Lighter grain streaks
+    g.fillStyle(0xc89966, 0.28);
+    for (const t of [0.2, 0.55, 0.74]) {
+      g.fillRect(x, y + Math.floor(h * t), w, 1);
+    }
+
+    // Top edge highlight
+    g.fillStyle(0xc89966, 0.9);
+    g.fillRect(x, y, w, 2);
+    // Bottom edge shadow
+    g.fillStyle(0x2a1808, 0.9);
+    g.fillRect(x, y + h - 3, w, 3);
+  }
+
   private drawFencePosts(): void {
     const g = this.fenceGfx;
     g.clear();
@@ -1012,58 +1074,65 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private updateShopButtons(): void {
+    const BG_IDLE = "#333344";
+    const BG_ACTIVE = "#555566";
+
     const dogAffordable = this.coins >= this.dogBuyCost;
-    this.dogBuyBtn.setText(`+Dog $${this.dogBuyCost}`);
-    this.dogBuyBtn.setBackgroundColor(dogAffordable ? "#2a6a2a" : "#333344");
+    this.dogBuyBtn.setText("Dog");
+    this.dogCostText.setText(`$${this.dogBuyCost}`);
+    this.dogBuyBtn.setBackgroundColor(dogAffordable ? BG_ACTIVE : BG_IDLE);
     this.dogBuyBtn.setAlpha(dogAffordable ? 1 : 0.55);
+    this.dogCostText.setAlpha(dogAffordable ? 1 : 0.55);
 
     const guardAffordable = this.coins >= this.guardBuyCost;
-    this.guardBuyBtn.setText(`+Guard $${this.guardBuyCost}`);
-    this.guardBuyBtn.setBackgroundColor(
-      guardAffordable ? "#2a6a2a" : "#333344",
-    );
+    this.guardBuyBtn.setText("Guard");
+    this.guardCostText.setText(`$${this.guardBuyCost}`);
+    this.guardBuyBtn.setBackgroundColor(guardAffordable ? BG_ACTIVE : BG_IDLE);
     this.guardBuyBtn.setAlpha(guardAffordable ? 1 : 0.55);
+    this.guardCostText.setAlpha(guardAffordable ? 1 : 0.55);
 
     const sheepAffordable = this.coins >= this.buySheepCost;
-    this.sheepBuyBtn.setText(`+Sheep $${this.buySheepCost}`);
-    this.sheepBuyBtn.setBackgroundColor(
-      sheepAffordable ? "#2a6a2a" : "#333344",
-    );
+    this.sheepBuyBtn.setText("Sheep");
+    this.sheepCostText.setText(`$${this.buySheepCost}`);
+    this.sheepBuyBtn.setBackgroundColor(sheepAffordable ? BG_ACTIVE : BG_IDLE);
     this.sheepBuyBtn.setAlpha(sheepAffordable ? 1 : 0.55);
+    this.sheepCostText.setAlpha(sheepAffordable ? 1 : 0.55);
 
     const speedMaxed = this.speedUpgradeLevel >= UPGRADE_MAX_LEVEL;
     const speedAffordable = !speedMaxed && this.coins >= this.speedUpgradeCost;
-    this.speedBuyBtn.setText(
-      speedMaxed ? "Speed MAX" : `+Speed $${this.speedUpgradeCost}`,
+    this.speedBuyBtn.setText("Speed");
+    this.speedCostText.setText(
+      speedMaxed ? "MAX" : `$${this.speedUpgradeCost}`,
     );
-    this.speedBuyBtn.setBackgroundColor(
-      speedAffordable ? "#2a6a2a" : "#333344",
-    );
+    this.speedBuyBtn.setBackgroundColor(speedAffordable ? BG_ACTIVE : BG_IDLE);
     this.speedBuyBtn.setAlpha(speedAffordable ? 1 : 0.55);
+    this.speedCostText.setAlpha(speedMaxed || speedAffordable ? 1 : 0.55);
 
     const capMaxed = this.capacityUpgradeLevel >= UPGRADE_MAX_LEVEL;
     const capAffordable = !capMaxed && this.coins >= this.capacityUpgradeCost;
-    this.capacityBuyBtn.setText(
-      capMaxed ? "Cap MAX" : `+Cap $${this.capacityUpgradeCost}`,
+    this.capacityBuyBtn.setText("Cap");
+    this.capacityCostText.setText(
+      capMaxed ? "MAX" : `$${this.capacityUpgradeCost}`,
     );
-    this.capacityBuyBtn.setBackgroundColor(
-      capAffordable ? "#2a6a2a" : "#333344",
-    );
+    this.capacityBuyBtn.setBackgroundColor(capAffordable ? BG_ACTIVE : BG_IDLE);
     this.capacityBuyBtn.setAlpha(capAffordable ? 1 : 0.55);
+    this.capacityCostText.setAlpha(capMaxed || capAffordable ? 1 : 0.55);
 
     const fenceAffordable = !this.fenceBuilt && this.coins >= FENCE_COST;
-    this.fenceBuyBtn.setText(
-      this.fenceBuilt ? "Fenced" : `+Fence $${FENCE_COST}`,
-    );
+    this.fenceBuyBtn.setText(this.fenceBuilt ? "Fenced" : "Fence");
+    this.fenceCostText.setText(this.fenceBuilt ? "" : `$${FENCE_COST}`);
     this.fenceBuyBtn.setBackgroundColor(
-      this.fenceBuilt ? "#444444" : fenceAffordable ? "#2a6a2a" : "#333344",
+      this.fenceBuilt ? BG_IDLE : fenceAffordable ? BG_ACTIVE : BG_IDLE,
     );
     this.fenceBuyBtn.setAlpha(this.fenceBuilt || fenceAffordable ? 1 : 0.55);
+    this.fenceCostText.setAlpha(fenceAffordable ? 1 : 0.55);
 
     const retireAffordable = this.coins >= RETIRE_COST;
-    this.retireBtn.setText(`Retire $${RETIRE_COST}`);
-    this.retireBtn.setBackgroundColor(retireAffordable ? "#8a6a1a" : "#333344");
+    this.retireBtn.setText("Retire");
+    this.retireCostText.setText(`$${RETIRE_COST}`);
+    this.retireBtn.setBackgroundColor(retireAffordable ? BG_ACTIVE : BG_IDLE);
     this.retireBtn.setAlpha(retireAffordable ? 1 : 0.55);
+    this.retireCostText.setAlpha(retireAffordable ? 1 : 0.55);
   }
 
   private buyDog(): void {
