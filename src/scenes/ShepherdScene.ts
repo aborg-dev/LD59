@@ -1171,7 +1171,6 @@ export class ShepherdScene extends Phaser.Scene {
     const rifleAffordable = !this.riflePurchased && this.coins >= RIFLE_COST;
     this.rifleBuyBtn.setText(this.riflePurchased ? "Owned" : "Rifle");
     this.rifleCostText.setText(this.riflePurchased ? "" : `$${RIFLE_COST}`);
-    this.rifleBuyBtn.setBackgroundColor(rifleAffordable ? BG_ACTIVE : BG_IDLE);
     this.rifleBuyBtn.setAlpha(
       this.riflePurchased || !rifleAffordable ? 0.55 : 1,
     );
