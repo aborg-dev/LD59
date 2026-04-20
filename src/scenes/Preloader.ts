@@ -59,6 +59,14 @@ export class Preloader extends Scene {
     this.load.image("tree3", "1809_Tree_Big_1.png");
     this.load.image("tree4", "1809_Tree_Big_2.png");
     this.load.image("font", "1807_Font.png");
+    this.load.image("road_block_a", "road/road_block_a.png");
+    this.load.image("road_block_b", "road/road_block_b.png");
+    this.load.image("road_block_c", "road/road_block_c.png");
+    this.load.image("road_block_d", "road/road_block_d.png");
+    this.load.image("road_e", "road/road_e.png");
+    this.load.image("road_f", "road/road_f.png");
+    this.load.image("road_g", "road/road_g.png");
+    this.load.image("road_h", "road/road_h.png");
     this.load.spritesheet("wolf", "sprite_wolf.png", {
       frameWidth: 30,
       frameHeight: 110,

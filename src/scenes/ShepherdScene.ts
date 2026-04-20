@@ -46,7 +46,6 @@ const MARKET_H_PX = 216;
 const BUILDING_ENTRY_PADDING = SHEEP_RADIUS * 2; // extra margin around buildings for entry detection
 
 // Country road — top-left → turns → center → bottom-right
-const ROAD_W_PX = 140;
 const TRUCK_W = 66;
 const TRUCK_H = 175;
 const TRUCK_SPEED = 320;
@@ -55,8 +54,8 @@ const ROAD_WAYPOINTS: readonly { x: number; y: number }[] = [
   { x: 350, y: 250 }, // [1] turn east
   { x: 1500, y: 250 }, // [2] turn south (crosses through center)
   { x: 1500, y: 1350 }, // [3] turn east
-  { x: 2850, y: 1350 }, // [4] turn south
-  { x: 2850, y: WORLD_H + TRUCK_H }, // [5] exit bottom-right area
+  { x: 2796, y: 1350 }, // [4] turn south
+  { x: 2796, y: WORLD_H + TRUCK_H }, // [5] exit bottom-right area
 ];
 const DROP_SEGMENT_WP_IDX = 3; // wpIdx when truck is on the center vertical segment
 const DROP_X = 1500;
@@ -1441,120 +1440,68 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private drawRoad(): void {
-    const gfx = this.add.graphics().setDepth(0.5);
-    this.hudCamera.ignore(gfx);
+    const TILE = 144; // 72px × 2.0 scale
+    const BLOCKS = [
+      "road_block_a",
+      "road_block_b",
+      "road_block_c",
+      "road_block_d",
+    ] as const;
 
-    const halfOuter = ROAD_W_PX / 2; // 70 — full shoulder half-width
-    const halfPaved = Math.round(ROAD_W_PX * 0.28); // ~39 — gray center half-width
+    const place = (
+      x: number,
+      y: number,
+      key: string,
+      rotation = 0,
+    ): void => {
+      const img = this.add.image(x, y, key).setScale(2.0).setDepth(0.5);
+      if (rotation !== 0) img.setRotation(rotation);
+      this.hudCamera.ignore(img);
+    };
 
-    // Pass 1 — ALL shoulder fills (tan) before any paved, so paved always wins
-    gfx.fillStyle(0xc4a07a);
-    for (let i = 0; i + 1 < ROAD_WAYPOINTS.length; i++) {
-      const p0 = ROAD_WAYPOINTS[i];
-      const p1 = ROAD_WAYPOINTS[i + 1];
-      const horiz = p0.y === p1.y;
-      gfx.fillRect(
-        Math.min(p0.x, p1.x) - (horiz ? 0 : halfOuter),
-        Math.min(p0.y, p1.y) - (horiz ? halfOuter : 0),
-        Math.abs(p1.x - p0.x) + (horiz ? 0 : ROAD_W_PX),
-        Math.abs(p1.y - p0.y) + (horiz ? ROAD_W_PX : 0),
-      );
-    }
-    for (let i = 1; i + 1 < ROAD_WAYPOINTS.length; i++) {
-      const p = ROAD_WAYPOINTS[i];
-      gfx.fillRect(p.x - halfOuter, p.y - halfOuter, ROAD_W_PX, ROAD_W_PX);
-    }
-
-    // Pass 2 — ALL paved fills (gray) drawn on top of all shoulders.
-    // Segment rects extend to the corner point so no gap at junctions.
-    // Corner paved fills only the halfPaved×halfPaved centre — the outer corner
-    // quadrants stay tan from pass 1, giving a consistent shoulder all round.
-    gfx.fillStyle(0x888880);
-    for (let i = 0; i + 1 < ROAD_WAYPOINTS.length; i++) {
-      const p0 = ROAD_WAYPOINTS[i];
-      const p1 = ROAD_WAYPOINTS[i + 1];
-      const horiz = p0.y === p1.y;
-      if (horiz) {
-        gfx.fillRect(
-          Math.min(p0.x, p1.x),
-          p0.y - halfPaved,
-          Math.abs(p1.x - p0.x),
-          halfPaved * 2,
-        );
-      } else {
-        gfx.fillRect(
-          p0.x - halfPaved,
-          Math.min(p0.y, p1.y),
-          halfPaved * 2,
-          Math.abs(p1.y - p0.y),
-        );
+    // Place straight tiles along a segment, cycling block_a…d.
+    // 'from' and 'to' are inclusive center positions, spaced TILE apart.
+    const placeSegment = (
+      isHorizontal: boolean,
+      fixed: number,
+      from: number,
+      to: number,
+      rotation: number,
+    ): void => {
+      let i = 0;
+      for (let pos = from; pos <= to + 0.5; pos += TILE, i++) {
+        place(isHorizontal ? pos : fixed, isHorizontal ? fixed : pos, BLOCKS[i % 4], rotation);
       }
-    }
-    for (let i = 1; i + 1 < ROAD_WAYPOINTS.length; i++) {
-      const p = ROAD_WAYPOINTS[i];
-      gfx.fillRect(
-        p.x - halfPaved,
-        p.y - halfPaved,
-        halfPaved * 2,
-        halfPaved * 2,
-      );
-    }
+    };
 
-    // Pass 3 — rough edge blobs along segments (skipping ±halfOuter from ends)
-    gfx.fillStyle(0x7a5630);
-    for (let i = 0; i + 1 < ROAD_WAYPOINTS.length; i++) {
-      const p0 = ROAD_WAYPOINTS[i];
-      const p1 = ROAD_WAYPOINTS[i + 1];
-      const horiz = p0.y === p1.y;
-      const len = Math.abs(horiz ? p1.x - p0.x : p1.y - p0.y);
-      const dirX = horiz ? Math.sign(p1.x - p0.x) : 0;
-      const dirY = horiz ? 0 : Math.sign(p1.y - p0.y);
-      const skip = halfPaved;
-      const usable = len - skip * 2;
-      if (usable <= 0) continue;
-      const count = Math.floor(usable / 20);
-      for (let j = 0; j < count; j++) {
-        const t = skip + (j + 0.5) * 20;
-        const cx = p0.x + dirX * t;
-        const cy = p0.y + dirY * t;
-        const r = 5 + Math.random() * 11;
-        const off = halfOuter - 4 + Math.random() * 10;
-        const jitter = (Math.random() - 0.5) * 18;
-        if (horiz) {
-          gfx.fillCircle(cx + jitter, cy - off, r);
-          gfx.fillCircle(cx + jitter, cy + off, r);
-        } else {
-          gfx.fillCircle(cx - off, cy + jitter, r);
-          gfx.fillCircle(cx + off, cy + jitter, r);
-        }
-      }
-    }
+    const WP = ROAD_WAYPOINTS;
 
-    // Pass 3b — blobs on the 4 outer edges of each corner, same style as segments
-    for (let i = 1; i + 1 < ROAD_WAYPOINTS.length; i++) {
-      const p = ROAD_WAYPOINTS[i];
-      const edgeSigns: [number, "h" | "v"][] = [
-        [-1, "h"],
-        [1, "h"],
-        [-1, "v"],
-        [1, "v"],
-      ];
-      const count = Math.floor((halfOuter * 2) / 20);
-      for (const [sign, axis] of edgeSigns) {
-        for (let j = 0; j < count; j++) {
-          const along = -halfOuter + (j + 0.5) * 20;
-          if (Math.abs(along) < halfPaved) continue; // road passes through here, no shoulder
-          const off = halfOuter - 4 + Math.random() * 10;
-          const jitter = (Math.random() - 0.5) * 18;
-          const r = 5 + Math.random() * 11;
-          if (axis === "h") {
-            gfx.fillCircle(p.x + along + jitter, p.y + sign * off, r);
-          } else {
-            gfx.fillCircle(p.x + sign * off, p.y + along + jitter, r);
-          }
-        }
-      }
-    }
+    // Corner tiles
+    place(WP[1].x, WP[1].y, "road_e");
+    place(WP[2].x, WP[2].y, "road_f");
+    place(WP[3].x, WP[3].y, "road_g");
+    place(WP[4].x, WP[4].y, "road_h");
+
+    // Segment before WP[1]: vertical, x=350, extends off-screen top.
+    // Anchor to WP[1].y and step upward in TILE increments.
+    placeSegment(false, WP[1].x, WP[1].y - 4 * TILE, WP[1].y - TILE, Math.PI / 2);
+
+    // Segment WP[1]→WP[2]: horizontal, y=250.
+    placeSegment(true, WP[1].y, WP[1].x + TILE, WP[2].x - TILE, 0);
+
+    // Segment WP[2]→WP[3]: vertical, x=1500.
+    placeSegment(false, WP[2].x, WP[2].y + TILE, WP[3].y - TILE, Math.PI / 2);
+
+    // Segment WP[3]→WP[4]: horizontal, y=1350.
+    placeSegment(true, WP[3].y, WP[3].x + TILE, WP[4].x - TILE, 0);
+
+    // Segment after WP[4]: vertical, x=2850, extends off-screen bottom.
+    placeSegment(false, WP[4].x, WP[4].y + TILE, WP[4].y + 5 * TILE, Math.PI / 2);
+
+
+    // fill in gaps
+    place(WP[2].x - 144, WP[2].y, "road_h");
+    place(WP[3].x, WP[3].y - 144, "road_h");
   }
 
   private spawnTruck(): void {
