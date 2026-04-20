@@ -135,7 +135,7 @@ interface Sheep {
 }
 
 interface Wolf {
-  sprite: Phaser.GameObjects.Image;
+  sprite: Phaser.GameObjects.Sprite;
   targetSheep: Sheep | null;
   vx: number;
   vy: number;
@@ -508,6 +508,13 @@ export class ShepherdScene extends Phaser.Scene {
       key: "wolf",
       frames: this.anims.generateFrameNumbers("wolf", { start: 0, end: 7 }),
       frameRate: 8,
+      repeat: -1,
+    });
+
+    this.anims.create({
+      key: "wolf_scared",
+      frames: this.anims.generateFrameNumbers("wolf_scared", { start: 0, end: 7 }),
+      frameRate: 16,
       repeat: -1,
     });
 
@@ -2234,7 +2241,9 @@ export class ShepherdScene extends Phaser.Scene {
         continue;
       }
 
+      const wasScared = wolf.scaredMs > 0;
       wolf.scaredMs = Math.max(0, wolf.scaredMs - dtMs);
+      if (wasScared && wolf.scaredMs === 0) wolf.sprite.play("wolf");
 
       // Howl once when the wolf first enters the visible world bounds
       if (!wolf.howled) {
@@ -2274,7 +2283,10 @@ export class ShepherdScene extends Phaser.Scene {
         const ddy = wolf.sprite.y - src.y;
         const dd = Math.hypot(ddx, ddy);
         if (dd < WOLF_CONTACT_RANGE && dd > 0.01) {
-          if (wolf.scaredMs <= 0) this.playBarkSound();
+          if (wolf.scaredMs <= 0) {
+            this.playBarkSound();
+            wolf.sprite.play("wolf_scared");
+          }
           wolf.scaredMs = WOLF_SCARED_MS;
           wolf.vx = (ddx / dd) * WOLF_FLEE_SPEED;
           wolf.vy = (ddy / dd) * WOLF_FLEE_SPEED;
