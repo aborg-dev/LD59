@@ -1732,11 +1732,12 @@ export class ShepherdScene extends Phaser.Scene {
     ): void => {
       let i = 0;
       for (let pos = from; pos <= to + 0.5; pos += TILE, i++) {
+        const flip = Math.floor(i / 4) % 2 === 1 ? Math.PI : 0;
         place(
           isHorizontal ? pos : fixed,
           isHorizontal ? fixed : pos,
           BLOCKS[i % 4],
-          rotation,
+          rotation + flip,
         );
       }
     };
