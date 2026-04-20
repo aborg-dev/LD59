@@ -341,17 +341,11 @@ export class ShepherdScene extends Phaser.Scene {
     // Field — baby sheep grow here. Fence is a paid upgrade.
     this.fieldRect = this.add
       .image(FIELD_CX, FIELD_CY, "farm")
-      .setDisplaySize(FIELD_W_PX, FIELD_H_PX)
+      .setScale(2.0)
       .setDepth(1);
     this.hudCamera.ignore(this.fieldRect);
     this.fieldBorderGfx = this.add.graphics().setDepth(1.1);
     this.fieldBorderGfx.lineStyle(4, 0x3a2814, 1);
-    this.fieldBorderGfx.strokeRect(
-      FIELD_CX - FIELD_W_PX / 2,
-      FIELD_CY - FIELD_H_PX / 2,
-      FIELD_W_PX,
-      FIELD_H_PX,
-    );
     this.hudCamera.ignore(this.fieldBorderGfx);
     this.fenceGfx = this.add.graphics().setDepth(1.2).setVisible(false);
     this.hudCamera.ignore(this.fenceGfx);
@@ -372,7 +366,7 @@ export class ShepherdScene extends Phaser.Scene {
     // Market — adult sheep sold here
     const marketImg = this.add
       .image(MARKET_CX, MARKET_CY, "market")
-      .setDisplaySize(MARKET_W_PX, MARKET_H_PX)
+      .setScale(2.0)
       .setDepth(1);
     this.hudCamera.ignore(marketImg);
     const marketLabel = this.add
