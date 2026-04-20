@@ -1957,14 +1957,13 @@ export class ShepherdScene extends Phaser.Scene {
       const sx = dog.targetSheep.sprite.x;
       const sy = dog.targetSheep.sprite.y;
 
-      // If a wolf close to my sheep is hunting it, stand between the sheep
-      // and the wolf to scare it off without abandoning the sheep.
+      // Any wolf near my sheep (or a cluster-mate's sheep) is a threat —
+      // stand between it and the sheep to scare it off without abandoning them.
       const threat = this.wolves.find(
         (w) =>
-          w.targetSheep === dog.targetSheep &&
           w.scaredMs === 0 &&
           Math.hypot(w.sprite.x - sx, w.sprite.y - sy) <
-          HERD_INTERCEPT_THREAT_RANGE,
+            HERD_INTERCEPT_THREAT_RANGE,
       );
 
       let herdX: number;
