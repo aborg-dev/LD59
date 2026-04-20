@@ -249,8 +249,9 @@ export class ShepherdScene extends Phaser.Scene {
   private shearSfx?: Phaser.Sound.BaseSound;
   private grazingSfx?: Phaser.Sound.BaseSound;
   private paused = false;
-  private adultTarget: "market" | "shear" = "market";
+  private adultTarget: "market" | "shear" = "shear";
   private buildingTargetGfx!: Phaser.GameObjects.Graphics;
+  private buildingTargetVisible = false;
   private placingGuard = false;
   private guardMarkers: Phaser.GameObjects.Graphics[] = [];
 
@@ -1151,8 +1152,29 @@ export class ShepherdScene extends Phaser.Scene {
     this.updateCoinText();
     if (!this.dogTutorialShown) {
       this.dogTutorialShown = true;
+      this.buildingTargetVisible = true;
+      this.drawBuildingTarget();
       this.showHint(
         "Move your dog near a sheep and BARK (click or SPACE)\nto signal the herding dog to follow that sheep.",
+        () =>
+          this.showHint(
+            "Click the Market or Shear building\nto choose where dogs bring adult sheep.\nShear is selected by default.",
+            undefined,
+            [
+              {
+                cx: SHEAR_CX,
+                cy: SHEAR_CY - 50,
+                w: SHEAR_W_PX + 120,
+                h: SHEAR_H_PX + 260,
+              },
+              {
+                cx: MARKET_CX,
+                cy: MARKET_CY - 50,
+                w: MARKET_W_PX + 160,
+                h: MARKET_H_PX + 260,
+              },
+            ],
+          ),
       );
     }
   }
@@ -1462,6 +1484,7 @@ export class ShepherdScene extends Phaser.Scene {
 
   private drawBuildingTarget(): void {
     this.buildingTargetGfx.clear();
+    if (!this.buildingTargetVisible) return;
     const pad = 10;
     this.buildingTargetGfx.lineStyle(5, 0xffd700, 1);
     if (this.adultTarget === "market") {
@@ -2181,24 +2204,6 @@ export class ShepherdScene extends Phaser.Scene {
         text: "Sell or shear sheep to make money",
       },
       {
-        worldRects: [
-          {
-            cx: SHEAR_CX,
-            cy: SHEAR_CY - 50,
-            w: SHEAR_W_PX + 100 + 2 * d,
-            h: SHEAR_H_PX + 250 + 2 * d,
-          },
-          {
-            cx: MARKET_CX,
-            cy: MARKET_CY - 50 - d,
-            w: MARKET_W_PX + 150 + 2 * d,
-            h: MARKET_H_PX + 250 + 2 * d,
-          },
-        ],
-        hudRects: [],
-        text: "Click a building to choose where dogs bring adult sheep",
-      },
-      {
         worldRects: [],
         hudRects: [hudRectFor(this.dogBuyBtn), hudRectFor(this.guardBuyBtn)],
         text: "Buy additional dogs to help you manage sheep",
@@ -2323,7 +2328,11 @@ export class ShepherdScene extends Phaser.Scene {
     }
   }
 
-  private showHint(text: string): void {
+  private showHint(
+    text: string,
+    onDismiss?: () => void,
+    worldRects?: { cx: number; cy: number; w: number; h: number }[],
+  ): void {
     this.tutorialOverlay?.destroy();
     this.tutorialLabel?.destroy();
     this.tutorialNextBtn?.destroy();
@@ -2334,11 +2343,52 @@ export class ShepherdScene extends Phaser.Scene {
     const gfx = this.add.graphics().setDepth(200);
     this.cameras.main.ignore(gfx);
     gfx.fillStyle(0x000000, 0.75);
-    gfx.fillRect(0, 0, width, height);
+    if (!worldRects || worldRects.length === 0) {
+      gfx.fillRect(0, 0, width, height);
+    } else {
+      const cam = this.cameras.main;
+      const highlights = worldRects.map((r) => {
+        const c = this.worldToScreen(r.cx, r.cy);
+        return {
+          x: c.x - (r.w * cam.zoom) / 2,
+          y: c.y - (r.h * cam.zoom) / 2,
+          w: r.w * cam.zoom,
+          h: r.h * cam.zoom,
+        };
+      });
+      const xs = [
+        0,
+        width,
+        ...highlights.flatMap((h) => [h.x, h.x + h.w]),
+      ].sort((a, b) => a - b);
+      const ys = [
+        0,
+        height,
+        ...highlights.flatMap((h) => [h.y, h.y + h.h]),
+      ].sort((a, b) => a - b);
+      for (let xi = 0; xi + 1 < xs.length; xi++) {
+        for (let yi = 0; yi + 1 < ys.length; yi++) {
+          const cx = (xs[xi] + xs[xi + 1]) / 2;
+          const cy = (ys[yi] + ys[yi + 1]) / 2;
+          const isLit = highlights.some(
+            (h) => cx >= h.x && cx <= h.x + h.w && cy >= h.y && cy <= h.y + h.h,
+          );
+          if (!isLit)
+            gfx.fillRect(
+              xs[xi],
+              ys[yi],
+              xs[xi + 1] - xs[xi],
+              ys[yi + 1] - ys[yi],
+            );
+        }
+      }
+    }
     this.tutorialOverlay = gfx;
 
+    const hasRects = worldRects && worldRects.length > 0;
+
     const label = this.add
-      .text(width / 2, height / 2 - 60, text, {
+      .text(width / 2, 0, text, {
         fontSize: "28px",
         color: "#ffffff",
         align: "center",
@@ -2348,13 +2398,23 @@ export class ShepherdScene extends Phaser.Scene {
         backgroundColor: "#00000066",
         padding: { left: 20, right: 20, top: 14, bottom: 14 },
       })
-      .setOrigin(0.5)
+      .setOrigin(0.5, 0)
       .setDepth(201);
     this.cameras.main.ignore(label);
     this.tutorialLabel = label;
 
+    // For world-rect slides pin the button to the same Y the tutorial Next sits at
+    // (fieldBottom - 190 + ~51px label height + 12px gap ≈ fieldBottom - 127).
+    // For plain hints keep the label centred and the button just below it.
+    const btnY = hasRects
+      ? this.fieldBottom - 127
+      : height / 2 - 60 + label.height / 2 + 24;
+    label.y = hasRects
+      ? btnY - label.height - 12
+      : height / 2 - 60 - label.height / 2;
+
     const btn = this.add
-      .text(width / 2, label.y + label.height / 2 + 24, "Got it!", {
+      .text(width / 2, btnY, "Got it!", {
         fontSize: "22px",
         color: "#ffffff",
         backgroundColor: "#2a6a2a",
@@ -2371,6 +2431,7 @@ export class ShepherdScene extends Phaser.Scene {
       this.tutorialLabel = undefined;
       this.tutorialNextBtn = undefined;
       this.paused = false;
+      onDismiss?.();
     });
     this.cameras.main.ignore(btn);
     this.tutorialNextBtn = btn;
