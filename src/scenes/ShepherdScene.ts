@@ -494,7 +494,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.hudCamera.ignore(shearPriceLabel);
 
     // Entry-area outlines (padded building bounds)
-    const entryGfx = this.add.graphics().setDepth(2);
+    const entryGfx = this.add.graphics().setDepth(1);
     this.hudCamera.ignore(entryGfx);
     const p = BUILDING_ENTRY_PADDING;
     entryGfx.lineStyle(3, 0x272e25, 0.6);
