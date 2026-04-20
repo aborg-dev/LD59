@@ -655,7 +655,8 @@ export class ShepherdScene extends Phaser.Scene {
 
     this.input.keyboard?.on("keydown-F", () => this.dispatchFollower());
     this.input.keyboard?.on("keydown-ESC", () => this.cancelGuardPlacement());
-    this.input.keyboard?.on("keydown-ENTER", () => this.toggleDebugPanel());
+    if (import.meta.env.DEV)
+      this.input.keyboard?.on("keydown-ENTER", () => this.toggleDebugPanel());
     this.input.keyboard?.on("keydown-BACKSPACE", () => {
       if (this.tutorialStep >= 0)
         this.showTutorialStep(Number.MAX_SAFE_INTEGER);
