@@ -60,6 +60,8 @@ export class Preloader extends Scene {
     this.load.image("tree3", "1809_Tree_Big_1.png");
     this.load.image("tree4", "1809_Tree_Big_2.png");
     this.load.image("font", "1807_Font.png");
+    this.load.image("menuFrame", "Menu_Frame.png");
+    this.load.image("ticket", "Ticket.png");
     this.load.image("road_block_a", "road/road_block_a.png");
     this.load.image("road_block_b", "road/road_block_b.png");
     this.load.image("road_block_c", "road/road_block_c.png");

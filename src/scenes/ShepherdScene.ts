@@ -18,7 +18,7 @@ const FIELD_W_PX = 368;
 const FIELD_H_PX = 216;
 const FIELD_CAPACITY_BASE = 3;
 const CAPACITY_UPGRADE_STEP = 1;
-const RETIRE_COST = 500;
+const RETIRE_COST = 1000;
 const GOLDEN_SHEEP_COST = 50;
 const GOLDEN_SHEEP_TINT = 0xffd84a;
 const GOLDEN_VALUE_MULT = 10;
@@ -213,6 +213,13 @@ export interface ShepherdSceneState {
   speedUpgradeLevel: number;
   capacityUpgradeLevel: number;
   viewport: { width: number; height: number };
+}
+
+function fmtCost(n: number): string {
+  return n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`;
+}
+function costShiftLeft(n: number): number {
+  return n < 10 ? 12 : 6;
 }
 
 export class ShepherdScene extends Phaser.Scene {
@@ -649,10 +656,18 @@ export class ShepherdScene extends Phaser.Scene {
     });
 
     // --- Top HUD ---
-    const hudBars = this.add.graphics().setDepth(100);
-    this.cameras.main.ignore(hudBars);
-    this.drawWoodStrip(hudBars, 0, 0, width, HUD_TOP_H);
-    this.drawWoodStrip(hudBars, 0, height - HUD_BOTTOM_H, width, HUD_BOTTOM_H);
+    const topBar = this.add
+      .image(width / 2, HUD_TOP_H / 2, "menuFrame")
+      .setDisplaySize(width, HUD_TOP_H)
+      .setDepth(100);
+    this.cameras.main.ignore(topBar);
+
+    const bottomBar = this.add
+      .image(width / 2, height - HUD_BOTTOM_H / 2, "menuFrame")
+      .setDisplaySize(width, HUD_BOTTOM_H)
+      .setFlipY(true)
+      .setDepth(100);
+    this.cameras.main.ignore(bottomBar);
 
     this.coinText = this.add
       .text(22, HUD_TOP_H / 2, `$${this.coins}`, {
@@ -785,13 +800,13 @@ export class ShepherdScene extends Phaser.Scene {
     const shopStep =
       (width - 2 * shopPad - SHOP_BTN_WIDTH) / (SHOP_BTN_COUNT - 1);
     const shopX = (i: number) => shopPad + SHOP_BTN_WIDTH / 2 + i * shopStep;
+    const TICKET_H = 58;
     const btnStyle = {
       fontFamily: FONT_UI,
       fontStyle: "bold",
-      fontSize: 20,
-      color: "#ffffff",
-      backgroundColor: "#333344",
-      padding: { left: 14, right: 14, top: 10, bottom: 10 },
+      fontSize: 26,
+      color: "#000000",
+      padding: { left: 10, right: 10, top: 8, bottom: 8 },
       fixedWidth: SHOP_BTN_WIDTH,
       align: "left",
       resolution: TEXT_RESOLUTION,
@@ -802,19 +817,31 @@ export class ShepherdScene extends Phaser.Scene {
       fontSize: 20,
       color: "#ffd700",
       stroke: "#000000",
-      strokeThickness: 3,
+      strokeThickness: 4,
       resolution: TEXT_RESOLUTION,
     };
+    const makeTicket = (i: number) => {
+      const img = this.add
+        .image(shopX(i), btnY, "ticket")
+        .setDisplaySize(SHOP_BTN_WIDTH, TICKET_H)
+        .setDepth(100);
+      this.cameras.main.ignore(img);
+      return img;
+    };
     const makeCost = (i: number) => {
+      const baseX = shopX(i) + SHOP_BTN_WIDTH / 2;
       const t = this.add
-        .text(shopX(i) + SHOP_BTN_WIDTH / 2 - 14, btnY, "", costStyle)
+        .text(baseX - 3, btnY, "", costStyle)
         .setOrigin(1, 0.5)
         .setDepth(102);
+      t.setData("baseX", baseX);
       this.cameras.main.ignore(t);
       return t;
     };
 
-    // Shop buttons, ordered left→right by ascending cost.
+    // Ticket backgrounds + shop buttons, ordered left→right by ascending cost.
+    for (let i = 0; i < SHOP_BTN_COUNT; i++) makeTicket(i);
+
     this.sheepBuyBtn = this.add
       .text(shopX(0), btnY, "", btnStyle)
       .setOrigin(0.5)
@@ -1036,36 +1063,6 @@ export class ShepherdScene extends Phaser.Scene {
     });
   }
 
-  private drawWoodStrip(
-    g: Phaser.GameObjects.Graphics,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-  ): void {
-    // Base plank color
-    g.fillStyle(0x8b5a2b, 1);
-    g.fillRect(x, y, w, h);
-
-    // Dark grain streaks (horizontal)
-    g.fillStyle(0x5a3818, 0.4);
-    for (const t of [0.12, 0.28, 0.47, 0.63, 0.81]) {
-      g.fillRect(x, y + Math.floor(h * t), w, 1);
-    }
-
-    // Lighter grain streaks
-    g.fillStyle(0xc89966, 0.28);
-    for (const t of [0.2, 0.55, 0.74]) {
-      g.fillRect(x, y + Math.floor(h * t), w, 1);
-    }
-
-    // Top edge highlight
-    g.fillStyle(0xc89966, 0.9);
-    g.fillRect(x, y, w, 2);
-    // Bottom edge shadow
-    g.fillStyle(0x2a1808, 0.9);
-    g.fillRect(x, y + h - 3, w, 3);
-  }
 
   buyCapacityUpgrade(): void {
     if (this.capacityUpgradeLevel >= UPGRADE_MAX_LEVEL) return;
@@ -1123,58 +1120,51 @@ export class ShepherdScene extends Phaser.Scene {
     if (this.paused) this.wolfSpawnTimer.paused = true;
   }
 
+  private setCostText(t: Phaser.GameObjects.Text, n: number): void {
+    t.setText(fmtCost(n));
+    t.setX(t.getData("baseX") - costShiftLeft(n));
+  }
+
   private updateShopButtons(): void {
-    const BG_IDLE = "#333344";
-    const BG_ACTIVE = "#555566";
 
     const dogAffordable = this.coins >= this.dogBuyCost;
     this.dogBuyBtn.setText("Dog");
-    this.dogCostText.setText(`$${this.dogBuyCost}`);
-    this.dogBuyBtn.setBackgroundColor(dogAffordable ? BG_ACTIVE : BG_IDLE);
+    this.setCostText(this.dogCostText, this.dogBuyCost);
     this.dogBuyBtn.setAlpha(dogAffordable ? 1 : 0.55);
     this.dogCostText.setAlpha(dogAffordable ? 1 : 0.55);
 
     const guardAffordable = this.coins >= this.guardBuyCost;
     this.guardBuyBtn.setText("Guard");
-    this.guardCostText.setText(`$${this.guardBuyCost}`);
-    this.guardBuyBtn.setBackgroundColor(guardAffordable ? BG_ACTIVE : BG_IDLE);
+    this.setCostText(this.guardCostText, this.guardBuyCost);
     this.guardBuyBtn.setAlpha(guardAffordable ? 1 : 0.55);
     this.guardCostText.setAlpha(guardAffordable ? 1 : 0.55);
 
     const sheepAffordable = this.coins >= this.buySheepCost;
     this.sheepBuyBtn.setText("Sheep");
-    this.sheepCostText.setText(`$${this.buySheepCost}`);
-    this.sheepBuyBtn.setBackgroundColor(sheepAffordable ? BG_ACTIVE : BG_IDLE);
+    this.setCostText(this.sheepCostText, this.buySheepCost);
     this.sheepBuyBtn.setAlpha(sheepAffordable ? 1 : 0.55);
     this.sheepCostText.setAlpha(sheepAffordable ? 1 : 0.55);
 
     const speedMaxed = this.speedUpgradeLevel >= UPGRADE_MAX_LEVEL;
     const speedAffordable = !speedMaxed && this.coins >= this.speedUpgradeCost;
     this.speedBuyBtn.setText("Speed");
-    this.speedCostText.setText(
-      speedMaxed ? "MAX" : `$${this.speedUpgradeCost}`,
-    );
-    this.speedBuyBtn.setBackgroundColor(speedAffordable ? BG_ACTIVE : BG_IDLE);
+    if (speedMaxed) this.speedCostText.setText("MAX");
+    else this.setCostText(this.speedCostText, this.speedUpgradeCost);
     this.speedBuyBtn.setAlpha(speedAffordable ? 1 : 0.55);
     this.speedCostText.setAlpha(speedMaxed || speedAffordable ? 1 : 0.55);
 
     const capMaxed = this.capacityUpgradeLevel >= UPGRADE_MAX_LEVEL;
     const capAffordable = !capMaxed && this.coins >= this.capacityUpgradeCost;
     this.capacityBuyBtn.setText("Cap");
-    this.capacityCostText.setText(
-      capMaxed ? "MAX" : `$${this.capacityUpgradeCost}`,
-    );
-    this.capacityBuyBtn.setBackgroundColor(capAffordable ? BG_ACTIVE : BG_IDLE);
+    if (capMaxed) this.capacityCostText.setText("MAX");
+    else this.setCostText(this.capacityCostText, this.capacityUpgradeCost);
     this.capacityBuyBtn.setAlpha(capAffordable ? 1 : 0.55);
     this.capacityCostText.setAlpha(capMaxed || capAffordable ? 1 : 0.55);
 
     const goldSheepAffordable =
       this.coins >= GOLDEN_SHEEP_COST && this.sheep.length < MAX_SHEEP;
     this.goldSheepBuyBtn.setText("Golden");
-    this.goldSheepCostText.setText(`$${GOLDEN_SHEEP_COST}`);
-    this.goldSheepBuyBtn.setBackgroundColor(
-      goldSheepAffordable ? BG_ACTIVE : BG_IDLE,
-    );
+    this.setCostText(this.goldSheepCostText, GOLDEN_SHEEP_COST);
     this.goldSheepBuyBtn.setAlpha(goldSheepAffordable ? 1 : 0.55);
     this.goldSheepCostText.setAlpha(goldSheepAffordable ? 1 : 0.55);
 
@@ -1189,8 +1179,7 @@ export class ShepherdScene extends Phaser.Scene {
 
     const retireAffordable = this.coins >= RETIRE_COST;
     this.retireBtn.setText("Retire");
-    this.retireCostText.setText(`$${RETIRE_COST}`);
-    this.retireBtn.setBackgroundColor(retireAffordable ? BG_ACTIVE : BG_IDLE);
+    this.setCostText(this.retireCostText, RETIRE_COST);
     this.retireBtn.setAlpha(retireAffordable ? 1 : 0.55);
     this.retireCostText.setAlpha(retireAffordable ? 1 : 0.55);
   }
@@ -2270,8 +2259,8 @@ export class ShepherdScene extends Phaser.Scene {
     const hudRectFor = (btn: Phaser.GameObjects.Text) => ({
       cx: btn.x,
       cy: btn.y,
-      w: btn.width,
-      h: btnH,
+      w: btn.width + 10,
+      h: btnH + 10,
     });
     const steps: StepDef[] = [
       {
@@ -2781,7 +2770,7 @@ export class ShepherdScene extends Phaser.Scene {
         (w) =>
           w.scaredMs === 0 &&
           Math.hypot(w.sprite.x - sx, w.sprite.y - sy) <
-            HERD_INTERCEPT_THREAT_RANGE,
+          HERD_INTERCEPT_THREAT_RANGE,
       );
 
       let herdX: number;
@@ -3210,9 +3199,9 @@ export class ShepherdScene extends Phaser.Scene {
         s.grazing = alignN === 0 ? !s.grazing : false;
         s.modeT = s.grazing
           ? SHEEP_GRAZE_MIN_SEC +
-            Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
+          Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
           : SHEEP_WALK_MIN_SEC +
-            Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
+          Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
         if (!s.grazing) s.wanderAngle = Math.random() * Math.PI * 2;
       }
       if (!s.grazing && alignN === 0) {
@@ -3505,7 +3494,7 @@ export class ShepherdScene extends Phaser.Scene {
       if (
         this.alphaDog &&
         Math.hypot(this.alphaDog.sprite.x - cx, this.alphaDog.sprite.y - cy) <
-          MAP_COIN_PICKUP_RANGE
+        MAP_COIN_PICKUP_RANGE
       ) {
         collected = true;
       }
@@ -3795,97 +3784,97 @@ export class ShepherdScene extends Phaser.Scene {
       max: number;
       step: number;
     }> = [
-      {
-        label: "Max Speed",
-        get: () => SHEEP_MAX_SPEED,
-        set: (v) => {
-          SHEEP_MAX_SPEED = v;
+        {
+          label: "Max Speed",
+          get: () => SHEEP_MAX_SPEED,
+          set: (v) => {
+            SHEEP_MAX_SPEED = v;
+          },
+          min: 0,
+          max: 800,
+          step: 5,
         },
-        min: 0,
-        max: 800,
-        step: 5,
-      },
-      {
-        label: "Damping",
-        get: () => SHEEP_DAMPING,
-        set: (v) => {
-          SHEEP_DAMPING = v;
+        {
+          label: "Damping",
+          get: () => SHEEP_DAMPING,
+          set: (v) => {
+            SHEEP_DAMPING = v;
+          },
+          min: 0.8,
+          max: 0.999,
+          step: 0.001,
         },
-        min: 0.8,
-        max: 0.999,
-        step: 0.001,
-      },
-      {
-        label: "Wander Force",
-        get: () => SHEEP_WANDER_FORCE,
-        set: (v) => {
-          SHEEP_WANDER_FORCE = v;
+        {
+          label: "Wander Force",
+          get: () => SHEEP_WANDER_FORCE,
+          set: (v) => {
+            SHEEP_WANDER_FORCE = v;
+          },
+          min: 0,
+          max: 400,
+          step: 5,
         },
-        min: 0,
-        max: 400,
-        step: 5,
-      },
-      {
-        label: "Cohesion Force",
-        get: () => SHEEP_COHESION_FORCE,
-        set: (v) => {
-          SHEEP_COHESION_FORCE = v;
+        {
+          label: "Cohesion Force",
+          get: () => SHEEP_COHESION_FORCE,
+          set: (v) => {
+            SHEEP_COHESION_FORCE = v;
+          },
+          min: 0,
+          max: 200,
+          step: 2,
         },
-        min: 0,
-        max: 200,
-        step: 2,
-      },
-      {
-        label: "Alignment Force",
-        get: () => ALIGNMENT_FORCE,
-        set: (v) => {
-          ALIGNMENT_FORCE = v;
+        {
+          label: "Alignment Force",
+          get: () => ALIGNMENT_FORCE,
+          set: (v) => {
+            ALIGNMENT_FORCE = v;
+          },
+          min: 0,
+          max: 300,
+          step: 5,
         },
-        min: 0,
-        max: 300,
-        step: 5,
-      },
-      {
-        label: "Flee Force",
-        get: () => FLEE_FORCE,
-        set: (v) => {
-          FLEE_FORCE = v;
+        {
+          label: "Flee Force",
+          get: () => FLEE_FORCE,
+          set: (v) => {
+            FLEE_FORCE = v;
+          },
+          min: 0,
+          max: 1000,
+          step: 10,
         },
-        min: 0,
-        max: 1000,
-        step: 10,
-      },
-      {
-        label: "Fear Radius",
-        get: () => FEAR_RADIUS,
-        set: (v) => {
-          FEAR_RADIUS = v;
+        {
+          label: "Fear Radius",
+          get: () => FEAR_RADIUS,
+          set: (v) => {
+            FEAR_RADIUS = v;
+          },
+          min: 0,
+          max: 500,
+          step: 5,
         },
-        min: 0,
-        max: 500,
-        step: 5,
-      },
-      {
-        label: "Panic Inherit",
-        get: () => PANIC_INHERIT,
-        set: (v) => {
-          PANIC_INHERIT = v;
+        {
+          label: "Panic Inherit",
+          get: () => PANIC_INHERIT,
+          set: (v) => {
+            PANIC_INHERIT = v;
+          },
+          min: 0,
+          max: 1,
+          step: 0.05,
         },
-        min: 0,
-        max: 1,
-        step: 0.05,
-      },
-      {
-        label: "Turn Rate",
-        get: () => SHEEP_TURN_RATE,
-        set: (v) => {
-          SHEEP_TURN_RATE = v;
+        {
+          label: "Turn Rate",
+          get: () => SHEEP_TURN_RATE,
+          set: (v) => {
+            SHEEP_TURN_RATE = v;
+          },
+          min: 0.5,
+          max: 15,
+          step: 0.5,
         },
-        min: 0.5,
-        max: 15,
-        step: 0.5,
-      },
-    ];
+      ];
 
     for (const cfg of params) {
       const row = document.createElement("div");
@@ -3983,7 +3972,7 @@ export class ShepherdScene extends Phaser.Scene {
         if (!treeFound) {
           this.editorTreeRadiusPreview =
             Math.random() *
-              (this.editorTreeRadiusMax - this.editorTreeRadiusMin) +
+            (this.editorTreeRadiusMax - this.editorTreeRadiusMin) +
             this.editorTreeRadiusMin;
           return;
         }
