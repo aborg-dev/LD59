@@ -1102,7 +1102,7 @@ export class ShepherdScene extends Phaser.Scene {
 
     const goldSheepAffordable =
       this.coins >= GOLDEN_SHEEP_COST && this.sheep.length < MAX_SHEEP;
-    this.goldSheepBuyBtn.setText("Gold Sheep");
+    this.goldSheepBuyBtn.setText("Golden");
     this.goldSheepCostText.setText(`$${GOLDEN_SHEEP_COST}`);
     this.goldSheepBuyBtn.setBackgroundColor(
       goldSheepAffordable ? BG_ACTIVE : BG_IDLE,
