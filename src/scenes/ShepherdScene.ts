@@ -260,7 +260,7 @@ export class ShepherdScene extends Phaser.Scene {
   private capacityBuyBtn!: Phaser.GameObjects.Text;
   private fenceBuyBtn!: Phaser.GameObjects.Text;
   private guardBuyBtn!: Phaser.GameObjects.Text;
-  private fieldLabel!: Phaser.GameObjects.Text;
+  private fieldCountText!: Phaser.GameObjects.Text;
   private marketCountText!: Phaser.GameObjects.Text;
   private fieldRect!: Phaser.GameObjects.Image;
   private fieldBorderGfx!: Phaser.GameObjects.Graphics;
@@ -327,6 +327,12 @@ export class ShepherdScene extends Phaser.Scene {
 
     this.hudCamera = this.cameras.add(0, 0, width, height);
 
+    // Add named frames for pre-rendered word labels in the font sheet
+    const ft = this.textures.get("font");
+    ft.add("label_market", 0, 2, 2, 156, 25);
+    ft.add("label_shear", 0, 2, 31, 145, 25);
+    ft.add("label_stable", 0, 2, 64, 195, 25);
+
     // Load map objects
     this.mapTrees = (mapData.trees as MapTree[]).map((t, i) => ({
       ...t,
@@ -349,18 +355,23 @@ export class ShepherdScene extends Phaser.Scene {
     this.hudCamera.ignore(this.fieldBorderGfx);
     this.fenceGfx = this.add.graphics().setDepth(1.2).setVisible(false);
     this.hudCamera.ignore(this.fenceGfx);
-    this.fieldLabel = this.add
-      .text(FIELD_CX, FIELD_CY - FIELD_H_PX / 2 - 44, "FIELD", {
+    const fieldWordImg = this.add
+      .image(FIELD_CX + 10, FIELD_CY - FIELD_H_PX / 2 - 80, "font", "label_stable")
+      .setScale(2.0)
+      .setDepth(2);
+    this.hudCamera.ignore(fieldWordImg);
+    this.fieldCountText = this.add
+      .text(FIELD_CX, FIELD_CY - FIELD_H_PX / 2 - 20, "", {
         fontFamily: FONT_UI,
-        fontSize: 64,
-        color: "#fff1c1",
+        fontSize: 44,
+        color: "#e3bd7e",
         stroke: "#000000",
-        strokeThickness: 8,
+        strokeThickness: 6,
         resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5)
       .setDepth(2);
-    this.hudCamera.ignore(this.fieldLabel);
+    this.hudCamera.ignore(this.fieldCountText);
     this.drawFencePosts();
 
     // Market — adult sheep sold here
@@ -370,15 +381,8 @@ export class ShepherdScene extends Phaser.Scene {
       .setDepth(1);
     this.hudCamera.ignore(marketImg);
     const marketLabel = this.add
-      .text(MARKET_CX, MARKET_CY - MARKET_H_PX / 2 - 110, "MARKET", {
-        fontFamily: FONT_UI,
-        fontSize: 64,
-        color: "#fff1c1",
-        stroke: "#000000",
-        strokeThickness: 8,
-        resolution: TEXT_RESOLUTION,
-      })
-      .setOrigin(0.5)
+      .image(MARKET_CX, MARKET_CY - MARKET_H_PX / 2 - 120, "font", "label_market")
+      .setScale(2.0)
       .setDepth(2);
     this.hudCamera.ignore(marketLabel);
     const marketPriceLabel = this.add
@@ -402,7 +406,7 @@ export class ShepherdScene extends Phaser.Scene {
       .text(MARKET_CX, MARKET_CY - MARKET_H_PX / 2 - 70, "Waiting: 0", {
         fontFamily: FONT_UI,
         fontSize: 44,
-        color: "#fff1c1",
+        color: "#e3bd7e",
         stroke: "#000000",
         strokeThickness: 6,
         resolution: TEXT_RESOLUTION,
@@ -418,15 +422,8 @@ export class ShepherdScene extends Phaser.Scene {
       .setDepth(1);
     this.hudCamera.ignore(shearImg);
     const shearLabel = this.add
-      .text(SHEAR_CX, SHEAR_CY - SHEAR_H_PX / 2 - 100, "SHEAR", {
-        fontFamily: FONT_UI,
-        fontSize: 64,
-        color: "#fff1c1",
-        stroke: "#000000",
-        strokeThickness: 8,
-        resolution: TEXT_RESOLUTION,
-      })
-      .setOrigin(0.5)
+      .image(SHEAR_CX, SHEAR_CY - SHEAR_H_PX / 2 - 110, "font", "label_shear")
+      .setScale(2.0)
       .setDepth(2);
     this.hudCamera.ignore(shearLabel);
     const shearPriceLabel = this.add
@@ -631,7 +628,7 @@ export class ShepherdScene extends Phaser.Scene {
       .text(width / 2, this.fieldTop + 60, "", {
         fontFamily: FONT_UI,
         fontSize: 36,
-        color: "#fff1c1",
+        color: "#e3bd7e",
         stroke: "#000000",
         strokeThickness: 5,
         resolution: TEXT_RESOLUTION,
@@ -1919,7 +1916,7 @@ export class ShepherdScene extends Phaser.Scene {
             cx: FIELD_CX - d,
             cy: FIELD_CY - d,
             w: FIELD_W_PX + 60 + (d + p) * 2,
-            h: FIELD_H_PX + 60 + (d + p) * 2,
+            h: FIELD_H_PX + 60 + 60 + (d + p) * 2,
           },
         ],
         hudRects: [],
@@ -2123,8 +2120,8 @@ export class ShepherdScene extends Phaser.Scene {
 
     this.updateTrucks(dt);
     this.checkGameOver();
-    this.fieldLabel.setText(
-      `FIELD  ${this.babiesGrowing()}/${this.fieldCapacity}`,
+    this.fieldCountText.setText(
+      `${this.babiesGrowing()} / ${this.fieldCapacity}`,
     );
 
     // --- Alpha dog (player-controlled) ---

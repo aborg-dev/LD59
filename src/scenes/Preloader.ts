@@ -58,6 +58,7 @@ export class Preloader extends Scene {
     this.load.image("tree2", "1755_TreeSmall_3.png");
     this.load.image("tree3", "1809_Tree_Big_1.png");
     this.load.image("tree4", "1809_Tree_Big_2.png");
+    this.load.image("font", "1807_Font.png");
     this.load.spritesheet("wolf", "sprite_wolf.png", {
       frameWidth: 30,
       frameHeight: 110,
