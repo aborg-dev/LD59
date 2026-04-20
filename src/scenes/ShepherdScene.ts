@@ -261,6 +261,9 @@ export class ShepherdScene extends Phaser.Scene {
   private dogBuyCost = 5;
   private guardBuyCost = GUARD_BUY_BASE_COST;
   private buySheepCost = BUY_SHEEP_BASE_COST;
+  private totalEarned = 0;
+  private sheepBought = 0;
+  private sheepLostToWolves = 0;
   private alphaDogSpeed = DOG_SPEED;
   private fieldCapacity = FIELD_CAPACITY_BASE;
   private speedUpgradeLevel = 0;
@@ -346,6 +349,9 @@ export class ShepherdScene extends Phaser.Scene {
     this.capacityUpgradeLevel = 0;
     this.speedUpgradeCost = 10;
     this.capacityUpgradeCost = 20;
+    this.totalEarned = 0;
+    this.sheepBought = 0;
+    this.sheepLostToWolves = 0;
 
     this.hudCamera = this.cameras.add(0, 0, width, height);
 
@@ -954,6 +960,9 @@ export class ShepherdScene extends Phaser.Scene {
       this.scene.start("GameOver", {
         score: this.score,
         returnScene: "Shepherd",
+        totalEarned: this.totalEarned,
+        sheepBought: this.sheepBought,
+        sheepLostToWolves: this.sheepLostToWolves,
       });
     });
   }
@@ -1051,6 +1060,7 @@ export class ShepherdScene extends Phaser.Scene {
       s.sold = true;
       this.score++;
       this.coins += s.salePrice;
+      this.totalEarned += s.salePrice;
       this.updateCoinText();
       this.sound.play("money");
       this.playSaleFx(s);
@@ -1527,6 +1537,7 @@ export class ShepherdScene extends Phaser.Scene {
     if (this.sheep.length >= MAX_SHEEP) return;
     if (this.tutorialStep >= 0) this.showTutorialStep(this.tutorialStep + 1);
     this.coins -= this.buySheepCost;
+    this.sheepBought++;
     const TRUCK_CAPACITY = 10;
     const arriving = this.trucks.findLast(
       (t) => t.state === "arriving" && t.sheepCount < TRUCK_CAPACITY,
@@ -1544,6 +1555,7 @@ export class ShepherdScene extends Phaser.Scene {
     if (this.coins < GOLDEN_SHEEP_COST) return;
     if (this.sheep.length >= MAX_SHEEP) return;
     this.coins -= GOLDEN_SHEEP_COST;
+    this.sheepBought++;
     const TRUCK_CAPACITY = 10;
     const arriving = this.trucks.findLast(
       (t) => t.state === "arriving" && t.sheepCount < TRUCK_CAPACITY,
@@ -2929,6 +2941,7 @@ export class ShepherdScene extends Phaser.Scene {
               this.sheep[idx].readyIcon?.destroy();
               this.sheep[idx].sprite.destroy();
               this.sheep.splice(idx, 1);
+              this.sheepLostToWolves++;
               for (const dog of this.dogs) {
                 if (dog.targetSheep === eaten) {
                   dog.targetSheep = null;
@@ -3297,6 +3310,7 @@ export class ShepherdScene extends Phaser.Scene {
             ? SHEAR_VALUE * GOLDEN_VALUE_MULT
             : SHEAR_VALUE;
           this.coins += shearGain;
+          this.totalEarned += shearGain;
           this.updateCoinText();
           this.sound.play("pop");
           this.playShearFx(s);
@@ -3430,6 +3444,7 @@ export class ShepherdScene extends Phaser.Scene {
         this.mapCoin.destroy();
         this.mapCoin = null;
         this.coins += MAP_COIN_VALUE;
+        this.totalEarned += MAP_COIN_VALUE;
         this.updateCoinText();
         this.sound.play("money");
         this.showCoinGainPopup(MAP_COIN_VALUE, cx, cy - 20);
