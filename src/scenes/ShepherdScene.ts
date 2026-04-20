@@ -267,6 +267,11 @@ export class ShepherdScene extends Phaser.Scene {
   private fenceGfx!: Phaser.GameObjects.Graphics;
   private fenceBuilt = false;
 
+  private tutorialStep = -1;
+  private tutorialOverlay?: Phaser.GameObjects.Graphics;
+  private tutorialLabel?: Phaser.GameObjects.Text;
+  private tutorialNextBtn?: Phaser.GameObjects.Text;
+
   private fieldTop = 0;
   private fieldBottom = 0;
   private hudCamera!: Phaser.Cameras.Scene2D.Camera;
@@ -499,7 +504,10 @@ export class ShepherdScene extends Phaser.Scene {
 
     this.anims.create({
       key: "dog_small",
-      frames: this.anims.generateFrameNumbers("dog_small", { start: 0, end: 11 }),
+      frames: this.anims.generateFrameNumbers("dog_small", {
+        start: 0,
+        end: 11,
+      }),
       frameRate: 25,
       repeat: -1,
     });
@@ -513,7 +521,10 @@ export class ShepherdScene extends Phaser.Scene {
 
     this.anims.create({
       key: "wolf_scared",
-      frames: this.anims.generateFrameNumbers("wolf_scared", { start: 0, end: 7 }),
+      frames: this.anims.generateFrameNumbers("wolf_scared", {
+        start: 0,
+        end: 7,
+      }),
       frameRate: 16,
       repeat: -1,
     });
@@ -753,7 +764,9 @@ export class ShepherdScene extends Phaser.Scene {
     // Set camera zoomed out to fit entire world
     this.updateCamera();
 
-    this.showBanner("Buy a sheep, herd it to the field!");
+    this.tutorialStep = 0;
+    this.paused = true;
+    this.showTutorialStep(0);
   }
 
   private spawnDog(x: number, y: number): void {
@@ -1326,6 +1339,7 @@ export class ShepherdScene extends Phaser.Scene {
   buySheep(): void {
     if (this.coins < this.buySheepCost) return;
     if (this.sheep.length >= MAX_SHEEP) return;
+    if (this.tutorialStep >= 0) this.showTutorialStep(this.tutorialStep + 1);
     this.coins -= this.buySheepCost;
     const TRUCK_CAPACITY = 10;
     const arriving = this.trucks.findLast(
@@ -1870,6 +1884,177 @@ export class ShepherdScene extends Phaser.Scene {
     const zoom = Math.min(width / WORLD_W, fieldH / WORLD_H);
     this.cameras.main.setZoom(zoom);
     this.cameras.main.centerOn(WORLD_W / 2, WORLD_H / 2);
+  }
+
+  private worldToScreen(wx: number, wy: number): { x: number; y: number } {
+    const { width } = this.scale;
+    const fieldH = this.fieldBottom - this.fieldTop;
+    const zoom = Math.min(width / WORLD_W, fieldH / WORLD_H);
+    const scrollX = WORLD_W / 2 - width / 2 / zoom;
+    const scrollY = WORLD_H / 2 - fieldH / 2 / zoom;
+    return {
+      x: (wx - scrollX) * zoom,
+      y: this.fieldTop + (wy - scrollY) * zoom,
+    };
+  }
+
+  private showTutorialStep(step: number): void {
+    this.tutorialOverlay?.destroy();
+    this.tutorialLabel?.destroy();
+    this.tutorialNextBtn?.destroy();
+    this.tutorialOverlay = undefined;
+    this.tutorialLabel = undefined;
+    this.tutorialNextBtn = undefined;
+
+    const { width, height } = this.scale;
+
+    type StepDef = {
+      worldRects: { cx: number; cy: number; w: number; h: number }[];
+      hudRects: { cx: number; cy: number; w: number; h: number }[];
+      text: string;
+    };
+
+    const btnY = this.fieldBottom + HUD_BOTTOM_H / 2;
+    const btnH = 54;
+    const p = BUILDING_ENTRY_PADDING;
+    const d = 10;
+    const steps: StepDef[] = [
+      {
+        worldRects: [
+          {
+            cx: FIELD_CX - d,
+            cy: FIELD_CY - d,
+            w: FIELD_W_PX + 60 + (d + p) * 2,
+            h: FIELD_H_PX + 60 + (d + p) * 2,
+          },
+        ],
+        hudRects: [],
+        text: "Bring your sheep here to grow",
+      },
+      {
+        worldRects: [
+          {
+            cx: SHEAR_CX - d,
+            cy: SHEAR_CY - 100,
+            w: SHEAR_W_PX + 100 + 2 * d,
+            h: SHEAR_H_PX + 100 + 2 * d,
+          },
+          {
+            cx: MARKET_CX - d,
+            cy: MARKET_CY - d,
+            w: MARKET_W_PX + 100 + 2 * d,
+            h: MARKET_H_PX + 100 + 2 * d,
+          },
+        ],
+        hudRects: [],
+        text: "Sell or shear sheep to make money",
+      },
+      {
+        worldRects: [],
+        hudRects: [
+          { cx: width * 0.05, cy: btnY, w: 140, h: btnH },
+          { cx: width * 0.16, cy: btnY, w: 170, h: btnH },
+        ],
+        text: "Buy additional dogs to help you manage sheep",
+      },
+      {
+        worldRects: [],
+        hudRects: [
+          { cx: width * 0.38, cy: btnY, w: 200, h: btnH },
+          { cx: width * 0.49, cy: btnY, w: 160, h: btnH },
+          { cx: width * 0.6, cy: btnY, w: 175, h: btnH },
+        ],
+        text: "Buy upgrades",
+      },
+      {
+        worldRects: [],
+        hudRects: [{ cx: width * 0.27, cy: btnY, w: 165, h: btnH }],
+        text: "Buy your first sheep now and start playing!",
+      },
+    ];
+
+    if (step >= steps.length) {
+      this.tutorialStep = -1;
+      this.paused = false;
+      this.showBanner("Herd your sheep to the field!");
+      return;
+    }
+
+    const { worldRects, hudRects, text } = steps[step];
+    const cam = this.cameras.main;
+
+    // Convert all highlight regions to screen-space rects
+    const highlights: { x: number; y: number; w: number; h: number }[] = [];
+    for (const r of worldRects) {
+      const c = this.worldToScreen(r.cx, r.cy);
+      highlights.push({
+        x: c.x - (r.w * cam.zoom) / 2,
+        y: c.y - (r.h * cam.zoom) / 2,
+        w: r.w * cam.zoom,
+        h: r.h * cam.zoom,
+      });
+    }
+    for (const r of hudRects) {
+      highlights.push({ x: r.cx - r.w / 2, y: r.cy - r.h / 2, w: r.w, h: r.h });
+    }
+
+    // Dark overlay: fill screen except the bounding box of highlighted areas
+    const gfx = this.add.graphics().setDepth(200);
+    this.cameras.main.ignore(gfx);
+    gfx.fillStyle(0x000000, 0.8);
+    if (highlights.length === 0) {
+      gfx.fillRect(0, 0, width, height);
+    } else {
+      const hx0 = Math.min(...highlights.map((h) => h.x));
+      const hy0 = Math.min(...highlights.map((h) => h.y));
+      const hx1 = Math.max(...highlights.map((h) => h.x + h.w));
+      const hy1 = Math.max(...highlights.map((h) => h.y + h.h));
+      // Four dark rectangles surrounding the lit bounding box
+      gfx.fillRect(0, 0, width, hy0); // top
+      gfx.fillRect(0, hy1, width, height - hy1); // bottom
+      gfx.fillRect(0, hy0, hx0, hy1 - hy0); // left
+      gfx.fillRect(hx1, hy0, width - hx1, hy1 - hy0); // right
+    }
+    this.tutorialOverlay = gfx;
+
+    // Label position: near bottom for world steps
+    const labelY = this.fieldBottom - 190;
+
+    const label = this.add
+      .text(width / 2, labelY, text, {
+        fontSize: "26px",
+        color: "#ffffff",
+        align: "center",
+        wordWrap: { width: width * 0.6 },
+        stroke: "#000000",
+        strokeThickness: 5,
+        backgroundColor: "#00000066",
+        padding: { left: 16, right: 16, top: 10, bottom: 10 },
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(201);
+    this.cameras.main.ignore(label);
+    this.tutorialLabel = label;
+
+    const isLast = step === steps.length - 1;
+    if (!isLast) {
+      const nextBtn = this.add
+        .text(width / 2, labelY + label.height + 12, "Next →", {
+          fontSize: "22px",
+          color: "#ffffff",
+          backgroundColor: "#2a6a2a",
+          padding: { left: 20, right: 20, top: 10, bottom: 10 },
+        })
+        .setOrigin(0.5, 0)
+        .setDepth(201)
+        .setInteractive({ useHandCursor: true });
+      nextBtn.on("pointerdown", () => {
+        this.tutorialStep++;
+        this.showTutorialStep(this.tutorialStep);
+      });
+      this.cameras.main.ignore(nextBtn);
+      this.tutorialNextBtn = nextBtn;
+    }
   }
 
   dumpState(): ShepherdSceneState {
