@@ -19,6 +19,9 @@ const FIELD_H_PX = 168;
 const FIELD_CAPACITY_BASE = 3;
 const CAPACITY_UPGRADE_STEP = 1;
 const RETIRE_COST = 500;
+const GOLDEN_SHEEP_COST = 50;
+const GOLDEN_SHEEP_TINT = 0xffd84a;
+const GOLDEN_VALUE_MULT = 10;
 const GUARD_RANGE = 320;
 const GUARD_BUY_BASE_COST = 30;
 const GROW_SEC = 12;
@@ -135,6 +138,7 @@ interface Sheep {
   wanderAngle: number;
   scaredMs: number;
   salePrice: number;
+  golden: boolean;
   readyIcon?: Phaser.GameObjects.Text;
 }
 
@@ -170,6 +174,7 @@ interface Truck {
   dropTimer: number;
   sheepCount: number;
   sheepDropped: number;
+  goldenCount: number;
 }
 
 const TRUCK_TURN_RATE = 7.0; // rad/s — how fast the truck rotates into a new heading
@@ -267,6 +272,8 @@ export class ShepherdScene extends Phaser.Scene {
   private capacityBuyBtn!: Phaser.GameObjects.Text;
   private guardBuyBtn!: Phaser.GameObjects.Text;
   private retireBtn!: Phaser.GameObjects.Text;
+  private goldSheepBuyBtn!: Phaser.GameObjects.Text;
+  private goldSheepCostText!: Phaser.GameObjects.Text;
   private tbdBtn!: Phaser.GameObjects.Text;
   private dogCostText!: Phaser.GameObjects.Text;
   private sheepCostText!: Phaser.GameObjects.Text;
@@ -728,7 +735,7 @@ export class ShepherdScene extends Phaser.Scene {
     // --- Bottom HUD ---
     const btnY = this.fieldBottom + HUD_BOTTOM_H / 2;
     const SHOP_BTN_WIDTH = 180;
-    const SHOP_BTN_COUNT = 7;
+    const SHOP_BTN_COUNT = 8;
     const shopPad = 22;
     const shopStep =
       (width - 2 * shopPad - SHOP_BTN_WIDTH) / (SHOP_BTN_COUNT - 1);
@@ -809,21 +816,30 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(this.guardBuyBtn);
     this.guardCostText = makeCost(4);
 
+    this.goldSheepBuyBtn = this.add
+      .text(shopX(5), btnY, "", btnStyle)
+      .setOrigin(0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+    this.goldSheepBuyBtn.on("pointerdown", () => this.buyGoldenSheep());
+    this.cameras.main.ignore(this.goldSheepBuyBtn);
+    this.goldSheepCostText = makeCost(5);
+
     this.tbdBtn = this.add
-      .text(shopX(5), btnY, "TBD", { ...btnStyle, align: "center" })
+      .text(shopX(6), btnY, "TBD", { ...btnStyle, align: "center" })
       .setOrigin(0.5)
       .setDepth(101);
     this.tbdBtn.setAlpha(0.55);
     this.cameras.main.ignore(this.tbdBtn);
 
     this.retireBtn = this.add
-      .text(shopX(6), btnY, "", btnStyle)
+      .text(shopX(7), btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
     this.retireBtn.on("pointerdown", () => this.retire());
     this.cameras.main.ignore(this.retireBtn);
-    this.retireCostText = makeCost(6);
+    this.retireCostText = makeCost(7);
 
     this.updateShopButtons();
 
@@ -1083,6 +1099,16 @@ export class ShepherdScene extends Phaser.Scene {
     this.capacityBuyBtn.setBackgroundColor(capAffordable ? BG_ACTIVE : BG_IDLE);
     this.capacityBuyBtn.setAlpha(capAffordable ? 1 : 0.55);
     this.capacityCostText.setAlpha(capMaxed || capAffordable ? 1 : 0.55);
+
+    const goldSheepAffordable =
+      this.coins >= GOLDEN_SHEEP_COST && this.sheep.length < MAX_SHEEP;
+    this.goldSheepBuyBtn.setText("Gold Sheep");
+    this.goldSheepCostText.setText(`$${GOLDEN_SHEEP_COST}`);
+    this.goldSheepBuyBtn.setBackgroundColor(
+      goldSheepAffordable ? BG_ACTIVE : BG_IDLE,
+    );
+    this.goldSheepBuyBtn.setAlpha(goldSheepAffordable ? 1 : 0.55);
+    this.goldSheepCostText.setAlpha(goldSheepAffordable ? 1 : 0.55);
 
     const retireAffordable = this.coins >= RETIRE_COST;
     this.retireBtn.setText("Retire");
@@ -1424,6 +1450,26 @@ export class ShepherdScene extends Phaser.Scene {
     this.updateCoinText();
   }
 
+  buyGoldenSheep(): void {
+    if (this.coins < GOLDEN_SHEEP_COST) return;
+    if (this.sheep.length >= MAX_SHEEP) return;
+    this.coins -= GOLDEN_SHEEP_COST;
+    const TRUCK_CAPACITY = 10;
+    const arriving = this.trucks.findLast(
+      (t) => t.state === "arriving" && t.sheepCount < TRUCK_CAPACITY,
+    );
+    if (arriving) {
+      arriving.sheepCount++;
+      arriving.goldenCount++;
+    } else {
+      this.spawnTruck();
+      const t = this.trucks[this.trucks.length - 1];
+      t.goldenCount = 1;
+    }
+    this.sound.play("money");
+    this.updateCoinText();
+  }
+
   private buildGrass(): void {
     if (this.grassLayer) {
       this.grassLayer.destroy(true);
@@ -1671,6 +1717,7 @@ export class ShepherdScene extends Phaser.Scene {
       dropTimer: 0,
       sheepCount: 1,
       sheepDropped: 0,
+      goldenCount: 0,
     };
     sprite.setRotation(initAngle);
     this.trucks.push(t);
@@ -1706,7 +1753,13 @@ export class ShepherdScene extends Phaser.Scene {
         const DROP_INTERVAL = 0.3;
         const nextDropAt = 0.2 + t.sheepDropped * DROP_INTERVAL;
         if (t.sheepDropped < t.sheepCount && t.dropTimer >= nextDropAt) {
-          this.spawnSheep(t.sprite.x + TRUCK_W / 2 + 20, t.sprite.y);
+          const dropGolden = t.goldenCount > 0;
+          this.spawnSheep(
+            t.sprite.x + TRUCK_W / 2 + 20,
+            t.sprite.y,
+            dropGolden,
+          );
+          if (dropGolden) t.goldenCount--;
           this.sound.play("sheep-bleat", { volume: 0.25 });
           t.sheepDropped++;
         }
@@ -1866,7 +1919,7 @@ export class ShepherdScene extends Phaser.Scene {
     }
   }
 
-  spawnSheep(ox?: number, oy?: number): Sheep {
+  spawnSheep(ox?: number, oy?: number, golden = false): Sheep {
     const jitter = 18;
     let sx: number;
     let sy: number;
@@ -1889,6 +1942,7 @@ export class ShepherdScene extends Phaser.Scene {
     s.setScale(BABY_SHEEP_SCALE);
     s.rotation = initAngle + Math.PI / 2;
     s.play("sheep-walk");
+    if (golden) s.setTint(GOLDEN_SHEEP_TINT);
     this.hudCamera.ignore(s);
 
     const sheep: Sheep = {
@@ -1902,6 +1956,7 @@ export class ShepherdScene extends Phaser.Scene {
       sold: false,
       waiting: false,
       salePrice: 0,
+      golden,
       grazing: false,
       modeT: SHEEP_WALK_MIN_SEC + Math.random() * SHEEP_WALK_MAX_SEC,
       wanderAngle: initAngle,
@@ -3057,7 +3112,9 @@ export class ShepherdScene extends Phaser.Scene {
           ADULT_SHEEP_SCALE - (ADULT_SHEEP_SCALE - BABY_SHEEP_SCALE) * t;
         s.sprite.setScale(scale);
         if (s.shearT >= SHEAR_SEC) {
-          this.coins += SHEAR_VALUE;
+          this.coins += s.golden
+            ? SHEAR_VALUE * GOLDEN_VALUE_MULT
+            : SHEAR_VALUE;
           this.updateCoinText();
           this.sound.play("pop");
           this.playShearFx(s);
@@ -3083,9 +3140,10 @@ export class ShepherdScene extends Phaser.Scene {
         s.waiting = true;
         s.vx *= 0.2;
         s.vy *= 0.2;
-        s.salePrice =
+        const basePrice =
           SALE_PRICE_MIN +
           Math.floor(Math.random() * (SALE_PRICE_MAX - SALE_PRICE_MIN + 1));
+        s.salePrice = s.golden ? basePrice * GOLDEN_VALUE_MULT : basePrice;
         if (s.readyIcon) {
           this.tweens.add({
             targets: s.readyIcon,
