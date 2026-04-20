@@ -1171,9 +1171,11 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private updateShopButtons(): void {
-    const dogAffordable = this.coins >= this.dogBuyCost;
+    const dogMaxed = this.dogs.length >= 5;
+    const dogAffordable = !dogMaxed && this.coins >= this.dogBuyCost;
     this.dogBuyBtn.setText("Dog");
-    this.setCostText(this.dogCostText, this.dogBuyCost);
+    if (dogMaxed) this.dogCostText.setText("MAX");
+    else this.setCostText(this.dogCostText, this.dogBuyCost);
     this.setBtnAffordable(this.dogBuyBtn, this.dogCostText, dogAffordable);
 
     const guardAffordable = this.coins >= this.guardBuyCost;
@@ -1246,9 +1248,10 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private buyDog(): void {
+    if (this.dogs.length >= 5) return;
     if (this.coins < this.dogBuyCost) return;
     this.coins -= this.dogBuyCost;
-    this.dogBuyCost += 5;
+    this.dogBuyCost *= 2;
     const a = Math.random() * Math.PI * 2;
     this.spawnDog(
       this.alphaDog.sprite.x + Math.cos(a) * 80,
