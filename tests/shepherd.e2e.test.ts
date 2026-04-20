@@ -227,61 +227,6 @@ describe("shepherd core loop", () => {
     expect(after.field.capacity).toBe(before + 1);
   });
 
-  it("fence costs $100 and must be purchased to block wolves", async () => {
-    await game.startScene("Shepherd");
-
-    await game.eval_(`(() => {
-      const gs = window.game.scene.getScene('Shepherd');
-      gs.coins = 200;
-      gs.updateCoinText();
-      gs.buyFence();
-    })()`);
-
-    const s = await shepherdState();
-    expect(s.coins).toBe(100);
-  });
-
-  it("fenced field bounces wolves out; without fence they can enter", async () => {
-    // Without fence: wolf placed inside stays inside
-    await game.startScene("Shepherd");
-    await game.eval_(`(() => {
-      const gs = window.game.scene.getScene('Shepherd');
-      const f = gs.dumpState().field;
-      const sprite = gs.add.rectangle(f.x, f.y, 42, 22, 0x7a1a1a).setDepth(9);
-      gs.hudCamera.ignore(sprite);
-      gs.wolves.push({ sprite, targetSheep: null, vx: 0, vy: 0, angle: 0, scaredMs: 0 });
-    })()`);
-    await game.advanceTime(100);
-    const unfencedInside = (await game.eval_(`(() => {
-      const gs = window.game.scene.getScene('Shepherd');
-      const f = gs.dumpState().field;
-      const w = gs.wolves[0];
-      return w.sprite.x > f.x - f.w / 2 && w.sprite.x < f.x + f.w / 2 &&
-             w.sprite.y > f.y - f.h / 2 && w.sprite.y < f.y + f.h / 2;
-    })()`)) as boolean;
-    expect(unfencedInside).toBe(true);
-
-    // With fence: same wolf is pushed out
-    await game.eval_(`(() => {
-      const gs = window.game.scene.getScene('Shepherd');
-      gs.coins = 200;
-      gs.updateCoinText();
-      gs.buyFence();
-      const f = gs.dumpState().field;
-      gs.wolves[0].sprite.x = f.x;
-      gs.wolves[0].sprite.y = f.y;
-    })()`);
-    await game.advanceTime(500);
-    const fencedInside = (await game.eval_(`(() => {
-      const gs = window.game.scene.getScene('Shepherd');
-      const f = gs.dumpState().field;
-      const w = gs.wolves[0];
-      return w.sprite.x > f.x - f.w / 2 && w.sprite.x < f.x + f.w / 2 &&
-             w.sprite.y > f.y - f.h / 2 && w.sprite.y < f.y + f.h / 2;
-    })()`)) as boolean;
-    expect(fencedInside).toBe(false);
-  });
-
   it("field capacity caps sheep at 3 growing at once", async () => {
     await game.startScene("Shepherd");
 
