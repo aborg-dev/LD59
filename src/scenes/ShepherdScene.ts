@@ -119,6 +119,9 @@ const WOLF_EAT_RANGE = 32;
 const WOLF_CONTACT_RANGE = 80;
 const WOLF_FLEE_SPEED = 550;
 const WOLF_SCARED_MS = 1800;
+const GUN_COST = 80;
+const GUN_COOLDOWN_MS = 60_000;
+const GUN_SCARE_MS = 4000;
 const WOLF_SPAWN_MAX_MS = 32000;
 const WOLF_SPAWN_MIN_MS = 9000;
 const WOLF_RAMP_MS = 300000;
@@ -280,7 +283,11 @@ export class ShepherdScene extends Phaser.Scene {
   private retireBtn!: Phaser.GameObjects.Text;
   private goldSheepBuyBtn!: Phaser.GameObjects.Text;
   private goldSheepCostText!: Phaser.GameObjects.Text;
-  private tbdBtn!: Phaser.GameObjects.Text;
+  private gunBuyBtn!: Phaser.GameObjects.Text;
+  private gunCostText!: Phaser.GameObjects.Text;
+  private gunHudBtn!: Phaser.GameObjects.Text;
+  private gunPurchased = false;
+  private gunCooldownMs = 0;
   private dogCostText!: Phaser.GameObjects.Text;
   private sheepCostText!: Phaser.GameObjects.Text;
   private speedCostText!: Phaser.GameObjects.Text;
@@ -352,6 +359,8 @@ export class ShepherdScene extends Phaser.Scene {
     this.totalEarned = 0;
     this.sheepBought = 0;
     this.sheepLostToWolves = 0;
+    this.gunPurchased = false;
+    this.gunCooldownMs = 0;
 
     this.hudCamera = this.cameras.add(0, 0, width, height);
 
@@ -659,6 +668,23 @@ export class ShepherdScene extends Phaser.Scene {
       .setDepth(101);
     this.cameras.main.ignore(this.coinText);
 
+    this.gunHudBtn = this.add
+      .text(180, HUD_TOP_H / 2, "GUN", {
+        fontFamily: FONT_UI,
+        fontStyle: "bold",
+        fontSize: 20,
+        color: "#ffffff",
+        backgroundColor: "#2a6b3a",
+        padding: { left: 14, right: 14, top: 10, bottom: 10 },
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0, 0.5)
+      .setDepth(101)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true });
+    this.gunHudBtn.on("pointerdown", () => this.useGun());
+    this.cameras.main.ignore(this.gunHudBtn);
+
     // --- Top-right control buttons (pause, menu, mute) ---
     const topBtnStyle = {
       fontFamily: FONT_UI,
@@ -846,12 +872,14 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(this.goldSheepBuyBtn);
     this.goldSheepCostText = makeCost(5);
 
-    this.tbdBtn = this.add
-      .text(shopX(6), btnY, "TBD", { ...btnStyle, align: "center" })
+    this.gunBuyBtn = this.add
+      .text(shopX(6), btnY, "", btnStyle)
       .setOrigin(0.5)
-      .setDepth(101);
-    this.tbdBtn.setAlpha(0.55);
-    this.cameras.main.ignore(this.tbdBtn);
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+    this.gunBuyBtn.on("pointerdown", () => this.buyGun());
+    this.cameras.main.ignore(this.gunBuyBtn);
+    this.gunCostText = makeCost(6);
 
     this.retireBtn = this.add
       .text(shopX(7), btnY, "", btnStyle)
@@ -1149,6 +1177,13 @@ export class ShepherdScene extends Phaser.Scene {
     );
     this.goldSheepBuyBtn.setAlpha(goldSheepAffordable ? 1 : 0.55);
     this.goldSheepCostText.setAlpha(goldSheepAffordable ? 1 : 0.55);
+
+    const gunAffordable = !this.gunPurchased && this.coins >= GUN_COST;
+    this.gunBuyBtn.setText(this.gunPurchased ? "Owned" : "Gun");
+    this.gunCostText.setText(this.gunPurchased ? "" : `$${GUN_COST}`);
+    this.gunBuyBtn.setBackgroundColor(gunAffordable ? BG_ACTIVE : BG_IDLE);
+    this.gunBuyBtn.setAlpha(this.gunPurchased || !gunAffordable ? 0.55 : 1);
+    this.gunCostText.setAlpha(gunAffordable ? 1 : 0.55);
 
     const retireAffordable = this.coins >= RETIRE_COST;
     this.retireBtn.setText("Retire");
@@ -1520,6 +1555,48 @@ export class ShepherdScene extends Phaser.Scene {
         SHEAR_W_PX + pad * 2,
         SHEAR_H_PX + pad * 2,
       );
+    }
+  }
+
+  private buyGun(): void {
+    if (this.gunPurchased) return;
+    if (this.coins < GUN_COST) return;
+    this.coins -= GUN_COST;
+    this.gunPurchased = true;
+    this.sound.play("money");
+    this.updateCoinText();
+    this.updateGunHud();
+  }
+
+  private useGun(): void {
+    if (!this.gunPurchased || this.gunCooldownMs > 0) return;
+    this.gunCooldownMs = GUN_COOLDOWN_MS;
+    this.sound.play("bark", { volume: 0.5 });
+    for (const wolf of this.wolves) {
+      const fleeAngle = wolf.angle + Math.PI;
+      wolf.vx = Math.cos(fleeAngle) * WOLF_FLEE_SPEED;
+      wolf.vy = Math.sin(fleeAngle) * WOLF_FLEE_SPEED;
+      wolf.angle = fleeAngle;
+      if (wolf.scaredMs <= 0) wolf.sprite.play("wolf_scared");
+      wolf.scaredMs = GUN_SCARE_MS;
+    }
+    this.updateGunHud();
+  }
+
+  private updateGunHud(): void {
+    if (!this.gunPurchased) {
+      this.gunHudBtn.setVisible(false);
+      return;
+    }
+    this.gunHudBtn.setVisible(true);
+    if (this.gunCooldownMs > 0) {
+      this.gunHudBtn.setText(String(Math.ceil(this.gunCooldownMs / 1000)));
+      this.gunHudBtn.setBackgroundColor("#555566");
+      this.gunHudBtn.setAlpha(0.55);
+    } else {
+      this.gunHudBtn.setText("GUN");
+      this.gunHudBtn.setBackgroundColor("#2a6b3a");
+      this.gunHudBtn.setAlpha(1);
     }
   }
 
@@ -2538,6 +2615,11 @@ export class ShepherdScene extends Phaser.Scene {
     this.fieldCountText.setText(
       `${this.babiesGrowing()} / ${this.fieldCapacity}`,
     );
+
+    if (this.gunCooldownMs > 0) {
+      this.gunCooldownMs = Math.max(0, this.gunCooldownMs - dtMs);
+      this.updateGunHud();
+    }
 
     // --- Alpha dog (player-controlled) ---
     {
