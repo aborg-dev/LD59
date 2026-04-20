@@ -2063,8 +2063,8 @@ export class ShepherdScene extends Phaser.Scene {
     this.bannerTween = this.tweens.add({
       targets: this.bannerText,
       alpha: 0,
-      delay: 900,
-      duration: 600,
+      delay: 2500,
+      duration: 1500,
     });
   }
 
