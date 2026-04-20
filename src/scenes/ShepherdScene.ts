@@ -249,6 +249,8 @@ export class ShepherdScene extends Phaser.Scene {
   private shearSfx?: Phaser.Sound.BaseSound;
   private grazingSfx?: Phaser.Sound.BaseSound;
   private paused = false;
+  private adultTarget: "market" | "shear" = "market";
+  private buildingTargetGfx!: Phaser.GameObjects.Graphics;
   private placingGuard = false;
   private guardMarkers: Phaser.GameObjects.Graphics[] = [];
 
@@ -399,7 +401,12 @@ export class ShepherdScene extends Phaser.Scene {
     const marketImg = this.add
       .image(MARKET_CX, MARKET_CY, "market")
       .setScale(2.0)
-      .setDepth(1);
+      .setDepth(1)
+      .setInteractive({ useHandCursor: true });
+    marketImg.on("pointerdown", () => {
+      this.adultTarget = "market";
+      this.drawBuildingTarget();
+    });
     this.hudCamera.ignore(marketImg);
     const marketLabel = this.add
       .image(
@@ -445,7 +452,12 @@ export class ShepherdScene extends Phaser.Scene {
     const shearImg = this.add
       .image(SHEAR_CX, SHEAR_CY, "shear")
       .setDisplaySize(SHEAR_W_PX, SHEAR_H_PX)
-      .setDepth(1);
+      .setDepth(1)
+      .setInteractive({ useHandCursor: true });
+    shearImg.on("pointerdown", () => {
+      this.adultTarget = "shear";
+      this.drawBuildingTarget();
+    });
     this.hudCamera.ignore(shearImg);
     const shearLabel = this.add
       .image(SHEAR_CX, SHEAR_CY - SHEAR_H_PX / 2 - 110, "font", "label_shear")
@@ -488,6 +500,11 @@ export class ShepherdScene extends Phaser.Scene {
       FIELD_W_PX + p * 2,
       FIELD_H_PX + p * 2,
     );
+
+    // Building target highlight (which building adult sheep are sent to)
+    this.buildingTargetGfx = this.add.graphics().setDepth(3);
+    this.hudCamera.ignore(this.buildingTargetGfx);
+    this.drawBuildingTarget();
 
     // Render trees
     for (const t of this.mapTrees) {
@@ -1426,10 +1443,34 @@ export class ShepherdScene extends Phaser.Scene {
     }
   }
 
+  private drawBuildingTarget(): void {
+    this.buildingTargetGfx.clear();
+    const pad = 10;
+    this.buildingTargetGfx.lineStyle(5, 0xffd700, 1);
+    if (this.adultTarget === "market") {
+      this.buildingTargetGfx.strokeRect(
+        MARKET_CX - MARKET_W_PX / 2 - pad,
+        MARKET_CY - MARKET_H_PX / 2 - pad,
+        MARKET_W_PX + pad * 2,
+        MARKET_H_PX + pad * 2,
+      );
+    } else {
+      this.buildingTargetGfx.strokeRect(
+        SHEAR_CX - SHEAR_W_PX / 2 - pad,
+        SHEAR_CY - SHEAR_H_PX / 2 - pad,
+        SHEAR_W_PX + pad * 2,
+        SHEAR_H_PX + pad * 2,
+      );
+    }
+  }
+
   private sheepGoal(s: Sheep): { x: number; y: number } {
-    return s.stage === "adult"
-      ? { x: MARKET_CX, y: MARKET_CY }
-      : { x: FIELD_CX, y: FIELD_CY };
+    if (s.stage === "adult") {
+      return this.adultTarget === "shear"
+        ? { x: SHEAR_CX, y: SHEAR_CY }
+        : { x: MARKET_CX, y: MARKET_CY };
+    }
+    return { x: FIELD_CX, y: FIELD_CY };
   }
 
   buySheep(): void {
@@ -2123,6 +2164,24 @@ export class ShepherdScene extends Phaser.Scene {
         text: "Sell or shear sheep to make money",
       },
       {
+        worldRects: [
+          {
+            cx: SHEAR_CX,
+            cy: SHEAR_CY - 50,
+            w: SHEAR_W_PX + 100 + 2 * d,
+            h: SHEAR_H_PX + 250 + 2 * d,
+          },
+          {
+            cx: MARKET_CX,
+            cy: MARKET_CY - 50 - d,
+            w: MARKET_W_PX + 150 + 2 * d,
+            h: MARKET_H_PX + 250 + 2 * d,
+          },
+        ],
+        hudRects: [],
+        text: "Click a building to choose where dogs bring adult sheep",
+      },
+      {
         worldRects: [],
         hudRects: [hudRectFor(this.dogBuyBtn), hudRectFor(this.guardBuyBtn)],
         text: "Buy additional dogs to help you manage sheep",
@@ -2428,7 +2487,19 @@ export class ShepherdScene extends Phaser.Scene {
     for (const dog of this.dogs) {
       if (
         dog.mode === "herding" &&
-        (!dog.targetSheep || dog.targetSheep.sold || dog.targetSheep.waiting)
+        (!dog.targetSheep ||
+          dog.targetSheep.sold ||
+          dog.targetSheep.waiting ||
+          (dog.targetSheep.stage === "baby" &&
+            this.fieldContains(
+              dog.targetSheep.sprite.x,
+              dog.targetSheep.sprite.y,
+            )) ||
+          (dog.targetSheep.stage === "adult" &&
+            this.shearContains(
+              dog.targetSheep.sprite.x,
+              dog.targetSheep.sprite.y,
+            )))
       ) {
         dog.mode = "following";
         dog.targetSheep = null;
