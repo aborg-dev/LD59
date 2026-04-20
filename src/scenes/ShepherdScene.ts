@@ -467,9 +467,11 @@ export class ShepherdScene extends Phaser.Scene {
     for (const t of this.mapTrees) {
       const key = `tree${t.variant % 5}`;
       const naturalHalfWidth = t.variant >= 3 ? 64 : 32;
+      const angle = (Math.sin(t.x * 0.031 + t.y * 0.22) * 0.5 + 0.5) * Math.PI * 2;
       const spr = this.add
         .image(t.x, t.y, key)
         .setScale(t.r / naturalHalfWidth)
+        .setRotation(angle)
         .setDepth(2);
       this.hudCamera.ignore(spr);
     }
