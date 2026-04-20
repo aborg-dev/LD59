@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import { FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
+import { FONT_BODY, FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
 import mapData from "./shepherd-map.json";
 
 const HUD_TOP_H = 70;
@@ -389,6 +389,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.fieldCountText = this.add
       .text(FIELD_CX, FIELD_CY - 12, "", {
         fontFamily: FONT_UI,
+        fontStyle: "bold",
         fontSize: 52,
         color: "#e3bd7e",
         stroke: "#000000",
@@ -427,6 +428,7 @@ export class ShepherdScene extends Phaser.Scene {
         `+$${SALE_PRICE_MIN}-${SALE_PRICE_MAX}`,
         {
           fontFamily: FONT_UI,
+          fontStyle: "bold",
           fontSize: 48,
           color: "#ffd700",
           stroke: "#000000",
@@ -457,6 +459,7 @@ export class ShepherdScene extends Phaser.Scene {
     const shearPriceLabel = this.add
       .text(SHEAR_CX, SHEAR_CY - 12, `+$${SHEAR_VALUE}`, {
         fontFamily: FONT_UI,
+        fontStyle: "bold",
         fontSize: 52,
         color: "#ffd700",
         stroke: "#000000",
@@ -639,6 +642,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.coinText = this.add
       .text(22, HUD_TOP_H / 2, `$${this.coins}`, {
         fontFamily: FONT_UI,
+        fontStyle: "bold",
         fontSize: 32,
         color: "#ffd700",
         stroke: "#000000",
@@ -652,6 +656,7 @@ export class ShepherdScene extends Phaser.Scene {
     // --- Top-right control buttons (pause, menu, mute) ---
     const topBtnStyle = {
       fontFamily: FONT_UI,
+      fontStyle: "bold",
       fontSize: 20,
       color: "#ffffff",
       backgroundColor: "#555566",
@@ -728,6 +733,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.bannerText = this.add
       .text(width / 2, this.fieldTop + 60, "", {
         fontFamily: FONT_UI,
+        fontStyle: "bold",
         fontSize: 36,
         color: "#e3bd7e",
         stroke: "#000000",
@@ -749,6 +755,7 @@ export class ShepherdScene extends Phaser.Scene {
     const shopX = (i: number) => shopPad + SHOP_BTN_WIDTH / 2 + i * shopStep;
     const btnStyle = {
       fontFamily: FONT_UI,
+      fontStyle: "bold",
       fontSize: 20,
       color: "#ffffff",
       backgroundColor: "#333344",
@@ -759,6 +766,7 @@ export class ShepherdScene extends Phaser.Scene {
     };
     const costStyle = {
       fontFamily: FONT_UI,
+      fontStyle: "bold",
       fontSize: 20,
       color: "#ffd700",
       stroke: "#000000",
@@ -954,6 +962,7 @@ export class ShepherdScene extends Phaser.Scene {
     const label = this.add
       .text(x, y, `+$${amount}`, {
         fontFamily: FONT_UI,
+        fontStyle: "bold",
         fontSize: 44,
         color: "#ffd700",
         stroke: "#000000",
@@ -2064,6 +2073,7 @@ export class ShepherdScene extends Phaser.Scene {
     const icon = this.add
       .text(s.sprite.x, s.sprite.y - 36, "$", {
         fontFamily: FONT_UI,
+        fontStyle: "bold",
         fontSize: 44,
         color: "#ffd700",
         stroke: "#000000",
@@ -2293,6 +2303,7 @@ export class ShepherdScene extends Phaser.Scene {
 
     const label = this.add
       .text(width / 2, labelY, text, {
+        fontFamily: FONT_BODY,
         fontSize: "26px",
         color: "#ffffff",
         align: "center",
@@ -2311,6 +2322,7 @@ export class ShepherdScene extends Phaser.Scene {
     if (!isLast) {
       const nextBtn = this.add
         .text(width / 2, labelY + label.height + 12, "Next →", {
+          fontFamily: FONT_BODY,
           fontSize: "22px",
           color: "#ffffff",
           backgroundColor: "#2a6a2a",
@@ -2389,6 +2401,7 @@ export class ShepherdScene extends Phaser.Scene {
 
     const label = this.add
       .text(width / 2, 0, text, {
+        fontFamily: FONT_BODY,
         fontSize: "28px",
         color: "#ffffff",
         align: "center",
@@ -2415,6 +2428,7 @@ export class ShepherdScene extends Phaser.Scene {
 
     const btn = this.add
       .text(width / 2, btnY, "Got it!", {
+        fontFamily: FONT_BODY,
         fontSize: "22px",
         color: "#ffffff",
         backgroundColor: "#2a6a2a",

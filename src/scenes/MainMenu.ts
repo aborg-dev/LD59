@@ -19,6 +19,7 @@ export class MainMenu extends Scene {
     this.add
       .text(width / 2, 80, "Select a Game", {
         fontFamily: FONT_UI,
+        fontStyle: "bold",
         fontSize: 48,
         color: "#ffe099",
         stroke: "#000000",

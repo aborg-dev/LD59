@@ -24,6 +24,7 @@ export class GameOver extends Scene {
     this.add
       .text(width / 2, height / 2 - 100, "Game Over", {
         fontFamily: FONT_UI,
+        fontStyle: "bold",
         fontSize: 48,
         color: "#ffffff",
         stroke: "#000000",
@@ -36,6 +37,7 @@ export class GameOver extends Scene {
     this.add
       .text(width / 2, height / 2, String(this.finalScore), {
         fontFamily: FONT_UI,
+        fontStyle: "bold",
         fontSize: 96,
         color: "#f48c28",
         stroke: "#000000",
