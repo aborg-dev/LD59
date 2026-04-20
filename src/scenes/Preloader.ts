@@ -46,7 +46,7 @@ export class Preloader extends Scene {
     this.load.image("farm", "0.5Field.png");
     this.load.image("market", "0.5Market.png");
     this.load.image("shear", "2222_Sheering.png");
-    this.load.image("truck", "Truck_No_lines.png");
+    this.load.image("truck", "Truck_No Noise.png");
     this.load.image("grassLow1", "1723_Gras_LowDetail_1.png");
     this.load.image("grassLow2", "1723_Gras_LowDetail_2.png");
     this.load.image("grassLow3", "1723_Gras_LowDetail_3.png");
@@ -64,6 +64,9 @@ export class Preloader extends Scene {
     this.load.image("road_block_c", "road/road_block_c.png");
     this.load.image("road_block_d", "road/road_block_d.png");
     this.load.image("road_e", "road/road_e.png");
+    for (let i = 1; i <= 12; i++) {
+      this.load.image(`stone${i}`, `road/stone${i}.png`);
+    }
     this.load.image("road_f", "road/road_f.png");
     this.load.image("road_g", "road/road_g.png");
     this.load.image("road_h", "road/road_h.png");

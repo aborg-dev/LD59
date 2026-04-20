@@ -1526,6 +1526,105 @@ export class ShepherdScene extends Phaser.Scene {
     // fill in gaps
     place(WP[2].x - 144, WP[2].y, "road_h");
     place(WP[3].x, WP[3].y - 144, "road_h");
+
+    this.placeRoadStones();
+  }
+
+  private placeRoadStones(): void {
+    const TILE = 144;
+    const ROAD_HALF = TILE / 2; // 72px — edge of the road tile
+    const NUM_STONES = 12;
+
+    // Deterministic pseudo-random in [0,1) from two coords + seed
+    const rng = (a: number, b: number, seed: number): number => {
+      const n = Math.sin(a * 127.1 + b * 311.7 + seed * 74.3) * 43758.5453;
+      return n - Math.floor(n);
+    };
+
+    // Returns true if (wx,wy) falls inside any road segment's tile strip.
+    const onRoad = (wx: number, wy: number): boolean => {
+      for (let i = 0; i + 1 < ROAD_WAYPOINTS.length; i++) {
+        const p0 = ROAD_WAYPOINTS[i];
+        const p1 = ROAD_WAYPOINTS[i + 1];
+        if (p0.y === p1.y) {
+          // horizontal segment
+          if (
+            Math.abs(wy - p0.y) < ROAD_HALF &&
+            wx >= Math.min(p0.x, p1.x) - ROAD_HALF &&
+            wx <= Math.max(p0.x, p1.x) + ROAD_HALF
+          )
+            return true;
+        } else {
+          // vertical segment
+          if (
+            Math.abs(wx - p0.x) < ROAD_HALF &&
+            wy >= Math.min(p0.y, p1.y) - ROAD_HALF &&
+            wy <= Math.max(p0.y, p1.y) + ROAD_HALF
+          )
+            return true;
+        }
+      }
+      return false;
+    };
+
+    const placeStone = (wx: number, wy: number, uid: number): void => {
+      if (onRoad(wx, wy)) return;
+      const variant = Math.floor(rng(wx, wy, 0) * NUM_STONES) + 1;
+      const rotation = rng(wx, wy, 1) * Math.PI * 2;
+      const scale = 1.8 + rng(wx, wy, 2) * 2.4; // 1.8× – 4.2×
+      const img = this.add
+        .image(wx, wy, `stone${variant}`)
+        .setScale(scale)
+        .setRotation(rotation)
+        .setDepth(0.6);
+      this.hudCamera.ignore(img);
+      void uid;
+    };
+
+    // Scatter along one road side. isHorizontal = segment runs east-west.
+    // 'fixed' = constant coord (y for horizontal, x for vertical).
+    // Stones are placed between 'from' and 'to' along the running axis.
+    const scatter = (
+      isHorizontal: boolean,
+      fixed: number,
+      from: number,
+      to: number,
+    ): void => {
+      const step = 16;
+      let uid = 0;
+      for (let pos = from; pos <= to; pos += step, uid++) {
+        for (const side of [-1, 1]) {
+          // ~25% chance to skip each candidate
+          if (rng(pos, fixed + side * 1000, 3) > 0.75) continue;
+          const dist = ROAD_HALF - 18 + rng(pos, fixed + side * 2000, 4) * 50;
+          const jitter = (rng(pos, fixed + side * 3000, 5) - 0.5) * 18;
+          const wx = isHorizontal ? pos + jitter : fixed + side * dist;
+          const wy = isHorizontal ? fixed + side * dist : pos + jitter;
+          placeStone(wx, wy, uid);
+        }
+      }
+    };
+
+    // Scatter around a single tile (corners) — both axes, short segments.
+    const scatterAround = (cx: number, cy: number): void => {
+      scatter(false, cx, cy - ROAD_HALF, cy + ROAD_HALF);
+      scatter(true, cy, cx - ROAD_HALF, cx + ROAD_HALF);
+    };
+
+    const WP = ROAD_WAYPOINTS;
+
+    // Straight segments
+    scatter(false, WP[1].x, WP[1].y - 4 * TILE, WP[1].y - TILE);
+    scatter(false, WP[2].x, WP[2].y + TILE, WP[3].y - TILE);
+    scatter(false, WP[4].x, WP[4].y + TILE, WP[4].y + 5 * TILE);
+    scatter(true, WP[1].y, WP[1].x + TILE, WP[2].x - TILE);
+    scatter(true, WP[3].y, WP[3].x + TILE, WP[4].x - TILE);
+
+    // Corner tiles
+    scatterAround(WP[1].x, WP[1].y);
+    scatterAround(WP[2].x, WP[2].y);
+    scatterAround(WP[3].x, WP[3].y);
+    scatterAround(WP[4].x, WP[4].y);
   }
 
   private spawnTruck(): void {
