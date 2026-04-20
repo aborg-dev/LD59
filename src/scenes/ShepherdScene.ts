@@ -166,6 +166,7 @@ interface Dog {
   mode: "following" | "herding" | "defending" | "guarding";
   postX?: number;
   postY?: number;
+  seed: number;
 }
 
 interface Truck {
@@ -275,6 +276,8 @@ export class ShepherdScene extends Phaser.Scene {
   private sheepBought = 0;
   private sheepLostToWolves = 0;
   private alphaDogSpeed = DOG_SPEED;
+  private alphaDogMoving = false;
+  private alphaDogSeedCooldown = 0;
   private fieldCapacity = FIELD_CAPACITY_BASE;
   private speedUpgradeLevel = 0;
   private capacityUpgradeLevel = 0;
@@ -597,6 +600,7 @@ export class ShepherdScene extends Phaser.Scene {
       angle: 0,
       smoothedAngularVel: 0,
       mode: "following",
+      seed: 0,
     };
     this.alphaDogTargetX = alphaSprite.x;
     this.alphaDogTargetY = alphaSprite.y;
@@ -951,6 +955,7 @@ export class ShepherdScene extends Phaser.Scene {
       smoothedAngularVel: 0,
       targetWolf: null,
       mode: "following",
+      seed: Math.random() * Math.PI * 2,
     });
   }
 
@@ -1412,6 +1417,7 @@ export class ShepherdScene extends Phaser.Scene {
       mode: "guarding",
       postX: x,
       postY: y,
+      seed: Math.random() * Math.PI * 2,
     });
   }
 
@@ -2736,25 +2742,29 @@ export class ShepherdScene extends Phaser.Scene {
 
     // --- Dog AI ---
     const followingDogs = this.dogs.filter((d) => d.mode === "following");
-    const fwdX = Math.cos(this.alphaDog.angle);
-    const fwdY = Math.sin(this.alphaDog.angle);
-    const perpX = -fwdY;
-    const perpY = fwdX;
-
-    for (let i = 0; i < followingDogs.length; i++) {
+    const n = followingDogs.length;
+    const alphaMovingNow =
+      Math.hypot(this.alphaDog.vx, this.alphaDog.vy) > DOG_SPEED * 0.1;
+    this.alphaDogSeedCooldown -= dt;
+    if (alphaMovingNow !== this.alphaDogMoving && this.alphaDogSeedCooldown <= 0) {
+      this.alphaDogMoving = alphaMovingNow;
+      this.alphaDogSeedCooldown = 1.5;
+      for (const dog of followingDogs) {
+        dog.seed = Math.random() * Math.PI * 2;
+      }
+    }
+    for (let i = 0; i < n; i++) {
       const dog = followingDogs[i];
-      // Alternate sides: 0→right, 1→left, 2→far-right, ...
-      const side =
-        i % 2 === 0 ? Math.floor(i / 2) + 1 : -(Math.floor(i / 2) + 1);
-      const row = Math.floor(i / 2) + 1;
+      // Loose cluster behind the alpha: each dog has a fixed random offset
+      // seeded at spawn so the formation looks natural, not grid-like
+      const backDist = FOLLOW_DIST * (1.5 + Math.cos(dog.seed * 3.1) * 1.0);
+      const sideDist = FOLLOW_SPREAD * Math.sin(dog.seed * 2.3) * 2.5;
+      const fwdX = Math.cos(this.alphaDog.angle);
+      const fwdY = Math.sin(this.alphaDog.angle);
       const targetX =
-        this.alphaDog.sprite.x -
-        fwdX * FOLLOW_DIST * row +
-        perpX * FOLLOW_SPREAD * side * 0.5;
+        this.alphaDog.sprite.x - fwdX * backDist - fwdY * sideDist;
       const targetY =
-        this.alphaDog.sprite.y -
-        fwdY * FOLLOW_DIST * row +
-        perpY * FOLLOW_SPREAD * side * 0.5;
+        this.alphaDog.sprite.y - fwdY * backDist + fwdX * sideDist;
       const toX = targetX - dog.sprite.x;
       const toY = targetY - dog.sprite.y;
       const toDist = Math.hypot(toX, toY);
