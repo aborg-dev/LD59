@@ -64,6 +64,11 @@ const DROP_Y = 800;
 const BABY_SHEEP_SCALE = 0.65;
 const ADULT_SHEEP_SCALE = 1.0;
 
+const MAP_COIN_SOFTLOCK_DELAY_MS = 5_000;
+const MAP_COIN_VALUE = 3;
+const MAP_COIN_PICKUP_RANGE = 60;
+const MAP_COIN_BASE_SCALE = 2.0;
+
 const BUY_SHEEP_BASE_COST = 3;
 
 let SHEEP_MAX_SPEED = 220;
@@ -227,6 +232,9 @@ export class ShepherdScene extends Phaser.Scene {
   private score = 0;
   private coins = 0;
   private accumulator = 0;
+  private mapCoin: Phaser.GameObjects.Image | null = null;
+  private mapCoinTween: Phaser.Tweens.Tween | null = null;
+  private mapCoinCooldownMs = 0;
 
   private trucks: Truck[] = [];
   private gameOverTriggered = false;
@@ -334,6 +342,7 @@ export class ShepherdScene extends Phaser.Scene {
     ft.add("label_market", 0, 2, 2, 156, 25);
     ft.add("label_shear", 0, 2, 31, 145, 25);
     ft.add("label_stable", 0, 2, 64, 195, 25);
+    ft.add("coin_icon", 0, 128, 2, 24, 25);
 
     // Load map objects
     this.mapTrees = (mapData.trees as MapTree[]).map((t, i) => ({
@@ -1554,21 +1563,6 @@ export class ShepherdScene extends Phaser.Scene {
     t.targetAngle = dir + Math.PI / 2;
   }
 
-  private checkGameOver(): void {
-    if (this.gameOverTriggered) return;
-    if (this.coins >= this.buySheepCost) return;
-    if (this.sheep.some((s) => !s.sold)) return;
-    if (this.trucks.length > 0) return;
-    this.gameOverTriggered = true;
-    this.showBanner("Out of sheep!");
-    this.time.delayedCall(1400, () => {
-      this.scene.start("GameOver", {
-        score: this.score,
-        returnScene: "Shepherd",
-      });
-    });
-  }
-
   private updateTrucks(dt: number): void {
     const truckGap = 20;
     for (let i = this.trucks.length - 1; i >= 0; i--) {
@@ -2134,7 +2128,6 @@ export class ShepherdScene extends Phaser.Scene {
     const dtMs = dt * 1000;
 
     this.updateTrucks(dt);
-    this.checkGameOver();
     this.fieldCountText.setText(
       `${this.babiesGrowing()} / ${this.fieldCapacity}`,
     );
@@ -3000,6 +2993,90 @@ export class ShepherdScene extends Phaser.Scene {
           b.sprite.y += ny * push;
         }
       }
+    }
+    this.updateMapCoin(dtMs);
+  }
+
+  private spawnMapCoin(): void {
+    const x = Phaser.Math.Between(WORLD_W * 0.25, WORLD_W * 0.75);
+    const y = Phaser.Math.Between(WORLD_H * 0.25, WORLD_H * 0.75);
+    this.mapCoin = this.add
+      .image(x, y, "font", "coin_icon")
+      .setScale(0.1)
+      .setDepth(5);
+    this.hudCamera.ignore(this.mapCoin);
+    this.mapCoinTween = this.tweens.add({
+      targets: this.mapCoin,
+      scaleX: MAP_COIN_BASE_SCALE * 1.1,
+      scaleY: MAP_COIN_BASE_SCALE * 1.1,
+      duration: 400,
+      ease: "Back.easeOut",
+      onComplete: () => {
+        this.sound.play("pop");
+        this.mapCoin?.setScale(MAP_COIN_BASE_SCALE);
+        this.mapCoinTween = this.tweens.add({
+          targets: this.mapCoin,
+          scaleX: MAP_COIN_BASE_SCALE * 1.1,
+          scaleY: MAP_COIN_BASE_SCALE * 1.1,
+          duration: 700,
+          yoyo: true,
+          repeat: -1,
+          ease: "Sine.easeInOut",
+        });
+      },
+    });
+  }
+
+  private updateMapCoin(dtMs: number): void {
+    if (this.mapCoin) {
+      const cx = this.mapCoin.x;
+      const cy = this.mapCoin.y;
+      let collected = false;
+      if (
+        this.alphaDog &&
+        Math.hypot(this.alphaDog.sprite.x - cx, this.alphaDog.sprite.y - cy) <
+          MAP_COIN_PICKUP_RANGE
+      ) {
+        collected = true;
+      }
+      if (!collected) {
+        for (const dog of this.dogs) {
+          if (
+            Math.hypot(dog.sprite.x - cx, dog.sprite.y - cy) <
+            MAP_COIN_PICKUP_RANGE
+          ) {
+            collected = true;
+            break;
+          }
+        }
+      }
+      if (collected) {
+        this.mapCoinTween?.stop();
+        this.mapCoinTween = null;
+        this.mapCoin.destroy();
+        this.mapCoin = null;
+        this.coins += MAP_COIN_VALUE;
+        this.updateCoinText();
+        this.sound.play("money");
+        this.updateShopButtons();
+      }
+      return;
+    }
+
+    const softLocked =
+      !this.gameOverTriggered &&
+      this.coins < this.buySheepCost &&
+      !this.sheep.some((s) => !s.sold) &&
+      this.trucks.length === 0;
+
+    if (!softLocked) {
+      this.mapCoinCooldownMs = MAP_COIN_SOFTLOCK_DELAY_MS;
+      return;
+    }
+
+    this.mapCoinCooldownMs = Math.max(0, this.mapCoinCooldownMs - dtMs);
+    if (this.mapCoinCooldownMs === 0) {
+      this.spawnMapCoin();
     }
   }
 
