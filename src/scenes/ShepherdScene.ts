@@ -19,6 +19,7 @@ const FIELD_H_PX = 168;
 const FIELD_CAPACITY_BASE = 3;
 const CAPACITY_UPGRADE_STEP = 1;
 const FENCE_COST = 100;
+const RETIRE_COST = 500;
 const GUARD_RANGE = 320;
 const GUARD_BUY_BASE_COST = 30;
 const GROW_SEC = 12;
@@ -241,7 +242,6 @@ export class ShepherdScene extends Phaser.Scene {
   private guardMarkers: Phaser.GameObjects.Graphics[] = [];
 
   private coinText!: Phaser.GameObjects.Text;
-  private dogCountText!: Phaser.GameObjects.Text;
   private bannerText!: Phaser.GameObjects.Text;
   private bannerTween?: Phaser.Tweens.Tween;
   private dogBuyCost = 5;
@@ -252,7 +252,7 @@ export class ShepherdScene extends Phaser.Scene {
   private speedUpgradeLevel = 0;
   private capacityUpgradeLevel = 0;
   private speedUpgradeCost = 10;
-  private capacityUpgradeCost = 10;
+  private capacityUpgradeCost = 20;
   private wolfSpawnStartMs = 0;
   private dogBuyBtn!: Phaser.GameObjects.Text;
   private sheepBuyBtn!: Phaser.GameObjects.Text;
@@ -260,6 +260,7 @@ export class ShepherdScene extends Phaser.Scene {
   private capacityBuyBtn!: Phaser.GameObjects.Text;
   private fenceBuyBtn!: Phaser.GameObjects.Text;
   private guardBuyBtn!: Phaser.GameObjects.Text;
+  private retireBtn!: Phaser.GameObjects.Text;
   private fieldCountText!: Phaser.GameObjects.Text;
   private marketCountText!: Phaser.GameObjects.Text;
   private fieldRect!: Phaser.GameObjects.Image;
@@ -322,7 +323,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.speedUpgradeLevel = 0;
     this.capacityUpgradeLevel = 0;
     this.speedUpgradeCost = 10;
-    this.capacityUpgradeCost = 10;
+    this.capacityUpgradeCost = 20;
     this.fenceBuilt = false;
 
     this.hudCamera = this.cameras.add(0, 0, width, height);
@@ -356,7 +357,12 @@ export class ShepherdScene extends Phaser.Scene {
     this.fenceGfx = this.add.graphics().setDepth(1.2).setVisible(false);
     this.hudCamera.ignore(this.fenceGfx);
     const fieldWordImg = this.add
-      .image(FIELD_CX + 10, FIELD_CY - FIELD_H_PX / 2 - 80, "font", "label_stable")
+      .image(
+        FIELD_CX + 10,
+        FIELD_CY - FIELD_H_PX / 2 - 80,
+        "font",
+        "label_stable",
+      )
       .setScale(2.0)
       .setDepth(2);
     this.hudCamera.ignore(fieldWordImg);
@@ -381,7 +387,12 @@ export class ShepherdScene extends Phaser.Scene {
       .setDepth(1);
     this.hudCamera.ignore(marketImg);
     const marketLabel = this.add
-      .image(MARKET_CX, MARKET_CY - MARKET_H_PX / 2 - 120, "font", "label_market")
+      .image(
+        MARKET_CX,
+        MARKET_CY - MARKET_H_PX / 2 - 120,
+        "font",
+        "label_market",
+      )
       .setScale(2.0)
       .setDepth(2);
     this.hudCamera.ignore(marketLabel);
@@ -467,7 +478,8 @@ export class ShepherdScene extends Phaser.Scene {
     for (const t of this.mapTrees) {
       const key = `tree${t.variant % 5}`;
       const naturalHalfWidth = t.variant >= 3 ? 64 : 32;
-      const angle = (Math.sin(t.x * 0.031 + t.y * 0.22) * 0.5 + 0.5) * Math.PI * 2;
+      const angle =
+        (Math.sin(t.x * 0.031 + t.y * 0.22) * 0.5 + 0.5) * Math.PI * 2;
       const spr = this.add
         .image(t.x, t.y, key)
         .setScale(t.r / naturalHalfWidth)
@@ -600,30 +612,80 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(hudTopBar);
 
     this.coinText = this.add
-      .text(width / 2 - 120, HUD_TOP_H / 2, `$${this.coins}`, {
+      .text(22, HUD_TOP_H / 2, `$${this.coins}`, {
         fontFamily: FONT_UI,
         fontSize: 32,
-        color: "#707070",
+        color: "#ffd700",
         stroke: "#000000",
         strokeThickness: 4,
         resolution: TEXT_RESOLUTION,
       })
-      .setOrigin(0.5, 0.5)
+      .setOrigin(0, 0.5)
       .setDepth(101);
     this.cameras.main.ignore(this.coinText);
 
-    this.dogCountText = this.add
-      .text(width / 2 + 120, HUD_TOP_H / 2, `Dogs: ${this.dogs.length}`, {
-        fontFamily: FONT_UI,
-        fontSize: 32,
-        color: "#ffffff",
-        stroke: "#000000",
-        strokeThickness: 4,
-        resolution: TEXT_RESOLUTION,
-      })
-      .setOrigin(0.5, 0.5)
-      .setDepth(101);
-    this.cameras.main.ignore(this.dogCountText);
+    // --- Top-right control buttons (pause, menu, mute) ---
+    const topBtnStyle = {
+      fontFamily: FONT_BODY,
+      fontSize: 22,
+      color: "#ffffff",
+      backgroundColor: "#333344",
+      padding: { left: 16, right: 16, top: 10, bottom: 10 },
+      resolution: TEXT_RESOLUTION,
+    };
+    const topBtnY = HUD_TOP_H / 2;
+
+    const pauseBtn = this.add
+      .text(0, topBtnY, "PAUSE", topBtnStyle)
+      .setOrigin(1, 0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+    this.cameras.main.ignore(pauseBtn);
+
+    const menuBtn = this.add
+      .text(0, topBtnY, "MENU", topBtnStyle)
+      .setOrigin(1, 0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+    menuBtn.on("pointerdown", () => {
+      this.sound.play("pop");
+      this.scene.start("MainMenu");
+    });
+    this.cameras.main.ignore(menuBtn);
+
+    const savedMute = localStorage.getItem("shepherd:muted") === "1";
+    this.sound.mute = savedMute;
+    const muteBtn = this.add
+      .text(0, topBtnY, savedMute ? "UNMUTE" : "MUTE", topBtnStyle)
+      .setOrigin(1, 0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+    this.cameras.main.ignore(muteBtn);
+
+    const rightPad = 22;
+    const rightGap = 30;
+    const layoutRightButtons = () => {
+      let rightEdge = width - rightPad;
+      muteBtn.setX(rightEdge);
+      rightEdge -= muteBtn.width + rightGap;
+      menuBtn.setX(rightEdge);
+      rightEdge -= menuBtn.width + rightGap;
+      pauseBtn.setX(rightEdge);
+    };
+    layoutRightButtons();
+
+    pauseBtn.on("pointerdown", () => {
+      this.paused = !this.paused;
+      pauseBtn.setText(this.paused ? "RESUME" : "PAUSE");
+      this.sound.play("pop");
+      layoutRightButtons();
+    });
+    muteBtn.on("pointerdown", () => {
+      this.sound.mute = !this.sound.mute;
+      localStorage.setItem("shepherd:muted", this.sound.mute ? "1" : "0");
+      muteBtn.setText(this.sound.mute ? "UNMUTE" : "MUTE");
+      layoutRightButtons();
+    });
 
     // Banner
     this.bannerText = this.add
@@ -648,63 +710,58 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(hudBottomBar);
 
     const btnY = this.fieldBottom + HUD_BOTTOM_H / 2;
+    const SHOP_BTN_WIDTH = 200;
+    const SHOP_BTN_COUNT = 7;
+    const shopPad = 22;
+    const shopStep =
+      (width - 2 * shopPad - SHOP_BTN_WIDTH) / (SHOP_BTN_COUNT - 1);
+    const shopX = (i: number) => shopPad + SHOP_BTN_WIDTH / 2 + i * shopStep;
     const btnStyle = {
       fontFamily: FONT_BODY,
       fontSize: 22,
       color: "#ffffff",
       backgroundColor: "#333344",
       padding: { left: 16, right: 16, top: 10, bottom: 10 },
+      fixedWidth: SHOP_BTN_WIDTH,
+      align: "center",
       resolution: TEXT_RESOLUTION,
     };
 
-    const pauseBtn = this.add
-      .text(width * 0.71, btnY, "PAUSE", btnStyle)
+    // Shop buttons, ordered left→right by ascending cost.
+    this.sheepBuyBtn = this.add
+      .text(shopX(0), btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
-    pauseBtn.on("pointerdown", () => {
-      this.paused = !this.paused;
-      pauseBtn.setText(this.paused ? "RESUME" : "PAUSE");
-      this.sound.play("pop");
-    });
-    this.cameras.main.ignore(pauseBtn);
-
-    const menuBtn = this.add
-      .text(width * 0.82, btnY, "MENU", btnStyle)
-      .setOrigin(0.5)
-      .setDepth(101)
-      .setInteractive({ useHandCursor: true });
-    menuBtn.on("pointerdown", () => {
-      this.sound.play("pop");
-      this.scene.start("MainMenu");
-    });
-    this.cameras.main.ignore(menuBtn);
-
-    // Mute toggle — bottom-right, persisted across reloads
-    const savedMute = localStorage.getItem("shepherd:muted") === "1";
-    this.sound.mute = savedMute;
-    const muteBtn = this.add
-      .text(width * 0.93, btnY, savedMute ? "UNMUTE" : "MUTE", btnStyle)
-      .setOrigin(0.5)
-      .setDepth(101)
-      .setInteractive({ useHandCursor: true });
-    muteBtn.on("pointerdown", () => {
-      this.sound.mute = !this.sound.mute;
-      localStorage.setItem("shepherd:muted", this.sound.mute ? "1" : "0");
-      muteBtn.setText(this.sound.mute ? "UNMUTE" : "MUTE");
-    });
-    this.cameras.main.ignore(muteBtn);
+    this.sheepBuyBtn.on("pointerdown", () => this.buySheep());
+    this.cameras.main.ignore(this.sheepBuyBtn);
 
     this.dogBuyBtn = this.add
-      .text(width * 0.05, btnY, "", btnStyle)
+      .text(shopX(1), btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
     this.dogBuyBtn.on("pointerdown", () => this.buyDog());
     this.cameras.main.ignore(this.dogBuyBtn);
 
+    this.speedBuyBtn = this.add
+      .text(shopX(2), btnY, "", btnStyle)
+      .setOrigin(0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+    this.speedBuyBtn.on("pointerdown", () => this.buySpeedUpgrade());
+    this.cameras.main.ignore(this.speedBuyBtn);
+
+    this.capacityBuyBtn = this.add
+      .text(shopX(3), btnY, "", btnStyle)
+      .setOrigin(0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+    this.capacityBuyBtn.on("pointerdown", () => this.buyCapacityUpgrade());
+    this.cameras.main.ignore(this.capacityBuyBtn);
+
     this.guardBuyBtn = this.add
-      .text(width * 0.16, btnY, "", btnStyle)
+      .text(shopX(4), btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
@@ -714,45 +771,27 @@ export class ShepherdScene extends Phaser.Scene {
     });
     this.cameras.main.ignore(this.guardBuyBtn);
 
-    this.sheepBuyBtn = this.add
-      .text(width * 0.27, btnY, "", btnStyle)
-      .setOrigin(0.5)
-      .setDepth(101)
-      .setInteractive({ useHandCursor: true });
-    this.sheepBuyBtn.on("pointerdown", () => this.buySheep());
-    this.cameras.main.ignore(this.sheepBuyBtn);
-
-    this.speedBuyBtn = this.add
-      .text(width * 0.38, btnY, "", btnStyle)
-      .setOrigin(0.5)
-      .setDepth(101)
-      .setInteractive({ useHandCursor: true });
-    this.speedBuyBtn.on("pointerdown", () => this.buySpeedUpgrade());
-    this.cameras.main.ignore(this.speedBuyBtn);
-
-    this.capacityBuyBtn = this.add
-      .text(width * 0.49, btnY, "", btnStyle)
-      .setOrigin(0.5)
-      .setDepth(101)
-      .setInteractive({ useHandCursor: true });
-    this.capacityBuyBtn.on("pointerdown", () => this.buyCapacityUpgrade());
-    this.cameras.main.ignore(this.capacityBuyBtn);
-
     this.fenceBuyBtn = this.add
-      .text(width * 0.6, btnY, "", btnStyle)
+      .text(shopX(5), btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
     this.fenceBuyBtn.on("pointerdown", () => this.buyFence());
     this.cameras.main.ignore(this.fenceBuyBtn);
 
+    this.retireBtn = this.add
+      .text(shopX(6), btnY, "", btnStyle)
+      .setOrigin(0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+    this.retireBtn.on("pointerdown", () => this.retire());
+    this.cameras.main.ignore(this.retireBtn);
+
     this.updateShopButtons();
 
     // Wolf spawning — interval shrinks as the game progresses
     this.wolfSpawnStartMs = this.time.now;
     this.scheduleNextWolf();
-
-    this.updateDogCountText();
 
     // Set camera zoomed out to fit entire world
     this.updateCamera();
@@ -780,7 +819,6 @@ export class ShepherdScene extends Phaser.Scene {
       targetWolf: null,
       mode: "following",
     });
-    this.updateDogCountText();
   }
 
   private spawnWolf(): void {
@@ -848,6 +886,19 @@ export class ShepherdScene extends Phaser.Scene {
     this.playBuildSound();
     this.showBanner("Fence built — wolves can't enter the field");
     this.updateCoinText();
+  }
+
+  retire(): void {
+    if (this.gameOverTriggered) return;
+    if (this.coins < RETIRE_COST) return;
+    this.gameOverTriggered = true;
+    this.showBanner("You retire in comfort!");
+    this.time.delayedCall(1400, () => {
+      this.scene.start("GameOver", {
+        score: this.score,
+        returnScene: "Shepherd",
+      });
+    });
   }
 
   private drawFencePosts(): void {
@@ -960,10 +1011,6 @@ export class ShepherdScene extends Phaser.Scene {
     });
   }
 
-  private updateDogCountText(): void {
-    this.dogCountText.setText(`Dogs: ${this.dogs.length + 1}`);
-  }
-
   private updateShopButtons(): void {
     const dogAffordable = this.coins >= this.dogBuyCost;
     this.dogBuyBtn.setText(`+Dog $${this.dogBuyCost}`);
@@ -1012,6 +1059,11 @@ export class ShepherdScene extends Phaser.Scene {
       this.fenceBuilt ? "#444444" : fenceAffordable ? "#2a6a2a" : "#333344",
     );
     this.fenceBuyBtn.setAlpha(this.fenceBuilt || fenceAffordable ? 1 : 0.55);
+
+    const retireAffordable = this.coins >= RETIRE_COST;
+    this.retireBtn.setText(`Retire $${RETIRE_COST}`);
+    this.retireBtn.setBackgroundColor(retireAffordable ? "#8a6a1a" : "#333344");
+    this.retireBtn.setAlpha(retireAffordable ? 1 : 0.55);
   }
 
   private buyDog(): void {
@@ -1168,7 +1220,6 @@ export class ShepherdScene extends Phaser.Scene {
       postX: x,
       postY: y,
     });
-    this.updateDogCountText();
   }
 
   private fieldContains(x: number, y: number): boolean {
@@ -1907,10 +1958,15 @@ export class ShepherdScene extends Phaser.Scene {
       text: string;
     };
 
-    const btnY = this.fieldBottom + HUD_BOTTOM_H / 2;
     const btnH = 54;
     const p = BUILDING_ENTRY_PADDING;
     const d = 10;
+    const hudRectFor = (btn: Phaser.GameObjects.Text) => ({
+      cx: btn.x,
+      cy: btn.y,
+      w: btn.width,
+      h: btnH,
+    });
     const steps: StepDef[] = [
       {
         worldRects: [
@@ -1944,24 +2000,21 @@ export class ShepherdScene extends Phaser.Scene {
       },
       {
         worldRects: [],
-        hudRects: [
-          { cx: width * 0.05, cy: btnY, w: 140, h: btnH },
-          { cx: width * 0.16, cy: btnY, w: 170, h: btnH },
-        ],
+        hudRects: [hudRectFor(this.dogBuyBtn), hudRectFor(this.guardBuyBtn)],
         text: "Buy additional dogs to help you manage sheep",
       },
       {
         worldRects: [],
         hudRects: [
-          { cx: width * 0.38, cy: btnY, w: 200, h: btnH },
-          { cx: width * 0.49, cy: btnY, w: 160, h: btnH },
-          { cx: width * 0.6, cy: btnY, w: 175, h: btnH },
+          hudRectFor(this.speedBuyBtn),
+          hudRectFor(this.capacityBuyBtn),
+          hudRectFor(this.fenceBuyBtn),
         ],
         text: "Buy upgrades",
       },
       {
         worldRects: [],
-        hudRects: [{ cx: width * 0.27, cy: btnY, w: 165, h: btnH }],
+        hudRects: [hudRectFor(this.sheepBuyBtn)],
         text: "Buy your first sheep now and start playing!",
       },
     ];
@@ -2018,7 +2071,12 @@ export class ShepherdScene extends Phaser.Scene {
             (h) => cx >= h.x && cx <= h.x + h.w && cy >= h.y && cy <= h.y + h.h,
           );
           if (!isLit) {
-            gfx.fillRect(xs[xi], ys[yi], xs[xi + 1] - xs[xi], ys[yi + 1] - ys[yi]);
+            gfx.fillRect(
+              xs[xi],
+              ys[yi],
+              xs[xi + 1] - xs[xi],
+              ys[yi + 1] - ys[yi],
+            );
           }
         }
       }
@@ -2306,7 +2364,7 @@ export class ShepherdScene extends Phaser.Scene {
         (w) =>
           w.scaredMs === 0 &&
           Math.hypot(w.sprite.x - sx, w.sprite.y - sy) <
-          HERD_INTERCEPT_THREAT_RANGE,
+            HERD_INTERCEPT_THREAT_RANGE,
       );
 
       let herdX: number;
@@ -2745,9 +2803,9 @@ export class ShepherdScene extends Phaser.Scene {
         s.grazing = alignN === 0 ? !s.grazing : false;
         s.modeT = s.grazing
           ? SHEEP_GRAZE_MIN_SEC +
-          Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
+            Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
           : SHEEP_WALK_MIN_SEC +
-          Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
+            Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
         if (!s.grazing) s.wanderAngle = Math.random() * Math.PI * 2;
       }
       if (!s.grazing && alignN === 0) {
@@ -3280,97 +3338,97 @@ export class ShepherdScene extends Phaser.Scene {
       max: number;
       step: number;
     }> = [
-        {
-          label: "Max Speed",
-          get: () => SHEEP_MAX_SPEED,
-          set: (v) => {
-            SHEEP_MAX_SPEED = v;
-          },
-          min: 0,
-          max: 800,
-          step: 5,
+      {
+        label: "Max Speed",
+        get: () => SHEEP_MAX_SPEED,
+        set: (v) => {
+          SHEEP_MAX_SPEED = v;
         },
-        {
-          label: "Damping",
-          get: () => SHEEP_DAMPING,
-          set: (v) => {
-            SHEEP_DAMPING = v;
-          },
-          min: 0.8,
-          max: 0.999,
-          step: 0.001,
+        min: 0,
+        max: 800,
+        step: 5,
+      },
+      {
+        label: "Damping",
+        get: () => SHEEP_DAMPING,
+        set: (v) => {
+          SHEEP_DAMPING = v;
         },
-        {
-          label: "Wander Force",
-          get: () => SHEEP_WANDER_FORCE,
-          set: (v) => {
-            SHEEP_WANDER_FORCE = v;
-          },
-          min: 0,
-          max: 400,
-          step: 5,
+        min: 0.8,
+        max: 0.999,
+        step: 0.001,
+      },
+      {
+        label: "Wander Force",
+        get: () => SHEEP_WANDER_FORCE,
+        set: (v) => {
+          SHEEP_WANDER_FORCE = v;
         },
-        {
-          label: "Cohesion Force",
-          get: () => SHEEP_COHESION_FORCE,
-          set: (v) => {
-            SHEEP_COHESION_FORCE = v;
-          },
-          min: 0,
-          max: 200,
-          step: 2,
+        min: 0,
+        max: 400,
+        step: 5,
+      },
+      {
+        label: "Cohesion Force",
+        get: () => SHEEP_COHESION_FORCE,
+        set: (v) => {
+          SHEEP_COHESION_FORCE = v;
         },
-        {
-          label: "Alignment Force",
-          get: () => ALIGNMENT_FORCE,
-          set: (v) => {
-            ALIGNMENT_FORCE = v;
-          },
-          min: 0,
-          max: 300,
-          step: 5,
+        min: 0,
+        max: 200,
+        step: 2,
+      },
+      {
+        label: "Alignment Force",
+        get: () => ALIGNMENT_FORCE,
+        set: (v) => {
+          ALIGNMENT_FORCE = v;
         },
-        {
-          label: "Flee Force",
-          get: () => FLEE_FORCE,
-          set: (v) => {
-            FLEE_FORCE = v;
-          },
-          min: 0,
-          max: 1000,
-          step: 10,
+        min: 0,
+        max: 300,
+        step: 5,
+      },
+      {
+        label: "Flee Force",
+        get: () => FLEE_FORCE,
+        set: (v) => {
+          FLEE_FORCE = v;
         },
-        {
-          label: "Fear Radius",
-          get: () => FEAR_RADIUS,
-          set: (v) => {
-            FEAR_RADIUS = v;
-          },
-          min: 0,
-          max: 500,
-          step: 5,
+        min: 0,
+        max: 1000,
+        step: 10,
+      },
+      {
+        label: "Fear Radius",
+        get: () => FEAR_RADIUS,
+        set: (v) => {
+          FEAR_RADIUS = v;
         },
-        {
-          label: "Panic Inherit",
-          get: () => PANIC_INHERIT,
-          set: (v) => {
-            PANIC_INHERIT = v;
-          },
-          min: 0,
-          max: 1,
-          step: 0.05,
+        min: 0,
+        max: 500,
+        step: 5,
+      },
+      {
+        label: "Panic Inherit",
+        get: () => PANIC_INHERIT,
+        set: (v) => {
+          PANIC_INHERIT = v;
         },
-        {
-          label: "Turn Rate",
-          get: () => SHEEP_TURN_RATE,
-          set: (v) => {
-            SHEEP_TURN_RATE = v;
-          },
-          min: 0.5,
-          max: 15,
-          step: 0.5,
+        min: 0,
+        max: 1,
+        step: 0.05,
+      },
+      {
+        label: "Turn Rate",
+        get: () => SHEEP_TURN_RATE,
+        set: (v) => {
+          SHEEP_TURN_RATE = v;
         },
-      ];
+        min: 0.5,
+        max: 15,
+        step: 0.5,
+      },
+    ];
 
     for (const cfg of params) {
       const row = document.createElement("div");
@@ -3468,7 +3526,7 @@ export class ShepherdScene extends Phaser.Scene {
         if (!treeFound) {
           this.editorTreeRadiusPreview =
             Math.random() *
-            (this.editorTreeRadiusMax - this.editorTreeRadiusMin) +
+              (this.editorTreeRadiusMax - this.editorTreeRadiusMin) +
             this.editorTreeRadiusMin;
           return;
         }
