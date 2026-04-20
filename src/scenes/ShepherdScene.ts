@@ -11,7 +11,7 @@ const SHEEP_RADIUS = 18;
 const MAX_SHEEP = 30;
 
 // Field — babies grow here into adults
-const FIELD_CX = 2088;
+const FIELD_CX = 2160; // Moved one tile (assuming 72px) to the right
 const FIELD_CY = 900;
 const FIELD_W_PX = 288;
 const FIELD_H_PX = 168;
@@ -275,14 +275,16 @@ export class ShepherdScene extends Phaser.Scene {
   private mapSpawns: { x: number; y: number }[] = [];
 
   private grassLayer!: Phaser.GameObjects.Layer;
-  private grassMode: 0 | 1 | 2 = 0; // 0=original, 1=random, 2=noise
+  private grassMode: 0 | 1 | 2 = 2; // 0=original, 1=random, 2=noise
 
   // Debug/editor state
   private debugPanel: HTMLDivElement | null = null;
   private editorActive = false;
   private dogVisuals = false;
   private editorTool: "tree" | "spawn" = "tree";
-  private editorTreeRadius = 60;
+  private editorTreeRadiusMin = 20;
+  private editorTreeRadiusMax = 150;
+  private editorTreeRadiusPreview = 60;
   private editorGfx!: Phaser.GameObjects.Graphics;
   private editorCursorGfx!: Phaser.GameObjects.Graphics;
   private editorPanel: HTMLDivElement | null = null;
@@ -466,7 +468,8 @@ export class ShepherdScene extends Phaser.Scene {
     // Render trees
     for (const t of this.mapTrees) {
       const key = `tree${t.variant % 5}`;
-      const spr = this.add.image(t.x, t.y, key).setScale(2.0).setDepth(2);
+      const naturalHalfWidth = t.variant >= 3 ? 64 : 32;
+      const spr = this.add.image(t.x, t.y, key).setScale(t.r / naturalHalfWidth).setDepth(2);
       this.hudCamera.ignore(spr);
     }
 
@@ -3051,7 +3054,7 @@ export class ShepherdScene extends Phaser.Scene {
     const { x, y } = this.editorPointerWorld;
     if (this.editorTool === "tree") {
       this.editorCursorGfx.lineStyle(2, 0x00ffff, 1);
-      this.editorCursorGfx.strokeCircle(x, y, this.editorTreeRadius);
+      this.editorCursorGfx.strokeCircle(x, y, this.editorTreeRadiusPreview);
     } else {
       this.editorCursorGfx.lineStyle(3, 0xff8800, 1);
       const s = 14;
@@ -3063,14 +3066,29 @@ export class ShepherdScene extends Phaser.Scene {
   private editorHandlePointerDown(p: Phaser.Input.Pointer): void {
     const wp = this.cameras.main.getWorldPoint(p.x, p.y);
     if (p.button === 2) {
+      if (this.editorTool === "tree") {
+        let treeFound = false;
+        for (const t of this.mapTrees) {
+          if (Math.hypot(wp.x - t.x, wp.y - t.y) < t.r + 10) {
+            treeFound = true;
+            break;
+          }
+        }
+        if (!treeFound) {
+          this.editorTreeRadiusPreview = Math.random() * (this.editorTreeRadiusMax - this.editorTreeRadiusMin) + this.editorTreeRadiusMin;
+          return;
+        }
+      }
       this.editorDeleteNearest(wp.x, wp.y);
       return;
     }
     if (this.editorTool === "tree") {
+      const r = Math.random() * (this.editorTreeRadiusMax - this.editorTreeRadiusMin) + this.editorTreeRadiusMin;
+      this.editorTreeRadiusPreview = r;
       this.mapTrees.push({
         x: Math.round(wp.x),
         y: Math.round(wp.y),
-        r: this.editorTreeRadius,
+        r: r,
         variant: Math.floor(Math.random() * 5),
       });
     } else {
@@ -3141,26 +3159,80 @@ export class ShepherdScene extends Phaser.Scene {
     const radiusLabel = document.createElement("div");
     radiusLabel.style.cssText = "display:flex;justify-content:space-between;";
     const rlbl = document.createElement("span");
-    rlbl.textContent = "Tree Radius";
+    rlbl.textContent = "Tree Radius Range";
     const rval = document.createElement("span");
     rval.style.color = "#fa8";
-    rval.textContent = String(this.editorTreeRadius);
+    rval.textContent = `${Math.round(this.editorTreeRadiusMin)}-${Math.round(this.editorTreeRadiusMax)}`;
     radiusLabel.appendChild(rlbl);
     radiusLabel.appendChild(rval);
-    const radiusSlider = document.createElement("input");
-    radiusSlider.type = "range";
-    radiusSlider.min = "20";
-    radiusSlider.max = "150";
-    radiusSlider.step = "5";
-    radiusSlider.value = String(this.editorTreeRadius);
-    radiusSlider.style.cssText = "width:100%;cursor:pointer;accent-color:#6af;";
-    radiusSlider.addEventListener("input", () => {
-      this.editorTreeRadius = parseFloat(radiusSlider.value);
-      rval.textContent = String(this.editorTreeRadius);
-    });
+
+    const rangeContainer = document.createElement("div");
+    rangeContainer.style.cssText = "position:relative;height:20px;margin-top:5px;";
+
+    const track = document.createElement("div");
+    track.style.cssText = "position:absolute;width:100%;height:4px;background:#446;top:8px;border-radius:2px;";
+    rangeContainer.appendChild(track);
+
+    const knobStyle = document.createElement("style");
+    knobStyle.textContent = `
+      .dual-range-knob { pointer-events: none; }
+      .dual-range-knob::-webkit-slider-thumb {
+        appearance: none;
+        height: 14px;
+        width: 14px;
+        border-radius: 50%;
+        background: #6af;
+        cursor: pointer;
+        pointer-events: all;
+      }
+      .dual-range-knob::-moz-range-thumb {
+        height: 14px;
+        width: 14px;
+        border-radius: 50%;
+        background: #6af;
+        cursor: pointer;
+        pointer-events: all;
+        border: none;
+      }
+    `;
+    document.head.appendChild(knobStyle);
+
+    const createKnob = (isMin: boolean) => {
+      const knob = document.createElement("input");
+      knob.type = "range";
+      knob.min = "20";
+      knob.max = "150";
+      knob.step = "5";
+      knob.value = isMin ? String(this.editorTreeRadiusMin) : String(this.editorTreeRadiusMax);
+      knob.className = "dual-range-knob";
+      knob.style.cssText =
+        "position:absolute;width:100%;appearance:none;background:none;outline:none;margin:0;padding:0;" +
+        "top:0;left:0;z-index:" + (isMin ? "3" : "2") + ";";
+
+      knob.addEventListener("input", () => {
+        const v = parseFloat(knob.value);
+        if (isMin) {
+          this.editorTreeRadiusMin = Math.min(v, this.editorTreeRadiusMax - 5);
+          knob.value = String(this.editorTreeRadiusMin);
+        } else {
+          this.editorTreeRadiusMax = Math.max(v, this.editorTreeRadiusMin + 5);
+          knob.value = String(this.editorTreeRadiusMax);
+        }
+        rval.textContent = `${Math.round(this.editorTreeRadiusMin)}-${Math.round(this.editorTreeRadiusMax)}`;
+      });
+
+      return knob;
+    };
+
+    const minKnob = createKnob(true);
+    const maxKnob = createKnob(false);
+    rangeContainer.appendChild(minKnob);
+    rangeContainer.appendChild(maxKnob);
+
+
     const radiusRow = document.createElement("div");
     radiusRow.appendChild(radiusLabel);
-    radiusRow.appendChild(radiusSlider);
+    radiusRow.appendChild(rangeContainer);
     panel.appendChild(radiusRow);
 
     const counts = document.createElement("div");
