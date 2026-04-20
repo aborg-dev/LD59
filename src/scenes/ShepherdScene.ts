@@ -1375,6 +1375,14 @@ export class ShepherdScene extends Phaser.Scene {
     );
   }
 
+  private insideBuilding(x: number, y: number): boolean {
+    return (
+      this.marketContains(x, y) ||
+      this.shearContains(x, y) ||
+      this.fieldContains(x, y)
+    );
+  }
+
   private babiesGrowing(): number {
     let n = 0;
     for (const s of this.sheep) {
@@ -2515,29 +2523,10 @@ export class ShepherdScene extends Phaser.Scene {
             this.alphaDog.sprite.y += (tdy / td) * (minDist - td);
           }
         }
-      this.pushOutOfRect(
-        MARKET_CX,
-        MARKET_CY,
-        MARKET_W_PX,
-        MARKET_H_PX,
-        this.alphaDog.sprite,
-        this.alphaDog,
-      );
-      this.pushOutOfRect(
-        SHEAR_CX,
-        SHEAR_CY,
-        SHEAR_W_PX,
-        SHEAR_H_PX,
-        this.alphaDog.sprite,
-        this.alphaDog,
-      );
-      this.pushOutOfRect(
-        FIELD_CX,
-        FIELD_CY,
-        FIELD_W_PX,
-        FIELD_H_PX,
-        this.alphaDog.sprite,
-        this.alphaDog,
+      this.alphaDog.sprite.setAlpha(
+        this.insideBuilding(this.alphaDog.sprite.x, this.alphaDog.sprite.y)
+          ? 0.25
+          : 1,
       );
     }
 
@@ -2930,24 +2919,8 @@ export class ShepherdScene extends Phaser.Scene {
         wolf.sprite.rotation = wolf.angle + Math.PI / 2;
       }
 
-      this.pushOutOfRect(
-        MARKET_CX,
-        MARKET_CY,
-        MARKET_W_PX,
-        MARKET_H_PX,
-        wolf.sprite,
-        wolf,
-      );
-      this.pushOutOfRect(
-        SHEAR_CX,
-        SHEAR_CY,
-        SHEAR_W_PX,
-        SHEAR_H_PX,
-        wolf.sprite,
-        wolf,
-      );
       wolf.sprite.setAlpha(
-        this.fieldContains(wolf.sprite.x, wolf.sprite.y) ? 0.25 : 1,
+        this.insideBuilding(wolf.sprite.x, wolf.sprite.y) ? 0.25 : 1,
       );
     }
 
@@ -3149,26 +3122,8 @@ export class ShepherdScene extends Phaser.Scene {
           }
         }
 
-      // Building collision — push sheep out of building footprints unless they
-      // legitimately belong inside (waiting to sell, shearing, growing)
-      if (!s.waiting)
-        this.pushOutOfRect(
-          MARKET_CX,
-          MARKET_CY,
-          MARKET_W_PX,
-          MARKET_H_PX,
-          s.sprite,
-          s,
-        );
-      if (s.shearT === 0)
-        this.pushOutOfRect(
-          SHEAR_CX,
-          SHEAR_CY,
-          SHEAR_W_PX,
-          SHEAR_H_PX,
-          s.sprite,
-          s,
-        );
+      // Field containment — adults are still pushed out of the field so they
+      // leave to roam the map and reach the market.
       if (s.stage === "adult")
         this.pushOutOfRect(
           FIELD_CX,
@@ -3311,11 +3266,7 @@ export class ShepherdScene extends Phaser.Scene {
       }
 
       // Fade sheep when inside a building footprint
-      const insideBuilding =
-        this.marketContains(s.sprite.x, s.sprite.y) ||
-        this.shearContains(s.sprite.x, s.sprite.y) ||
-        this.fieldContains(s.sprite.x, s.sprite.y);
-      s.sprite.setAlpha(insideBuilding ? 0.25 : 1);
+      s.sprite.setAlpha(this.insideBuilding(s.sprite.x, s.sprite.y) ? 0.25 : 1);
     }
 
     // Positional overlap resolution
@@ -3474,29 +3425,8 @@ export class ShepherdScene extends Phaser.Scene {
           dog.sprite.y += (tdy / td) * (minDist - td);
         }
       }
-    this.pushOutOfRect(
-      MARKET_CX,
-      MARKET_CY,
-      MARKET_W_PX,
-      MARKET_H_PX,
-      dog.sprite,
-      dog,
-    );
-    this.pushOutOfRect(
-      SHEAR_CX,
-      SHEAR_CY,
-      SHEAR_W_PX,
-      SHEAR_H_PX,
-      dog.sprite,
-      dog,
-    );
-    this.pushOutOfRect(
-      FIELD_CX,
-      FIELD_CY,
-      FIELD_W_PX,
-      FIELD_H_PX,
-      dog.sprite,
-      dog,
+    dog.sprite.setAlpha(
+      this.insideBuilding(dog.sprite.x, dog.sprite.y) ? 0.25 : 1,
     );
   }
 
