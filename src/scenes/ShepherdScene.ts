@@ -1536,44 +1536,7 @@ export class ShepherdScene extends Phaser.Scene {
     }
   }
 
-  private pushOutOfRect(
-    cx: number,
-    cy: number,
-    w: number,
-    h: number,
-    sprite: { x: number; y: number },
-    mover?: { vx: number; vy: number },
-  ): void {
-    const leftX = cx - w / 2;
-    const rightX = cx + w / 2;
-    const topY = cy - h / 2;
-    const bottomY = cy + h / 2;
-    if (
-      sprite.x <= leftX ||
-      sprite.x >= rightX ||
-      sprite.y <= topY ||
-      sprite.y >= bottomY
-    )
-      return;
-    const leftD = sprite.x - leftX;
-    const rightD = rightX - sprite.x;
-    const topD = sprite.y - topY;
-    const bottomD = bottomY - sprite.y;
-    const minD = Math.min(leftD, rightD, topD, bottomD);
-    if (minD === leftD) {
-      sprite.x = leftX - 1;
-      if (mover) mover.vx = -Math.abs(mover.vx);
-    } else if (minD === rightD) {
-      sprite.x = rightX + 1;
-      if (mover) mover.vx = Math.abs(mover.vx);
-    } else if (minD === topD) {
-      sprite.y = topY - 1;
-      if (mover) mover.vy = -Math.abs(mover.vy);
-    } else {
-      sprite.y = bottomY + 1;
-      if (mover) mover.vy = Math.abs(mover.vy);
-    }
-  }
+
 
   private drawBuildingTarget(): void {
     this.buildingTargetGfx.clear();
@@ -3330,17 +3293,7 @@ export class ShepherdScene extends Phaser.Scene {
           }
         }
 
-      // Field containment — adults are still pushed out of the field so they
-      // leave to roam the map and reach the market.
-      if (s.stage === "adult")
-        this.pushOutOfRect(
-          FIELD_CX,
-          FIELD_CY,
-          FIELD_W_PX,
-          FIELD_H_PX,
-          s.sprite,
-          s,
-        );
+
 
       // Babies that have started growing can't leave the field until adult
       if (s.stage === "baby" && s.growthT > 0) {
