@@ -393,7 +393,7 @@ export class ShepherdScene extends Phaser.Scene {
       .setDepth(2);
     this.hudCamera.ignore(fieldWordImg);
     this.fieldCountText = this.add
-      .text(FIELD_CX, FIELD_CY + 6, "", {
+      .text(FIELD_CX, FIELD_CY - 3, `0 / ${this.fieldCapacity}`, {
         fontFamily: FONT_UI,
         fontStyle: "bold",
         fontSize: 52,
