@@ -1,6 +1,7 @@
 import * as Phaser from "phaser";
 import { FONT_BODY, FONT_UI, TEXT_RESOLUTION } from "../fonts.js";
 import mapData from "./shepherd-map.json";
+
 const HUD_TOP_H = 70;
 const HUD_BOTTOM_H = 80;
 
@@ -50,11 +51,11 @@ const TRUCK_W = 66;
 const TRUCK_H = 175;
 const TRUCK_SPEED = 320;
 const ROAD_WAYPOINTS: readonly { x: number; y: number }[] = [
-  { x: 350, y: -TRUCK_H },           // [0] spawn off-screen, top-left area
-  { x: 350, y: 250 },                 // [1] turn east
-  { x: 1500, y: 250 },               // [2] turn south (crosses through center)
-  { x: 1500, y: 1350 },              // [3] turn east
-  { x: 2850, y: 1350 },              // [4] turn south
+  { x: 350, y: -TRUCK_H }, // [0] spawn off-screen, top-left area
+  { x: 350, y: 250 }, // [1] turn east
+  { x: 1500, y: 250 }, // [2] turn south (crosses through center)
+  { x: 1500, y: 1350 }, // [3] turn east
+  { x: 2850, y: 1350 }, // [4] turn south
   { x: 2850, y: WORLD_H + TRUCK_H }, // [5] exit bottom-right area
 ];
 const DROP_SEGMENT_WP_IDX = 3; // wpIdx when truck is on the center vertical segment
@@ -86,8 +87,6 @@ let PANIC_INHERIT = 0.7;
 const TREE_COLLISION = false;
 
 const DOG_RADIUS = 20;
-const DOG_W = 34;
-const DOG_H = 16;
 
 const DOG_SPEED = 350;
 const DOG_TURN_RATE = 6.5;
@@ -343,7 +342,10 @@ export class ShepherdScene extends Phaser.Scene {
     this.fieldBorderGfx = this.add.graphics().setDepth(1.1);
     this.fieldBorderGfx.lineStyle(4, 0x3a2814, 1);
     this.fieldBorderGfx.strokeRect(
-      FIELD_CX - FIELD_W_PX / 2, FIELD_CY - FIELD_H_PX / 2, FIELD_W_PX, FIELD_H_PX,
+      FIELD_CX - FIELD_W_PX / 2,
+      FIELD_CY - FIELD_H_PX / 2,
+      FIELD_W_PX,
+      FIELD_H_PX,
     );
     this.hudCamera.ignore(this.fieldBorderGfx);
     this.fenceGfx = this.add.graphics().setDepth(1.2).setVisible(false);
@@ -469,7 +471,10 @@ export class ShepherdScene extends Phaser.Scene {
     for (const t of this.mapTrees) {
       const key = `tree${t.variant % 5}`;
       const naturalHalfWidth = t.variant >= 3 ? 64 : 32;
-      const spr = this.add.image(t.x, t.y, key).setScale(t.r / naturalHalfWidth).setDepth(2);
+      const spr = this.add
+        .image(t.x, t.y, key)
+        .setScale(t.r / naturalHalfWidth)
+        .setDepth(2);
       this.hudCamera.ignore(spr);
     }
 
@@ -484,7 +489,12 @@ export class ShepherdScene extends Phaser.Scene {
     // Alpha dog — player-controlled, starts between field and market
     const alphaStartX = (FIELD_CX + MARKET_CX) / 2;
     const alphaStartY = FIELD_CY + FIELD_H_PX / 2 + 60;
-    for (const key of ["dog_straight", "dog_bend_min", "dog_bend_mid", "dog_bend_max"]) {
+    for (const key of [
+      "dog_straight",
+      "dog_bend_min",
+      "dog_bend_mid",
+      "dog_bend_max",
+    ]) {
       if (!this.anims.exists(key)) {
         this.anims.create({
           key,
@@ -712,7 +722,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.cameras.main.ignore(this.capacityBuyBtn);
 
     this.fenceBuyBtn = this.add
-      .text(width * 0.60, btnY, "", btnStyle)
+      .text(width * 0.6, btnY, "", btnStyle)
       .setOrigin(0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
@@ -797,7 +807,8 @@ export class ShepherdScene extends Phaser.Scene {
     if (this.coins < this.speedUpgradeCost) return;
     this.coins -= this.speedUpgradeCost;
     this.speedUpgradeLevel++;
-    this.alphaDogSpeed = DOG_SPEED + this.speedUpgradeLevel * SPEED_UPGRADE_STEP;
+    this.alphaDogSpeed =
+      DOG_SPEED + this.speedUpgradeLevel * SPEED_UPGRADE_STEP;
     this.speedUpgradeCost = Math.ceil(this.speedUpgradeCost * 2);
     this.sound.play("pop");
     this.updateCoinText();
@@ -811,7 +822,10 @@ export class ShepherdScene extends Phaser.Scene {
     this.fieldBorderGfx.clear();
     this.fieldBorderGfx.lineStyle(6, 0x8b5a2b, 1);
     this.fieldBorderGfx.strokeRect(
-      FIELD_CX - FIELD_W_PX / 2, FIELD_CY - FIELD_H_PX / 2, FIELD_W_PX, FIELD_H_PX,
+      FIELD_CX - FIELD_W_PX / 2,
+      FIELD_CY - FIELD_H_PX / 2,
+      FIELD_W_PX,
+      FIELD_H_PX,
     );
     this.fenceGfx.setVisible(true);
     this.playBuildSound();
@@ -954,8 +968,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.sheepBuyBtn.setAlpha(sheepAffordable ? 1 : 0.55);
 
     const speedMaxed = this.speedUpgradeLevel >= UPGRADE_MAX_LEVEL;
-    const speedAffordable =
-      !speedMaxed && this.coins >= this.speedUpgradeCost;
+    const speedAffordable = !speedMaxed && this.coins >= this.speedUpgradeCost;
     this.speedBuyBtn.setText(
       speedMaxed ? "Speed MAX" : `+Speed $${this.speedUpgradeCost}`,
     );
@@ -1012,26 +1025,64 @@ export class ShepherdScene extends Phaser.Scene {
     const off = 40;
     return [
       // Field corners
-      { x: FIELD_CX - FIELD_W_PX / 2 - off, y: FIELD_CY - FIELD_H_PX / 2 - off },
-      { x: FIELD_CX + FIELD_W_PX / 2 + off, y: FIELD_CY - FIELD_H_PX / 2 - off },
-      { x: FIELD_CX + FIELD_W_PX / 2 + off, y: FIELD_CY + FIELD_H_PX / 2 + off },
-      { x: FIELD_CX - FIELD_W_PX / 2 - off, y: FIELD_CY + FIELD_H_PX / 2 + off },
+      {
+        x: FIELD_CX - FIELD_W_PX / 2 - off,
+        y: FIELD_CY - FIELD_H_PX / 2 - off,
+      },
+      {
+        x: FIELD_CX + FIELD_W_PX / 2 + off,
+        y: FIELD_CY - FIELD_H_PX / 2 - off,
+      },
+      {
+        x: FIELD_CX + FIELD_W_PX / 2 + off,
+        y: FIELD_CY + FIELD_H_PX / 2 + off,
+      },
+      {
+        x: FIELD_CX - FIELD_W_PX / 2 - off,
+        y: FIELD_CY + FIELD_H_PX / 2 + off,
+      },
       // Market corners
-      { x: MARKET_CX - MARKET_W_PX / 2 - off, y: MARKET_CY - MARKET_H_PX / 2 - off },
-      { x: MARKET_CX + MARKET_W_PX / 2 + off, y: MARKET_CY - MARKET_H_PX / 2 - off },
-      { x: MARKET_CX + MARKET_W_PX / 2 + off, y: MARKET_CY + MARKET_H_PX / 2 + off },
-      { x: MARKET_CX - MARKET_W_PX / 2 - off, y: MARKET_CY + MARKET_H_PX / 2 + off },
+      {
+        x: MARKET_CX - MARKET_W_PX / 2 - off,
+        y: MARKET_CY - MARKET_H_PX / 2 - off,
+      },
+      {
+        x: MARKET_CX + MARKET_W_PX / 2 + off,
+        y: MARKET_CY - MARKET_H_PX / 2 - off,
+      },
+      {
+        x: MARKET_CX + MARKET_W_PX / 2 + off,
+        y: MARKET_CY + MARKET_H_PX / 2 + off,
+      },
+      {
+        x: MARKET_CX - MARKET_W_PX / 2 - off,
+        y: MARKET_CY + MARKET_H_PX / 2 + off,
+      },
       // Shear corners
-      { x: SHEAR_CX - SHEAR_W_PX / 2 - off, y: SHEAR_CY - SHEAR_H_PX / 2 - off },
-      { x: SHEAR_CX + SHEAR_W_PX / 2 + off, y: SHEAR_CY - SHEAR_H_PX / 2 - off },
-      { x: SHEAR_CX + SHEAR_W_PX / 2 + off, y: SHEAR_CY + SHEAR_H_PX / 2 + off },
-      { x: SHEAR_CX - SHEAR_W_PX / 2 - off, y: SHEAR_CY + SHEAR_H_PX / 2 + off },
+      {
+        x: SHEAR_CX - SHEAR_W_PX / 2 - off,
+        y: SHEAR_CY - SHEAR_H_PX / 2 - off,
+      },
+      {
+        x: SHEAR_CX + SHEAR_W_PX / 2 + off,
+        y: SHEAR_CY - SHEAR_H_PX / 2 - off,
+      },
+      {
+        x: SHEAR_CX + SHEAR_W_PX / 2 + off,
+        y: SHEAR_CY + SHEAR_H_PX / 2 + off,
+      },
+      {
+        x: SHEAR_CX - SHEAR_W_PX / 2 - off,
+        y: SHEAR_CY + SHEAR_H_PX / 2 + off,
+      },
     ];
   }
 
   private isPostOccupied(px: number, py: number): boolean {
     return this.dogs.some(
-      (d) => d.mode === "guarding" && Math.hypot((d.postX ?? 0) - px, (d.postY ?? 0) - py) < 10,
+      (d) =>
+        d.mode === "guarding" &&
+        Math.hypot((d.postX ?? 0) - px, (d.postY ?? 0) - py) < 10,
     );
   }
 
@@ -1040,10 +1091,13 @@ export class ShepherdScene extends Phaser.Scene {
     this.placingGuard = true;
     for (const post of this.guardPosts()) {
       if (this.isPostOccupied(post.x, post.y)) continue;
-      const g = this.add.graphics().setDepth(50).setInteractive(
-        new Phaser.Geom.Circle(post.x, post.y, 22),
-        Phaser.Geom.Circle.Contains,
-      );
+      const g = this.add
+        .graphics()
+        .setDepth(50)
+        .setInteractive(
+          new Phaser.Geom.Circle(post.x, post.y, 22),
+          Phaser.Geom.Circle.Contains,
+        );
       this.hudCamera.ignore(g);
       const drawMarker = (hover: boolean) => {
         g.clear();
@@ -1216,7 +1270,10 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private pushOutOfRect(
-    cx: number, cy: number, w: number, h: number,
+    cx: number,
+    cy: number,
+    w: number,
+    h: number,
     sprite: { x: number; y: number },
     mover?: { vx: number; vy: number },
   ): void {
@@ -1224,7 +1281,13 @@ export class ShepherdScene extends Phaser.Scene {
     const rightX = cx + w / 2;
     const topY = cy - h / 2;
     const bottomY = cy + h / 2;
-    if (sprite.x <= leftX || sprite.x >= rightX || sprite.y <= topY || sprite.y >= bottomY) return;
+    if (
+      sprite.x <= leftX ||
+      sprite.x >= rightX ||
+      sprite.y <= topY ||
+      sprite.y >= bottomY
+    )
+      return;
     const leftD = sprite.x - leftX;
     const rightD = rightX - sprite.x;
     const topD = sprite.y - topY;
@@ -1256,7 +1319,9 @@ export class ShepherdScene extends Phaser.Scene {
     if (this.sheep.length >= MAX_SHEEP) return;
     this.coins -= this.buySheepCost;
     const TRUCK_CAPACITY = 10;
-    const arriving = this.trucks.findLast((t) => t.state === "arriving" && t.sheepCount < TRUCK_CAPACITY);
+    const arriving = this.trucks.findLast(
+      (t) => t.state === "arriving" && t.sheepCount < TRUCK_CAPACITY,
+    );
     if (arriving) {
       arriving.sheepCount++;
     } else {
@@ -1284,8 +1349,13 @@ export class ShepherdScene extends Phaser.Scene {
           const waveFreq = Math.PI / 900;
           const blendHalf = 96;
           const boundary = baseBoundary + Math.cos(yy * waveFreq) * waveAmp;
-          const dist = (xx + tile / 2) - boundary;
-          const highProb = dist < -blendHalf ? 1 : dist > blendHalf ? 0 : (blendHalf - dist) / (blendHalf * 2);
+          const dist = xx + tile / 2 - boundary;
+          const highProb =
+            dist < -blendHalf
+              ? 1
+              : dist > blendHalf
+                ? 0
+                : (blendHalf - dist) / (blendHalf * 2);
           const pool = Math.random() < highProb ? highKeys : lowKeys;
           key = pool[Math.floor(Math.random() * pool.length)];
         } else if (this.grassMode === 1) {
@@ -1294,13 +1364,16 @@ export class ShepherdScene extends Phaser.Scene {
           key = all[Math.floor(Math.random() * all.length)];
         } else {
           // Noise: two-frequency sine sum drives high vs low probability
-          const n = Math.sin(xx * 0.013 + Math.cos(yy * 0.009 + 1.3))
-                  + Math.sin(yy * 0.011 + Math.cos(xx * 0.007 + 0.7));
+          const n =
+            Math.sin(xx * 0.013 + Math.cos(yy * 0.009 + 1.3)) +
+            Math.sin(yy * 0.011 + Math.cos(xx * 0.007 + 0.7));
           const t = (n + 2) / 4;
           const pool = Math.random() < t ? highKeys : lowKeys;
           key = pool[Math.floor(Math.random() * pool.length)];
         }
-        this.grassLayer.add(this.add.image(xx, yy, key).setOrigin(0, 0).setScale(2.0));
+        this.grassLayer.add(
+          this.add.image(xx, yy, key).setOrigin(0, 0).setScale(2.0),
+        );
       }
     }
     this.hudCamera.ignore(this.grassLayer);
@@ -1310,7 +1383,7 @@ export class ShepherdScene extends Phaser.Scene {
     const gfx = this.add.graphics().setDepth(0.5);
     this.hudCamera.ignore(gfx);
 
-    const halfOuter = ROAD_W_PX / 2;              // 70 — full shoulder half-width
+    const halfOuter = ROAD_W_PX / 2; // 70 — full shoulder half-width
     const halfPaved = Math.round(ROAD_W_PX * 0.28); // ~39 — gray center half-width
 
     // Pass 1 — ALL shoulder fills (tan) before any paved, so paved always wins
@@ -1341,14 +1414,29 @@ export class ShepherdScene extends Phaser.Scene {
       const p1 = ROAD_WAYPOINTS[i + 1];
       const horiz = p0.y === p1.y;
       if (horiz) {
-        gfx.fillRect(Math.min(p0.x, p1.x), p0.y - halfPaved, Math.abs(p1.x - p0.x), halfPaved * 2);
+        gfx.fillRect(
+          Math.min(p0.x, p1.x),
+          p0.y - halfPaved,
+          Math.abs(p1.x - p0.x),
+          halfPaved * 2,
+        );
       } else {
-        gfx.fillRect(p0.x - halfPaved, Math.min(p0.y, p1.y), halfPaved * 2, Math.abs(p1.y - p0.y));
+        gfx.fillRect(
+          p0.x - halfPaved,
+          Math.min(p0.y, p1.y),
+          halfPaved * 2,
+          Math.abs(p1.y - p0.y),
+        );
       }
     }
     for (let i = 1; i + 1 < ROAD_WAYPOINTS.length; i++) {
       const p = ROAD_WAYPOINTS[i];
-      gfx.fillRect(p.x - halfPaved, p.y - halfPaved, halfPaved * 2, halfPaved * 2);
+      gfx.fillRect(
+        p.x - halfPaved,
+        p.y - halfPaved,
+        halfPaved * 2,
+        halfPaved * 2,
+      );
     }
 
     // Pass 3 — rough edge blobs along segments (skipping ±halfOuter from ends)
@@ -1384,7 +1472,12 @@ export class ShepherdScene extends Phaser.Scene {
     // Pass 3b — blobs on the 4 outer edges of each corner, same style as segments
     for (let i = 1; i + 1 < ROAD_WAYPOINTS.length; i++) {
       const p = ROAD_WAYPOINTS[i];
-      const edgeSigns: [number, "h" | "v"][] = [[-1, "h"], [1, "h"], [-1, "v"], [1, "v"]];
+      const edgeSigns: [number, "h" | "v"][] = [
+        [-1, "h"],
+        [1, "h"],
+        [-1, "v"],
+        [1, "v"],
+      ];
       const count = Math.floor((halfOuter * 2) / 20);
       for (const [sign, axis] of edgeSigns) {
         for (let j = 0; j < count; j++) {
@@ -1410,14 +1503,14 @@ export class ShepherdScene extends Phaser.Scene {
       .setOrigin(0.5, 0.35)
       .setDisplaySize(TRUCK_W, TRUCK_H)
       .setScale(2.0)
-      .setDepth(1.8
-
-      );
+      .setDepth(1.8);
     this.hudCamera.ignore(sprite);
-    const initAngle = Math.atan2(
-      ROAD_WAYPOINTS[1].y - ROAD_WAYPOINTS[0].y,
-      ROAD_WAYPOINTS[1].x - ROAD_WAYPOINTS[0].x,
-    ) + Math.PI / 2;
+    const initAngle =
+      Math.atan2(
+        ROAD_WAYPOINTS[1].y - ROAD_WAYPOINTS[0].y,
+        ROAD_WAYPOINTS[1].x - ROAD_WAYPOINTS[0].x,
+      ) +
+      Math.PI / 2;
     const t: Truck = {
       sprite,
       wpIdx: 1,
@@ -1436,7 +1529,8 @@ export class ShepherdScene extends Phaser.Scene {
     }
     if (this.truckSfx?.isPlaying) {
       // Cancel any mid-fade and restore volume — another truck is on the road
-      (this.truckSfx as Phaser.Sound.BaseSound & { volume: number }).volume = 0.7;
+      (this.truckSfx as Phaser.Sound.BaseSound & { volume: number }).volume =
+        0.7;
     } else {
       this.sound.removeByKey("truck");
       this.truckSfx = this.sound.add("truck", { loop: true, volume: 0.7 });
@@ -1480,7 +1574,10 @@ export class ShepherdScene extends Phaser.Scene {
           this.sound.play("sheep-bleat", { volume: 0.25 });
           t.sheepDropped++;
         }
-        if (t.sheepDropped >= t.sheepCount && t.dropTimer >= 0.2 + t.sheepCount * DROP_INTERVAL + 0.2) {
+        if (
+          t.sheepDropped >= t.sheepCount &&
+          t.dropTimer >= 0.2 + t.sheepCount * DROP_INTERVAL + 0.2
+        ) {
           t.state = "leaving";
         }
       } else if (t.wpIdx >= ROAD_WAYPOINTS.length) {
@@ -1501,13 +1598,20 @@ export class ShepherdScene extends Phaser.Scene {
           for (const other of this.trucks) {
             if (other === t || other.state === "leaving") continue;
             if (other.state === "dropping") {
-              maxY = Math.min(maxY, DROP_Y - other.sprite.displayHeight - truckGap);
+              maxY = Math.min(
+                maxY,
+                DROP_Y - other.sprite.displayHeight - truckGap,
+              );
             } else if (other.wpIdx === DROP_SEGMENT_WP_IDX) {
               const otherIdx = this.trucks.indexOf(other);
-              const ahead = other.sprite.y > t.sprite.y ||
+              const ahead =
+                other.sprite.y > t.sprite.y ||
                 (other.sprite.y === t.sprite.y && otherIdx < myIdx);
               if (ahead) {
-                maxY = Math.min(maxY, other.sprite.y - other.sprite.displayHeight - truckGap);
+                maxY = Math.min(
+                  maxY,
+                  other.sprite.y - other.sprite.displayHeight - truckGap,
+                );
               }
             }
           }
@@ -1522,12 +1626,19 @@ export class ShepherdScene extends Phaser.Scene {
           // Generic waypoint following
           // Begin rotating early so the turn is visually centered on the corner:
           // start when the truck is half a turn-arc away from the waypoint.
-          const anticipateDist = (Math.PI / 2) / TRUCK_TURN_RATE * TRUCK_SPEED * 0.5;
+          const anticipateDist =
+            (Math.PI / 2 / TRUCK_TURN_RATE) * TRUCK_SPEED * 0.5;
           const nextAfterCorner = t.wpIdx + 1;
-          if (nextAfterCorner < ROAD_WAYPOINTS.length && distToWp <= anticipateDist) {
+          if (
+            nextAfterCorner < ROAD_WAYPOINTS.length &&
+            distToWp <= anticipateDist
+          ) {
             const corner = ROAD_WAYPOINTS[t.wpIdx];
             const afterCorner = ROAD_WAYPOINTS[nextAfterCorner];
-            const dir = Math.atan2(afterCorner.y - corner.y, afterCorner.x - corner.x);
+            const dir = Math.atan2(
+              afterCorner.y - corner.y,
+              afterCorner.x - corner.x,
+            );
             t.targetAngle = dir + Math.PI / 2;
           }
 
@@ -1541,7 +1652,10 @@ export class ShepherdScene extends Phaser.Scene {
             if (gap < t.sprite.displayHeight + truckGap) {
               // Too close — skip movement this frame
             } else {
-              const clampedStep = Math.min(step, gap - t.sprite.displayHeight - truckGap);
+              const clampedStep = Math.min(
+                step,
+                gap - t.sprite.displayHeight - truckGap,
+              );
               if (distToWp <= clampedStep) {
                 t.sprite.x = target.x;
                 t.sprite.y = target.y;
@@ -1572,7 +1686,10 @@ export class ShepherdScene extends Phaser.Scene {
       let diff = t.targetAngle - t.angle;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
-      t.angle += Math.max(-TRUCK_TURN_RATE * dt, Math.min(TRUCK_TURN_RATE * dt, diff));
+      t.angle += Math.max(
+        -TRUCK_TURN_RATE * dt,
+        Math.min(TRUCK_TURN_RATE * dt, diff),
+      );
       t.sprite.setRotation(t.angle);
     }
     if (
@@ -1863,9 +1980,15 @@ export class ShepherdScene extends Phaser.Scene {
           Math.min(DOG_TURN_RATE * dt, diff),
         );
       }
-      this.updateDogAnim(this.alphaDog, this.alphaDog.angle - prevAlphaAngle, dt);
+      this.updateDogAnim(
+        this.alphaDog,
+        this.alphaDog.angle - prevAlphaAngle,
+        dt,
+      );
       const speed =
-        desiredSpd > 2 ? this.alphaDogSpeed * arrivalScale * Math.max(0, Math.cos(diff)) : 0;
+        desiredSpd > 2
+          ? this.alphaDogSpeed * arrivalScale * Math.max(0, Math.cos(diff))
+          : 0;
       this.alphaDog.vx = Math.cos(this.alphaDog.angle) * speed;
       this.alphaDog.vy = Math.sin(this.alphaDog.angle) * speed;
       this.alphaDog.sprite.x += this.alphaDog.vx * dt;
@@ -1892,9 +2015,30 @@ export class ShepherdScene extends Phaser.Scene {
             this.alphaDog.sprite.y += (tdy / td) * (minDist - td);
           }
         }
-      this.pushOutOfRect(MARKET_CX, MARKET_CY, MARKET_W_PX, MARKET_H_PX, this.alphaDog.sprite, this.alphaDog);
-      this.pushOutOfRect(SHEAR_CX, SHEAR_CY, SHEAR_W_PX, SHEAR_H_PX, this.alphaDog.sprite, this.alphaDog);
-      this.pushOutOfRect(FIELD_CX, FIELD_CY, FIELD_W_PX, FIELD_H_PX, this.alphaDog.sprite, this.alphaDog);
+      this.pushOutOfRect(
+        MARKET_CX,
+        MARKET_CY,
+        MARKET_W_PX,
+        MARKET_H_PX,
+        this.alphaDog.sprite,
+        this.alphaDog,
+      );
+      this.pushOutOfRect(
+        SHEAR_CX,
+        SHEAR_CY,
+        SHEAR_W_PX,
+        SHEAR_H_PX,
+        this.alphaDog.sprite,
+        this.alphaDog,
+      );
+      this.pushOutOfRect(
+        FIELD_CX,
+        FIELD_CY,
+        FIELD_W_PX,
+        FIELD_H_PX,
+        this.alphaDog.sprite,
+        this.alphaDog,
+      );
     }
 
     // Update facing targets once per step
@@ -1918,7 +2062,6 @@ export class ShepherdScene extends Phaser.Scene {
         dog.targetWolf = null;
       }
     }
-
 
     // --- Dog AI ---
     const followingDogs = this.dogs.filter((d) => d.mode === "following");
@@ -2222,15 +2365,23 @@ export class ShepherdScene extends Phaser.Scene {
         // Steer away from building footprints
         for (const [cx, cy, w, h] of [
           [MARKET_CX, MARKET_CY, MARKET_W_PX, MARKET_H_PX],
-          [SHEAR_CX,  SHEAR_CY,  SHEAR_W_PX,  SHEAR_H_PX],
+          [SHEAR_CX, SHEAR_CY, SHEAR_W_PX, SHEAR_H_PX],
         ] as [number, number, number, number][]) {
-          const nearX = Math.max(cx - w / 2, Math.min(cx + w / 2, wolf.sprite.x));
-          const nearY = Math.max(cy - h / 2, Math.min(cy + h / 2, wolf.sprite.y));
+          const nearX = Math.max(
+            cx - w / 2,
+            Math.min(cx + w / 2, wolf.sprite.x),
+          );
+          const nearY = Math.max(
+            cy - h / 2,
+            Math.min(cy + h / 2, wolf.sprite.y),
+          );
           const repX = wolf.sprite.x - nearX;
           const repY = wolf.sprite.y - nearY;
           const dist = Math.hypot(repX, repY);
           if (dist < WOLF_BUILDING_AVOIDANCE_RADIUS && dist > 0.01) {
-            const strength = (1 - dist / WOLF_BUILDING_AVOIDANCE_RADIUS) * WOLF_BUILDING_AVOIDANCE_FORCE;
+            const strength =
+              (1 - dist / WOLF_BUILDING_AVOIDANCE_RADIUS) *
+              WOLF_BUILDING_AVOIDANCE_FORCE;
             desiredVx += (repX / dist) * strength;
             desiredVy += (repY / dist) * strength;
           }
@@ -2257,9 +2408,25 @@ export class ShepherdScene extends Phaser.Scene {
       // Field fence — with a fence, wolves can't enter. Push any wolf inside
       // the field out to the nearest edge and reflect its velocity.
       if (this.fenceBuilt) this.pushOutOfField(wolf.sprite, wolf);
-      this.pushOutOfRect(MARKET_CX, MARKET_CY, MARKET_W_PX, MARKET_H_PX, wolf.sprite, wolf);
-      this.pushOutOfRect(SHEAR_CX, SHEAR_CY, SHEAR_W_PX, SHEAR_H_PX, wolf.sprite, wolf);
-      wolf.sprite.setAlpha(this.fieldContains(wolf.sprite.x, wolf.sprite.y) ? 0.25 : 1);
+      this.pushOutOfRect(
+        MARKET_CX,
+        MARKET_CY,
+        MARKET_W_PX,
+        MARKET_H_PX,
+        wolf.sprite,
+        wolf,
+      );
+      this.pushOutOfRect(
+        SHEAR_CX,
+        SHEAR_CY,
+        SHEAR_W_PX,
+        SHEAR_H_PX,
+        wolf.sprite,
+        wolf,
+      );
+      wolf.sprite.setAlpha(
+        this.fieldContains(wolf.sprite.x, wolf.sprite.y) ? 0.25 : 1,
+      );
     }
 
     // --- Sheep behavior ---
@@ -2376,9 +2543,9 @@ export class ShepherdScene extends Phaser.Scene {
         s.grazing = alignN === 0 ? !s.grazing : false;
         s.modeT = s.grazing
           ? SHEEP_GRAZE_MIN_SEC +
-          Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
+            Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
           : SHEEP_WALK_MIN_SEC +
-          Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
+            Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
         if (!s.grazing) s.wanderAngle = Math.random() * Math.PI * 2;
       }
       if (!s.grazing && alignN === 0) {
@@ -2463,11 +2630,32 @@ export class ShepherdScene extends Phaser.Scene {
       // Building collision — push sheep out of building footprints unless they
       // legitimately belong inside (waiting to sell, shearing, growing)
       if (!s.waiting)
-        this.pushOutOfRect(MARKET_CX, MARKET_CY, MARKET_W_PX, MARKET_H_PX, s.sprite, s);
+        this.pushOutOfRect(
+          MARKET_CX,
+          MARKET_CY,
+          MARKET_W_PX,
+          MARKET_H_PX,
+          s.sprite,
+          s,
+        );
       if (s.shearT === 0)
-        this.pushOutOfRect(SHEAR_CX, SHEAR_CY, SHEAR_W_PX, SHEAR_H_PX, s.sprite, s);
+        this.pushOutOfRect(
+          SHEAR_CX,
+          SHEAR_CY,
+          SHEAR_W_PX,
+          SHEAR_H_PX,
+          s.sprite,
+          s,
+        );
       if (s.stage === "adult")
-        this.pushOutOfRect(FIELD_CX, FIELD_CY, FIELD_W_PX, FIELD_H_PX, s.sprite, s);
+        this.pushOutOfRect(
+          FIELD_CX,
+          FIELD_CY,
+          FIELD_W_PX,
+          FIELD_H_PX,
+          s.sprite,
+          s,
+        );
 
       // Babies that have started growing can't leave the field until adult
       if (s.stage === "baby" && s.growthT > 0) {
@@ -2693,9 +2881,30 @@ export class ShepherdScene extends Phaser.Scene {
           dog.sprite.y += (tdy / td) * (minDist - td);
         }
       }
-    this.pushOutOfRect(MARKET_CX, MARKET_CY, MARKET_W_PX, MARKET_H_PX, dog.sprite, dog);
-    this.pushOutOfRect(SHEAR_CX, SHEAR_CY, SHEAR_W_PX, SHEAR_H_PX, dog.sprite, dog);
-    this.pushOutOfRect(FIELD_CX, FIELD_CY, FIELD_W_PX, FIELD_H_PX, dog.sprite, dog);
+    this.pushOutOfRect(
+      MARKET_CX,
+      MARKET_CY,
+      MARKET_W_PX,
+      MARKET_H_PX,
+      dog.sprite,
+      dog,
+    );
+    this.pushOutOfRect(
+      SHEAR_CX,
+      SHEAR_CY,
+      SHEAR_W_PX,
+      SHEAR_H_PX,
+      dog.sprite,
+      dog,
+    );
+    this.pushOutOfRect(
+      FIELD_CX,
+      FIELD_CY,
+      FIELD_W_PX,
+      FIELD_H_PX,
+      dog.sprite,
+      dog,
+    );
   }
 
   private findFacingWolf(): Wolf | null {
@@ -2889,97 +3098,97 @@ export class ShepherdScene extends Phaser.Scene {
       max: number;
       step: number;
     }> = [
-        {
-          label: "Max Speed",
-          get: () => SHEEP_MAX_SPEED,
-          set: (v) => {
-            SHEEP_MAX_SPEED = v;
-          },
-          min: 0,
-          max: 800,
-          step: 5,
+      {
+        label: "Max Speed",
+        get: () => SHEEP_MAX_SPEED,
+        set: (v) => {
+          SHEEP_MAX_SPEED = v;
         },
-        {
-          label: "Damping",
-          get: () => SHEEP_DAMPING,
-          set: (v) => {
-            SHEEP_DAMPING = v;
-          },
-          min: 0.8,
-          max: 0.999,
-          step: 0.001,
+        min: 0,
+        max: 800,
+        step: 5,
+      },
+      {
+        label: "Damping",
+        get: () => SHEEP_DAMPING,
+        set: (v) => {
+          SHEEP_DAMPING = v;
         },
-        {
-          label: "Wander Force",
-          get: () => SHEEP_WANDER_FORCE,
-          set: (v) => {
-            SHEEP_WANDER_FORCE = v;
-          },
-          min: 0,
-          max: 400,
-          step: 5,
+        min: 0.8,
+        max: 0.999,
+        step: 0.001,
+      },
+      {
+        label: "Wander Force",
+        get: () => SHEEP_WANDER_FORCE,
+        set: (v) => {
+          SHEEP_WANDER_FORCE = v;
         },
-        {
-          label: "Cohesion Force",
-          get: () => SHEEP_COHESION_FORCE,
-          set: (v) => {
-            SHEEP_COHESION_FORCE = v;
-          },
-          min: 0,
-          max: 200,
-          step: 2,
+        min: 0,
+        max: 400,
+        step: 5,
+      },
+      {
+        label: "Cohesion Force",
+        get: () => SHEEP_COHESION_FORCE,
+        set: (v) => {
+          SHEEP_COHESION_FORCE = v;
         },
-        {
-          label: "Alignment Force",
-          get: () => ALIGNMENT_FORCE,
-          set: (v) => {
-            ALIGNMENT_FORCE = v;
-          },
-          min: 0,
-          max: 300,
-          step: 5,
+        min: 0,
+        max: 200,
+        step: 2,
+      },
+      {
+        label: "Alignment Force",
+        get: () => ALIGNMENT_FORCE,
+        set: (v) => {
+          ALIGNMENT_FORCE = v;
         },
-        {
-          label: "Flee Force",
-          get: () => FLEE_FORCE,
-          set: (v) => {
-            FLEE_FORCE = v;
-          },
-          min: 0,
-          max: 1000,
-          step: 10,
+        min: 0,
+        max: 300,
+        step: 5,
+      },
+      {
+        label: "Flee Force",
+        get: () => FLEE_FORCE,
+        set: (v) => {
+          FLEE_FORCE = v;
         },
-        {
-          label: "Fear Radius",
-          get: () => FEAR_RADIUS,
-          set: (v) => {
-            FEAR_RADIUS = v;
-          },
-          min: 0,
-          max: 500,
-          step: 5,
+        min: 0,
+        max: 1000,
+        step: 10,
+      },
+      {
+        label: "Fear Radius",
+        get: () => FEAR_RADIUS,
+        set: (v) => {
+          FEAR_RADIUS = v;
         },
-        {
-          label: "Panic Inherit",
-          get: () => PANIC_INHERIT,
-          set: (v) => {
-            PANIC_INHERIT = v;
-          },
-          min: 0,
-          max: 1,
-          step: 0.05,
+        min: 0,
+        max: 500,
+        step: 5,
+      },
+      {
+        label: "Panic Inherit",
+        get: () => PANIC_INHERIT,
+        set: (v) => {
+          PANIC_INHERIT = v;
         },
-        {
-          label: "Turn Rate",
-          get: () => SHEEP_TURN_RATE,
-          set: (v) => {
-            SHEEP_TURN_RATE = v;
-          },
-          min: 0.5,
-          max: 15,
-          step: 0.5,
+        min: 0,
+        max: 1,
+        step: 0.05,
+      },
+      {
+        label: "Turn Rate",
+        get: () => SHEEP_TURN_RATE,
+        set: (v) => {
+          SHEEP_TURN_RATE = v;
         },
-      ];
+        min: 0.5,
+        max: 15,
+        step: 0.5,
+      },
+    ];
 
     for (const cfg of params) {
       const row = document.createElement("div");
@@ -3075,7 +3284,10 @@ export class ShepherdScene extends Phaser.Scene {
           }
         }
         if (!treeFound) {
-          this.editorTreeRadiusPreview = Math.random() * (this.editorTreeRadiusMax - this.editorTreeRadiusMin) + this.editorTreeRadiusMin;
+          this.editorTreeRadiusPreview =
+            Math.random() *
+              (this.editorTreeRadiusMax - this.editorTreeRadiusMin) +
+            this.editorTreeRadiusMin;
           return;
         }
       }
@@ -3083,7 +3295,9 @@ export class ShepherdScene extends Phaser.Scene {
       return;
     }
     if (this.editorTool === "tree") {
-      const r = Math.random() * (this.editorTreeRadiusMax - this.editorTreeRadiusMin) + this.editorTreeRadiusMin;
+      const r =
+        Math.random() * (this.editorTreeRadiusMax - this.editorTreeRadiusMin) +
+        this.editorTreeRadiusMin;
       this.editorTreeRadiusPreview = r;
       this.mapTrees.push({
         x: Math.round(wp.x),
@@ -3102,13 +3316,19 @@ export class ShepherdScene extends Phaser.Scene {
     if (this.editorTool === "tree") {
       for (let i = 0; i < this.mapTrees.length; i++) {
         const d = Math.hypot(x - this.mapTrees[i].x, y - this.mapTrees[i].y);
-        if (d < bestDist) { bestDist = d; bestIdx = i; }
+        if (d < bestDist) {
+          bestDist = d;
+          bestIdx = i;
+        }
       }
       if (bestIdx >= 0) this.mapTrees.splice(bestIdx, 1);
     } else {
       for (let i = 0; i < this.mapSpawns.length; i++) {
         const d = Math.hypot(x - this.mapSpawns[i].x, y - this.mapSpawns[i].y);
-        if (d < bestDist) { bestDist = d; bestIdx = i; }
+        if (d < bestDist) {
+          bestDist = d;
+          bestIdx = i;
+        }
       }
       if (bestIdx >= 0) this.mapSpawns.splice(bestIdx, 1);
     }
@@ -3167,10 +3387,12 @@ export class ShepherdScene extends Phaser.Scene {
     radiusLabel.appendChild(rval);
 
     const rangeContainer = document.createElement("div");
-    rangeContainer.style.cssText = "position:relative;height:20px;margin-top:5px;";
+    rangeContainer.style.cssText =
+      "position:relative;height:20px;margin-top:5px;";
 
     const track = document.createElement("div");
-    track.style.cssText = "position:absolute;width:100%;height:4px;background:#446;top:8px;border-radius:2px;";
+    track.style.cssText =
+      "position:absolute;width:100%;height:4px;background:#446;top:8px;border-radius:2px;";
     rangeContainer.appendChild(track);
 
     const knobStyle = document.createElement("style");
@@ -3203,11 +3425,15 @@ export class ShepherdScene extends Phaser.Scene {
       knob.min = "20";
       knob.max = "150";
       knob.step = "5";
-      knob.value = isMin ? String(this.editorTreeRadiusMin) : String(this.editorTreeRadiusMax);
+      knob.value = isMin
+        ? String(this.editorTreeRadiusMin)
+        : String(this.editorTreeRadiusMax);
       knob.className = "dual-range-knob";
       knob.style.cssText =
         "position:absolute;width:100%;appearance:none;background:none;outline:none;margin:0;padding:0;" +
-        "top:0;left:0;z-index:" + (isMin ? "3" : "2") + ";";
+        "top:0;left:0;z-index:" +
+        (isMin ? "3" : "2") +
+        ";";
 
       knob.addEventListener("input", () => {
         const v = parseFloat(knob.value);
@@ -3228,7 +3454,6 @@ export class ShepherdScene extends Phaser.Scene {
     const maxKnob = createKnob(false);
     rangeContainer.appendChild(minKnob);
     rangeContainer.appendChild(maxKnob);
-
 
     const radiusRow = document.createElement("div");
     radiusRow.appendChild(radiusLabel);
