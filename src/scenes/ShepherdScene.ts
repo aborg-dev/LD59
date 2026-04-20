@@ -489,21 +489,20 @@ export class ShepherdScene extends Phaser.Scene {
     // Alpha dog — player-controlled, starts between field and market
     const alphaStartX = (FIELD_CX + MARKET_CX) / 2;
     const alphaStartY = FIELD_CY + FIELD_H_PX / 2 + 60;
-    for (const key of [
-      "dog_straight",
-      "dog_bend_min",
-      "dog_bend_mid",
-      "dog_bend_max",
-    ]) {
-      if (!this.anims.exists(key)) {
-        this.anims.create({
-          key,
-          frames: this.anims.generateFrameNumbers(key, { start: 0, end: 11 }),
-          frameRate: 12,
-          repeat: -1,
-        });
-      }
-    }
+
+    this.anims.create({
+      key: "dog",
+      frames: this.anims.generateFrameNumbers("dog", { start: 0, end: 11 }),
+      frameRate: 25,
+      repeat: -1,
+    });
+
+    this.anims.create({
+      key: "dog_small",
+      frames: this.anims.generateFrameNumbers("dog_small", { start: 0, end: 11 }),
+      frameRate: 25,
+      repeat: -1,
+    });
 
     this.anims.create({
       key: "wolf",
@@ -513,10 +512,10 @@ export class ShepherdScene extends Phaser.Scene {
     });
 
     const alphaSprite = this.add
-      .sprite(alphaStartX, alphaStartY, "dog_straight")
+      .sprite(alphaStartX, alphaStartY, "dog")
       .setOrigin(0.5, 0.25)
       .setDepth(1.8)
-      .play("dog_straight");
+      .play("dog");
     this.hudCamera.ignore(alphaSprite);
     this.alphaDog = {
       sprite: alphaSprite,
@@ -752,12 +751,10 @@ export class ShepherdScene extends Phaser.Scene {
 
   private spawnDog(x: number, y: number): void {
     const sprite = this.add
-      .sprite(x, y, "dog_straight")
+      .sprite(x, y, "dog_small")
       .setOrigin(0.5, 0.25)
       .setDepth(1.7)
-      .setScale(0.75)
-      .setTint(0xdddddd)
-      .play("dog_straight");
+      .play("dog_small");
     this.hudCamera.ignore(sprite);
 
     this.dogs.push({
@@ -1141,12 +1138,10 @@ export class ShepherdScene extends Phaser.Scene {
 
   private spawnGuardDog(x: number, y: number): void {
     const sprite = this.add
-      .sprite(x, y, "dog_straight")
+      .sprite(x, y, "dog_small")
       .setOrigin(0.5, 0.25)
       .setDepth(1.7)
-      .setScale(0.75)
-      .setTint(0xddaaff)
-      .play("dog_straight");
+      .play("dog_small");
     this.hudCamera.ignore(sprite);
     this.dogs.push({
       sprite,
@@ -1977,7 +1972,6 @@ export class ShepherdScene extends Phaser.Scene {
       }
       const desiredSpd = Math.hypot(desiredVx, desiredVy);
       let diff = 0;
-      const prevAlphaAngle = this.alphaDog.angle;
       if (desiredSpd > 2) {
         diff = Math.atan2(desiredVy, desiredVx) - this.alphaDog.angle;
         while (diff > Math.PI) diff -= Math.PI * 2;
@@ -1987,11 +1981,7 @@ export class ShepherdScene extends Phaser.Scene {
           Math.min(DOG_TURN_RATE * dt, diff),
         );
       }
-      this.updateDogAnim(
-        this.alphaDog,
-        this.alphaDog.angle - prevAlphaAngle,
-        dt,
-      );
+
       const speed =
         desiredSpd > 2
           ? this.alphaDogSpeed * arrivalScale * Math.max(0, Math.cos(diff))
@@ -2823,24 +2813,6 @@ export class ShepherdScene extends Phaser.Scene {
     }
   }
 
-  private updateDogAnim(dog: Dog, angleDelta: number, dt: number): void {
-    const rawVel = dt > 0 ? angleDelta / dt : 0; // signed rad/s
-    const alpha = 1 - Math.exp(-dt / 0.12); // ~0.12s time constant
-    dog.smoothedAngularVel += (rawVel - dog.smoothedAngularVel) * alpha;
-    const r = Math.abs(dog.smoothedAngularVel);
-    let key: string;
-    if (r < DOG_TURN_RATE * 0.2) key = "dog_straight";
-    else if (r < DOG_TURN_RATE * 0.5) key = "dog_bend_min";
-    else if (r < DOG_TURN_RATE * 0.8) key = "dog_bend_mid";
-    else key = "dog_bend_max";
-    if (dog.sprite.anims.currentAnim?.key !== key) {
-      const progress = dog.sprite.anims.getProgress();
-      dog.sprite.play(key, true);
-      dog.sprite.anims.setProgress(progress);
-    }
-    dog.sprite.setFlipX(dog.smoothedAngularVel < 0);
-  }
-
   private moveDog(
     dog: Dog,
     desiredVx: number,
@@ -2848,7 +2820,6 @@ export class ShepherdScene extends Phaser.Scene {
     dt: number,
   ): void {
     const desiredSpd = Math.hypot(desiredVx, desiredVy);
-    const prevAngle = dog.angle;
     if (desiredSpd > 2) {
       let diff = Math.atan2(desiredVy, desiredVx) - dog.angle;
       while (diff > Math.PI) diff -= Math.PI * 2;
@@ -2863,7 +2834,6 @@ export class ShepherdScene extends Phaser.Scene {
       dog.vx = 0;
       dog.vy = 0;
     }
-    this.updateDogAnim(dog, dog.angle - prevAngle, dt);
     dog.sprite.x += dog.vx * dt;
     dog.sprite.y += dog.vy * dt;
     dog.sprite.rotation = dog.angle + Math.PI / 2;

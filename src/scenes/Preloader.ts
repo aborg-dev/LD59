@@ -46,7 +46,7 @@ export class Preloader extends Scene {
     this.load.image("farm", "2131_Farm.png");
     this.load.image("market", "2228_AnotherOne.png");
     this.load.image("shear", "2222_Sheering.png");
-    this.load.image("truck", "Truck_Less-Lines.png");
+    this.load.image("truck", "Truck_No_lines.png");
     this.load.image("grassLow1", "1723_Gras_LowDetail_1.png");
     this.load.image("grassLow2", "1723_Gras_LowDetail_2.png");
     this.load.image("grassLow3", "1723_Gras_LowDetail_3.png");
@@ -62,21 +62,13 @@ export class Preloader extends Scene {
       frameWidth: 30,
       frameHeight: 110,
     });
-    this.load.spritesheet("dog_straight", "sprite_dog_straigt.png", {
-      frameWidth: 110,
+    this.load.spritesheet("dog", "sprite_dog.png", {
+      frameWidth: 40,
       frameHeight: 110,
     });
-    this.load.spritesheet("dog_bend_min", "sprite_dog_bending_minimum.png", {
-      frameWidth: 110,
-      frameHeight: 110,
-    });
-    this.load.spritesheet("dog_bend_mid", "dog_bending_medium.png", {
-      frameWidth: 110,
-      frameHeight: 110,
-    });
-    this.load.spritesheet("dog_bend_max", "dog_bending_maximum.png", {
-      frameWidth: 110,
-      frameHeight: 110,
+    this.load.spritesheet("dog_small", "sprite_dog_small.png", {
+      frameWidth: 34,
+      frameHeight: 93,
     });
   }
 
