@@ -151,7 +151,10 @@ export class MainMenu extends Scene {
         Math.random() < 0.5
           ? Math.random() * WORLD_H * 0.35
           : WORLD_H * 0.65 + Math.random() * WORLD_H * 0.35;
-      this.add.image(x, y, `tree${variant}`).setScale(r / hw).setDepth(2);
+      this.add
+        .image(x, y, `tree${variant}`)
+        .setScale(r / hw)
+        .setDepth(2);
     }
   }
 
@@ -204,7 +207,8 @@ export class MainMenu extends Scene {
     // Dog speed variation (always positive)
     this.speedTimer -= dt;
     if (this.speedTimer <= 0) {
-      this.targetSpeed = DOG_SPEED_MIN + Math.random() * (DOG_SPEED_MAX - DOG_SPEED_MIN);
+      this.targetSpeed =
+        DOG_SPEED_MIN + Math.random() * (DOG_SPEED_MAX - DOG_SPEED_MIN);
       this.speedTimer = 2 + Math.random() * 3;
     }
 
@@ -215,7 +219,10 @@ export class MainMenu extends Scene {
     this.dogSprite.x += this.dogVx * dt;
 
     const scrollX = this.cameras.main.scrollX;
-    this.dogSprite.x = Math.max(scrollX + 150, Math.min(this.dogSprite.x, scrollX + width - 150));
+    this.dogSprite.x = Math.max(
+      scrollX + 150,
+      Math.min(this.dogSprite.x, scrollX + width - 150),
+    );
     this.dogSprite.anims.timeScale = Math.max(0.1, this.dogVx / ANIM_SPEED_REF);
 
     // Spawn wolves and sheep
@@ -236,7 +243,9 @@ export class MainMenu extends Scene {
     const cam = this.cameras.main.worldView;
     for (let i = this.critters.length - 1; i >= 0; i--) {
       const c = this.critters[i];
-      c.vy = c.baseVy + Math.sin(t * c.wiggleFreq * Math.PI * 2 + c.wigglePhase) * c.wiggleAmp;
+      c.vy =
+        c.baseVy +
+        Math.sin(t * c.wiggleFreq * Math.PI * 2 + c.wigglePhase) * c.wiggleAmp;
       c.sprite.x += c.vx * dt;
       c.sprite.y = Math.max(50, Math.min(c.sprite.y + c.vy * dt, WORLD_H - 50));
       // Tilt sprite to match actual velocity direction

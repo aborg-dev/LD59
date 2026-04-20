@@ -194,10 +194,10 @@ describe("shepherd core loop", () => {
     expect(adults.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("speed upgrade increases the alpha dog's max speed", async () => {
+  it("speed upgrade increases every dog's max speed", async () => {
     await game.startScene("Shepherd");
 
-    const before = (await shepherdState()).alphaDogSpeed;
+    const before = (await shepherdState()).dogSpeed;
     await game.eval_(`(() => {
       const gs = window.game.scene.getScene('Shepherd');
       gs.coins = 1000;
@@ -206,7 +206,7 @@ describe("shepherd core loop", () => {
     })()`);
 
     const after = await shepherdState();
-    expect(after.alphaDogSpeed).toBeGreaterThan(before);
+    expect(after.dogSpeed).toBeGreaterThan(before);
     expect(after.speedUpgradeLevel).toBe(1);
   });
 

@@ -209,7 +209,7 @@ export interface ShepherdSceneState {
   score: number;
   coins: number;
   buySheepCost: number;
-  alphaDogSpeed: number;
+  dogSpeed: number;
   fieldCapacity: number;
   speedUpgradeLevel: number;
   capacityUpgradeLevel: number;
@@ -275,7 +275,7 @@ export class ShepherdScene extends Phaser.Scene {
   private totalEarned = 0;
   private sheepBought = 0;
   private sheepLostToWolves = 0;
-  private alphaDogSpeed = DOG_SPEED;
+  private dogSpeed = DOG_SPEED;
   private alphaDogMoving = false;
   private alphaDogSeedCooldown = 0;
   private fieldCapacity = FIELD_CAPACITY_BASE;
@@ -360,7 +360,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.dogBuyCost = 5;
     this.guardBuyCost = GUARD_BUY_BASE_COST;
     this.buySheepCost = BUY_SHEEP_BASE_COST;
-    this.alphaDogSpeed = DOG_SPEED;
+    this.dogSpeed = DOG_SPEED;
     this.fieldCapacity = FIELD_CAPACITY_BASE;
     this.speedUpgradeLevel = 0;
     this.capacityUpgradeLevel = 0;
@@ -652,7 +652,7 @@ export class ShepherdScene extends Phaser.Scene {
       }
     });
 
-    this.input.keyboard?.on("keydown-SPACE", () => this.dispatchFollower());
+    this.input.keyboard?.on("keydown-F", () => this.dispatchFollower());
     this.input.keyboard?.on("keydown-ESC", () => this.cancelGuardPlacement());
     this.input.keyboard?.on("keydown-ENTER", () => this.toggleDebugPanel());
     this.input.keyboard?.on("keydown-BACKSPACE", () => {
@@ -720,17 +720,20 @@ export class ShepherdScene extends Phaser.Scene {
     const topBtnY = HUD_TOP_H / 2;
 
     const pauseBtn = this.add
-      .text(0, topBtnY, "PAUSE", topBtnStyle)
-      .setOrigin(1, 0.5)
+      .text(0, topBtnY, "RESUME", topBtnStyle)
+      .setOrigin(0.5, 0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
+    const pauseMaxW = pauseBtn.width;
+    pauseBtn.setText("PAUSE");
     this.cameras.main.ignore(pauseBtn);
 
     const menuBtn = this.add
       .text(0, topBtnY, "MENU", topBtnStyle)
-      .setOrigin(1, 0.5)
+      .setOrigin(0.5, 0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
+    const menuMaxW = menuBtn.width;
     menuBtn.on("pointerdown", () => {
       this.sound.play("pop");
       this.scene.start("MainMenu");
@@ -740,25 +743,28 @@ export class ShepherdScene extends Phaser.Scene {
     const savedMute = localStorage.getItem("shepherd:muted") === "1";
     this.sound.mute = savedMute;
     const muteBtn = this.add
-      .text(0, topBtnY, savedMute ? "UNMUTE" : "MUTE", topBtnStyle)
-      .setOrigin(1, 0.5)
+      .text(0, topBtnY, "UNMUTE", topBtnStyle)
+      .setOrigin(0.5, 0.5)
       .setDepth(101)
       .setInteractive({ useHandCursor: true });
+    const muteMaxW = muteBtn.width;
+    muteBtn.setText(savedMute ? "UNMUTE" : "MUTE");
     this.cameras.main.ignore(muteBtn);
 
+    const topBtnSlotW = Math.max(pauseMaxW, menuMaxW, muteMaxW);
     const rightPad = 22;
     const rightGap = 30;
     const layoutRightButtons = () => {
-      let rightEdge = width - rightPad;
-      muteBtn.setX(rightEdge);
-      rightEdge -= muteBtn.width + rightGap;
-      menuBtn.setX(rightEdge);
-      rightEdge -= menuBtn.width + rightGap;
-      pauseBtn.setX(rightEdge);
+      let slotRight = width - rightPad;
+      muteBtn.setX(slotRight - topBtnSlotW / 2);
+      slotRight -= topBtnSlotW + rightGap;
+      menuBtn.setX(slotRight - topBtnSlotW / 2);
+      slotRight -= topBtnSlotW + rightGap;
+      pauseBtn.setX(slotRight - topBtnSlotW / 2);
     };
     layoutRightButtons();
 
-    pauseBtn.on("pointerdown", () => {
+    const togglePause = () => {
       this.paused = !this.paused;
       pauseBtn.setText(this.paused ? "RESUME" : "PAUSE");
       this.sound.play("pop");
@@ -775,7 +781,9 @@ export class ShepherdScene extends Phaser.Scene {
         this.shearSfx?.resume();
         this.grazingSfx?.resume();
       }
-    });
+    };
+    pauseBtn.on("pointerdown", togglePause);
+    this.input.keyboard?.on("keydown-SPACE", togglePause);
     muteBtn.on("pointerdown", () => {
       this.sound.mute = !this.sound.mute;
       localStorage.setItem("shepherd:muted", this.sound.mute ? "1" : "0");
@@ -1007,8 +1015,7 @@ export class ShepherdScene extends Phaser.Scene {
     if (this.coins < this.speedUpgradeCost) return;
     this.coins -= this.speedUpgradeCost;
     this.speedUpgradeLevel++;
-    this.alphaDogSpeed =
-      DOG_SPEED + this.speedUpgradeLevel * SPEED_UPGRADE_STEP;
+    this.dogSpeed = DOG_SPEED + this.speedUpgradeLevel * SPEED_UPGRADE_STEP;
     this.speedUpgradeCost = Math.ceil(this.speedUpgradeCost * 2);
     this.sound.play("pop");
     this.updateCoinText();
@@ -1253,7 +1260,7 @@ export class ShepherdScene extends Phaser.Scene {
       this.buildingTargetVisible = true;
       this.drawBuildingTarget();
       this.showHint(
-        "Move your dog near a sheep and BARK (click or SPACE)\nto signal the herding dog to follow that sheep.",
+        "Move your dog near a sheep and BARK (click or F)\nto signal the herding dog to follow that sheep.",
         () =>
           this.showHint(
             "Click the Market or Shear building\nto choose where dogs bring adult sheep.\nShear is selected by default.",
@@ -1541,8 +1548,6 @@ export class ShepherdScene extends Phaser.Scene {
       if (mover) mover.vy = Math.abs(mover.vy);
     }
   }
-
-
 
   private drawBuildingTarget(): void {
     this.buildingTargetGfx.clear();
@@ -2586,7 +2591,7 @@ export class ShepherdScene extends Phaser.Scene {
       score: this.score,
       coins: this.coins,
       buySheepCost: this.buySheepCost,
-      alphaDogSpeed: this.alphaDogSpeed,
+      dogSpeed: this.dogSpeed,
       fieldCapacity: this.fieldCapacity,
       speedUpgradeLevel: this.speedUpgradeLevel,
       capacityUpgradeLevel: this.capacityUpgradeLevel,
@@ -2644,8 +2649,8 @@ export class ShepherdScene extends Phaser.Scene {
       let arrivalScale = 1;
       if (kx !== 0 || ky !== 0) {
         const klen = Math.hypot(kx, ky);
-        desiredVx = (kx / klen) * this.alphaDogSpeed;
-        desiredVy = (ky / klen) * this.alphaDogSpeed;
+        desiredVx = (kx / klen) * this.dogSpeed;
+        desiredVy = (ky / klen) * this.dogSpeed;
         this.alphaDogTargetX = this.alphaDog.sprite.x;
         this.alphaDogTargetY = this.alphaDog.sprite.y;
       } else {
@@ -2654,8 +2659,8 @@ export class ShepherdScene extends Phaser.Scene {
         const dDist = Math.hypot(ddx, ddy);
         if (dDist > 5) {
           arrivalScale = Math.min(1, dDist / DOG_ARRIVAL_RADIUS);
-          desiredVx = (ddx / dDist) * this.alphaDogSpeed;
-          desiredVy = (ddy / dDist) * this.alphaDogSpeed;
+          desiredVx = (ddx / dDist) * this.dogSpeed;
+          desiredVy = (ddy / dDist) * this.dogSpeed;
         }
       }
       const desiredSpd = Math.hypot(desiredVx, desiredVy);
@@ -2672,7 +2677,7 @@ export class ShepherdScene extends Phaser.Scene {
 
       const speed =
         desiredSpd > 2
-          ? this.alphaDogSpeed * arrivalScale * Math.max(0, Math.cos(diff))
+          ? this.dogSpeed * arrivalScale * Math.max(0, Math.cos(diff))
           : 0;
       this.alphaDog.vx = Math.cos(this.alphaDog.angle) * speed;
       this.alphaDog.vy = Math.sin(this.alphaDog.angle) * speed;
@@ -2747,7 +2752,10 @@ export class ShepherdScene extends Phaser.Scene {
     const alphaMovingNow =
       Math.hypot(this.alphaDog.vx, this.alphaDog.vy) > DOG_SPEED * 0.1;
     this.alphaDogSeedCooldown -= dt;
-    if (alphaMovingNow !== this.alphaDogMoving && this.alphaDogSeedCooldown <= 0) {
+    if (
+      alphaMovingNow !== this.alphaDogMoving &&
+      this.alphaDogSeedCooldown <= 0
+    ) {
       this.alphaDogMoving = alphaMovingNow;
       this.alphaDogSeedCooldown = 1.5;
       for (const dog of followingDogs) {
@@ -2773,8 +2781,8 @@ export class ShepherdScene extends Phaser.Scene {
       let desiredVx = 0;
       let desiredVy = 0;
       if (toDist > 8) {
-        desiredVx = (toX / toDist) * DOG_SPEED;
-        desiredVy = (toY / toDist) * DOG_SPEED;
+        desiredVx = (toX / toDist) * this.dogSpeed;
+        desiredVy = (toY / toDist) * this.dogSpeed;
       }
       this.moveDog(dog, desiredVx, desiredVy, dt);
     }
@@ -2843,7 +2851,7 @@ export class ShepherdScene extends Phaser.Scene {
       let desiredVx = 0;
       let desiredVy = 0;
       if (toHerdD > 5) {
-        const approachSpeed = Math.min(toHerdD * 3.5, DOG_SPEED);
+        const approachSpeed = Math.min(toHerdD * 3.5, this.dogSpeed);
         desiredVx = (toHerdX / toHerdD) * approachSpeed;
         desiredVy = (toHerdY / toHerdD) * approachSpeed;
       }
@@ -2856,8 +2864,8 @@ export class ShepherdScene extends Phaser.Scene {
       const toWolfX = dog.targetWolf.sprite.x - dog.sprite.x;
       const toWolfY = dog.targetWolf.sprite.y - dog.sprite.y;
       const toWolfD = Math.hypot(toWolfX, toWolfY);
-      const desiredVx = toWolfD > 1 ? (toWolfX / toWolfD) * DOG_SPEED : 0;
-      const desiredVy = toWolfD > 1 ? (toWolfY / toWolfD) * DOG_SPEED : 0;
+      const desiredVx = toWolfD > 1 ? (toWolfX / toWolfD) * this.dogSpeed : 0;
+      const desiredVy = toWolfD > 1 ? (toWolfY / toWolfD) * this.dogSpeed : 0;
       this.moveDog(dog, desiredVx, desiredVy, dt);
     }
 
@@ -2887,15 +2895,15 @@ export class ShepherdScene extends Phaser.Scene {
         const toY = nearest.sprite.y - dog.sprite.y;
         const toD = Math.hypot(toX, toY);
         if (toD > 1) {
-          desiredVx = (toX / toD) * DOG_SPEED;
-          desiredVy = (toY / toD) * DOG_SPEED;
+          desiredVx = (toX / toD) * this.dogSpeed;
+          desiredVy = (toY / toD) * this.dogSpeed;
         }
       } else {
         const toX = post.x - dog.sprite.x;
         const toY = post.y - dog.sprite.y;
         const toD = Math.hypot(toX, toY);
         if (toD > 5) {
-          const spd = Math.min(toD * 3, DOG_SPEED);
+          const spd = Math.min(toD * 3, this.dogSpeed);
           desiredVx = (toX / toD) * spd;
           desiredVy = (toY / toD) * spd;
         }
@@ -2932,7 +2940,7 @@ export class ShepherdScene extends Phaser.Scene {
         ) {
           this.wolfTutorialShown = true;
           this.showHint(
-            "A wolf is nearby!\nBark (click or SPACE) near it to scare it off.\nYour herding dogs will also intercept wolves near their sheep.",
+            "A wolf is nearby!\nBark (click or F) near it to scare it off.\nYour herding dogs will also intercept wolves near their sheep.",
           );
         }
       }
@@ -3303,8 +3311,6 @@ export class ShepherdScene extends Phaser.Scene {
             s.sprite.y += (tdy / td) * (minDist - td);
           }
         }
-
-
 
       // Babies that have started growing can't leave the field until adult
       if (s.stage === "baby" && s.growthT > 0) {
