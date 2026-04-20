@@ -14,8 +14,8 @@ const MAX_SHEEP = 30;
 // Field — babies grow here into adults
 const FIELD_CX = 2160; // Moved one tile (assuming 72px) to the right
 const FIELD_CY = 900;
-const FIELD_W_PX = 288;
-const FIELD_H_PX = 168;
+const FIELD_W_PX = 368;
+const FIELD_H_PX = 216;
 const FIELD_CAPACITY_BASE = 3;
 const CAPACITY_UPGRADE_STEP = 1;
 const RETIRE_COST = 500;
