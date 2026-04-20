@@ -414,7 +414,7 @@ export class ShepherdScene extends Phaser.Scene {
     const marketLabel = this.add
       .image(
         MARKET_CX,
-        MARKET_CY - MARKET_H_PX / 2 - 120,
+        MARKET_CY - MARKET_H_PX / 2 - 80,
         "font",
         "label_market",
       )
@@ -452,7 +452,7 @@ export class ShepherdScene extends Phaser.Scene {
     });
     this.hudCamera.ignore(shearImg);
     const shearLabel = this.add
-      .image(SHEAR_CX, SHEAR_CY - SHEAR_H_PX / 2 - 110, "font", "label_shear")
+      .image(SHEAR_CX, SHEAR_CY - SHEAR_H_PX / 2 - 80, "font", "label_shear")
       .setScale(2.0)
       .setDepth(2);
     this.hudCamera.ignore(shearLabel);
