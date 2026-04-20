@@ -116,9 +116,9 @@ const WOLF_EAT_RANGE = 32;
 const WOLF_CONTACT_RANGE = 80;
 const WOLF_FLEE_SPEED = 550;
 const WOLF_SCARED_MS = 1800;
-const WOLF_SPAWN_MAX_MS = 20000;
-const WOLF_SPAWN_MIN_MS = 5000;
-const WOLF_RAMP_MS = 180000;
+const WOLF_SPAWN_MAX_MS = 32000;
+const WOLF_SPAWN_MIN_MS = 9000;
+const WOLF_RAMP_MS = 300000;
 
 interface Sheep {
   sprite: Phaser.GameObjects.Sprite;
@@ -259,7 +259,8 @@ export class ShepherdScene extends Phaser.Scene {
   private capacityUpgradeLevel = 0;
   private speedUpgradeCost = 10;
   private capacityUpgradeCost = 20;
-  private wolfSpawnStartMs = 0;
+  private wolfGameElapsedMs = 0;
+  private wolfSpawnTimer: Phaser.Time.TimerEvent | null = null;
   private dogBuyBtn!: Phaser.GameObjects.Text;
   private sheepBuyBtn!: Phaser.GameObjects.Text;
   private speedBuyBtn!: Phaser.GameObjects.Text;
@@ -689,6 +690,18 @@ export class ShepherdScene extends Phaser.Scene {
       pauseBtn.setText(this.paused ? "RESUME" : "PAUSE");
       this.sound.play("pop");
       layoutRightButtons();
+      if (this.wolfSpawnTimer) this.wolfSpawnTimer.paused = this.paused;
+      if (this.paused) {
+        this.anims.pauseAll();
+        this.truckSfx?.pause();
+        this.shearSfx?.pause();
+        this.grazingSfx?.pause();
+      } else {
+        this.anims.resumeAll();
+        this.truckSfx?.resume();
+        this.shearSfx?.resume();
+        this.grazingSfx?.resume();
+      }
     });
     muteBtn.on("pointerdown", () => {
       this.sound.mute = !this.sound.mute;
@@ -815,7 +828,6 @@ export class ShepherdScene extends Phaser.Scene {
     this.updateShopButtons();
 
     // Wolf spawning — interval shrinks as the game progresses
-    this.wolfSpawnStartMs = this.time.now;
     this.scheduleNextWolf();
 
     // Set camera zoomed out to fit entire world
@@ -823,6 +835,7 @@ export class ShepherdScene extends Phaser.Scene {
 
     this.tutorialStep = 0;
     this.paused = true;
+    if (this.wolfSpawnTimer) this.wolfSpawnTimer.paused = true;
     this.showTutorialStep(0);
   }
 
@@ -846,7 +859,14 @@ export class ShepherdScene extends Phaser.Scene {
     });
   }
 
+  private wolfCap(): number {
+    const n = this.sheep.length;
+    if (n <= 10) return Math.floor(n / 2);
+    return Math.min(10, 5 + Math.floor((n - 10) / 5));
+  }
+
   private spawnWolf(): void {
+    if (this.wolves.length >= this.wolfCap()) return;
     const edge = Math.floor(Math.random() * 4);
     let x: number;
     let y: number;
@@ -1009,14 +1029,14 @@ export class ShepherdScene extends Phaser.Scene {
 
   private scheduleNextWolf(): void {
     if (this.gameOverTriggered) return;
-    const elapsed = Math.max(0, this.time.now - this.wolfSpawnStartMs);
-    const ramp = Math.min(elapsed / WOLF_RAMP_MS, 1);
+    const ramp = Math.min(this.wolfGameElapsedMs / WOLF_RAMP_MS, 1);
     const delay =
       WOLF_SPAWN_MAX_MS - (WOLF_SPAWN_MAX_MS - WOLF_SPAWN_MIN_MS) * ramp;
-    this.time.delayedCall(delay, () => {
+    this.wolfSpawnTimer = this.time.delayedCall(delay, () => {
       this.spawnWolf();
       this.scheduleNextWolf();
     });
+    if (this.paused) this.wolfSpawnTimer.paused = true;
   }
 
   private updateShopButtons(): void {
@@ -2070,6 +2090,7 @@ export class ShepherdScene extends Phaser.Scene {
     if (step >= steps.length) {
       this.tutorialStep = -1;
       this.paused = false;
+      if (this.wolfSpawnTimer) this.wolfSpawnTimer.paused = false;
       this.showBanner("Herd your sheep to the field!");
       return;
     }
@@ -2240,6 +2261,7 @@ export class ShepherdScene extends Phaser.Scene {
   private step(): void {
     const dt = ShepherdScene.stepSec;
     const dtMs = dt * 1000;
+    this.wolfGameElapsedMs += dtMs;
 
     this.updateTrucks(dt);
     this.fieldCountText.setText(
