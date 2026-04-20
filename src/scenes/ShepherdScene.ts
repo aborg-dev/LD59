@@ -1596,7 +1596,7 @@ export class ShepherdScene extends Phaser.Scene {
         for (const side of [-1, 1]) {
           // ~25% chance to skip each candidate
           if (rng(pos, fixed + side * 1000, 3) > 0.75) continue;
-          const dist = ROAD_HALF - 18 + rng(pos, fixed + side * 2000, 4) * 50;
+          const dist = ROAD_HALF - 18 + rng(pos, fixed + side * 2000, 4) * 60;
           const jitter = (rng(pos, fixed + side * 3000, 5) - 0.5) * 18;
           const wx = isHorizontal ? pos + jitter : fixed + side * dist;
           const wy = isHorizontal ? fixed + side * dist : pos + jitter;
