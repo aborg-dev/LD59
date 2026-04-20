@@ -691,6 +691,8 @@ export class ShepherdScene extends Phaser.Scene {
         color: "#ffffff",
         backgroundColor: "#2a6b3a",
         padding: { left: 14, right: 14, top: 10, bottom: 10 },
+        fixedWidth: 140,
+        align: "center",
         resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0, 0.5)
@@ -1063,7 +1065,6 @@ export class ShepherdScene extends Phaser.Scene {
     });
   }
 
-
   buyCapacityUpgrade(): void {
     if (this.capacityUpgradeLevel >= UPGRADE_MAX_LEVEL) return;
     if (this.coins < this.capacityUpgradeCost) return;
@@ -1126,7 +1127,6 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private updateShopButtons(): void {
-
     const dogAffordable = this.coins >= this.dogBuyCost;
     this.dogBuyBtn.setText("Dog");
     this.setCostText(this.dogCostText, this.dogBuyCost);
@@ -1580,7 +1580,8 @@ export class ShepherdScene extends Phaser.Scene {
     }
     this.rifleHudBtn.setVisible(true);
     if (this.rifleCooldownMs > 0) {
-      this.rifleHudBtn.setText(String(Math.ceil(this.rifleCooldownMs / 1000)));
+      const s = Math.ceil(this.rifleCooldownMs / 1000);
+      this.rifleHudBtn.setText(`RIFLE ${s}`);
       this.rifleHudBtn.setBackgroundColor("#555566");
       this.rifleHudBtn.setAlpha(0.55);
     } else {
@@ -2769,7 +2770,7 @@ export class ShepherdScene extends Phaser.Scene {
         (w) =>
           w.scaredMs === 0 &&
           Math.hypot(w.sprite.x - sx, w.sprite.y - sy) <
-          HERD_INTERCEPT_THREAT_RANGE,
+            HERD_INTERCEPT_THREAT_RANGE,
       );
 
       let herdX: number;
@@ -3198,9 +3199,9 @@ export class ShepherdScene extends Phaser.Scene {
         s.grazing = alignN === 0 ? !s.grazing : false;
         s.modeT = s.grazing
           ? SHEEP_GRAZE_MIN_SEC +
-          Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
+            Math.random() * (SHEEP_GRAZE_MAX_SEC - SHEEP_GRAZE_MIN_SEC)
           : SHEEP_WALK_MIN_SEC +
-          Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
+            Math.random() * (SHEEP_WALK_MAX_SEC - SHEEP_WALK_MIN_SEC);
         if (!s.grazing) s.wanderAngle = Math.random() * Math.PI * 2;
       }
       if (!s.grazing && alignN === 0) {
@@ -3493,7 +3494,7 @@ export class ShepherdScene extends Phaser.Scene {
       if (
         this.alphaDog &&
         Math.hypot(this.alphaDog.sprite.x - cx, this.alphaDog.sprite.y - cy) <
-        MAP_COIN_PICKUP_RANGE
+          MAP_COIN_PICKUP_RANGE
       ) {
         collected = true;
       }
@@ -3783,97 +3784,97 @@ export class ShepherdScene extends Phaser.Scene {
       max: number;
       step: number;
     }> = [
-        {
-          label: "Max Speed",
-          get: () => SHEEP_MAX_SPEED,
-          set: (v) => {
-            SHEEP_MAX_SPEED = v;
-          },
-          min: 0,
-          max: 800,
-          step: 5,
+      {
+        label: "Max Speed",
+        get: () => SHEEP_MAX_SPEED,
+        set: (v) => {
+          SHEEP_MAX_SPEED = v;
         },
-        {
-          label: "Damping",
-          get: () => SHEEP_DAMPING,
-          set: (v) => {
-            SHEEP_DAMPING = v;
-          },
-          min: 0.8,
-          max: 0.999,
-          step: 0.001,
+        min: 0,
+        max: 800,
+        step: 5,
+      },
+      {
+        label: "Damping",
+        get: () => SHEEP_DAMPING,
+        set: (v) => {
+          SHEEP_DAMPING = v;
         },
-        {
-          label: "Wander Force",
-          get: () => SHEEP_WANDER_FORCE,
-          set: (v) => {
-            SHEEP_WANDER_FORCE = v;
-          },
-          min: 0,
-          max: 400,
-          step: 5,
+        min: 0.8,
+        max: 0.999,
+        step: 0.001,
+      },
+      {
+        label: "Wander Force",
+        get: () => SHEEP_WANDER_FORCE,
+        set: (v) => {
+          SHEEP_WANDER_FORCE = v;
         },
-        {
-          label: "Cohesion Force",
-          get: () => SHEEP_COHESION_FORCE,
-          set: (v) => {
-            SHEEP_COHESION_FORCE = v;
-          },
-          min: 0,
-          max: 200,
-          step: 2,
+        min: 0,
+        max: 400,
+        step: 5,
+      },
+      {
+        label: "Cohesion Force",
+        get: () => SHEEP_COHESION_FORCE,
+        set: (v) => {
+          SHEEP_COHESION_FORCE = v;
         },
-        {
-          label: "Alignment Force",
-          get: () => ALIGNMENT_FORCE,
-          set: (v) => {
-            ALIGNMENT_FORCE = v;
-          },
-          min: 0,
-          max: 300,
-          step: 5,
+        min: 0,
+        max: 200,
+        step: 2,
+      },
+      {
+        label: "Alignment Force",
+        get: () => ALIGNMENT_FORCE,
+        set: (v) => {
+          ALIGNMENT_FORCE = v;
         },
-        {
-          label: "Flee Force",
-          get: () => FLEE_FORCE,
-          set: (v) => {
-            FLEE_FORCE = v;
-          },
-          min: 0,
-          max: 1000,
-          step: 10,
+        min: 0,
+        max: 300,
+        step: 5,
+      },
+      {
+        label: "Flee Force",
+        get: () => FLEE_FORCE,
+        set: (v) => {
+          FLEE_FORCE = v;
         },
-        {
-          label: "Fear Radius",
-          get: () => FEAR_RADIUS,
-          set: (v) => {
-            FEAR_RADIUS = v;
-          },
-          min: 0,
-          max: 500,
-          step: 5,
+        min: 0,
+        max: 1000,
+        step: 10,
+      },
+      {
+        label: "Fear Radius",
+        get: () => FEAR_RADIUS,
+        set: (v) => {
+          FEAR_RADIUS = v;
         },
-        {
-          label: "Panic Inherit",
-          get: () => PANIC_INHERIT,
-          set: (v) => {
-            PANIC_INHERIT = v;
-          },
-          min: 0,
-          max: 1,
-          step: 0.05,
+        min: 0,
+        max: 500,
+        step: 5,
+      },
+      {
+        label: "Panic Inherit",
+        get: () => PANIC_INHERIT,
+        set: (v) => {
+          PANIC_INHERIT = v;
         },
-        {
-          label: "Turn Rate",
-          get: () => SHEEP_TURN_RATE,
-          set: (v) => {
-            SHEEP_TURN_RATE = v;
-          },
-          min: 0.5,
-          max: 15,
-          step: 0.5,
+        min: 0,
+        max: 1,
+        step: 0.05,
+      },
+      {
+        label: "Turn Rate",
+        get: () => SHEEP_TURN_RATE,
+        set: (v) => {
+          SHEEP_TURN_RATE = v;
         },
-      ];
+        min: 0.5,
+        max: 15,
+        step: 0.5,
+      },
+    ];
 
     for (const cfg of params) {
       const row = document.createElement("div");
@@ -3971,7 +3972,7 @@ export class ShepherdScene extends Phaser.Scene {
         if (!treeFound) {
           this.editorTreeRadiusPreview =
             Math.random() *
-            (this.editorTreeRadiusMax - this.editorTreeRadiusMin) +
+              (this.editorTreeRadiusMax - this.editorTreeRadiusMin) +
             this.editorTreeRadiusMin;
           return;
         }
