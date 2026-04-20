@@ -1014,7 +1014,8 @@ export class ShepherdScene extends Phaser.Scene {
     if (this.coins < RETIRE_COST) return;
     this.gameOverTriggered = true;
     this.showBanner("You retire in comfort!");
-    this.time.delayedCall(1400, () => {
+    this.spawnCoinShower(this.alphaDog.sprite.x, this.alphaDog.sprite.y);
+    this.time.delayedCall(2200, () => {
       this.scene.start("GameOver", {
         score: this.score,
         returnScene: "Shepherd",
@@ -1024,6 +1025,25 @@ export class ShepherdScene extends Phaser.Scene {
         runMs: this.wolfGameElapsedMs,
       });
     });
+  }
+
+  private spawnCoinShower(x: number, y: number): void {
+    const emitter = this.add.particles(x, y, "font", {
+      frame: "coin_icon",
+      speed: { min: 280, max: 520 },
+      angle: { min: 240, max: 300 },
+      gravityY: 900,
+      lifespan: 1800,
+      quantity: 60,
+      scale: { start: 1.1, end: 0.7 },
+      alpha: { start: 1, end: 0, ease: "Quad.easeIn" },
+      rotate: { min: -180, max: 180 },
+      emitting: false,
+    });
+    emitter.setDepth(20);
+    this.hudCamera.ignore(emitter);
+    emitter.explode(60);
+    this.time.delayedCall(2000, () => emitter.destroy());
   }
 
   private showCoinGainPopup(amount: number, x: number, y: number): void {
@@ -2346,7 +2366,6 @@ export class ShepherdScene extends Phaser.Scene {
       this.tutorialStep = -1;
       this.paused = false;
       if (this.wolfSpawnTimer) this.wolfSpawnTimer.paused = false;
-      this.showBanner("Herd your sheep to the field!");
       return;
     }
 
@@ -2367,6 +2386,8 @@ export class ShepherdScene extends Phaser.Scene {
     for (const r of hudRects) {
       highlights.push({ x: r.cx - r.w / 2, y: r.cy - r.h / 2, w: r.w, h: r.h });
     }
+    // Always keep the top bar visible — that's where the hint text lives.
+    highlights.push({ x: 0, y: 0, w: width, h: HUD_TOP_H });
 
     // Dark overlay: fill every screen region that isn't inside a highlight rect.
     // Use a grid decomposition so each highlight is individually lit with no
@@ -2407,22 +2428,19 @@ export class ShepherdScene extends Phaser.Scene {
     }
     this.tutorialOverlay = gfx;
 
-    // Label position: near bottom for world steps
-    const labelY = this.fieldBottom - 190;
-
+    // Hint text lives on the top bar so it doesn't cover the field.
     const label = this.add
-      .text(width / 2, labelY, text, {
+      .text(width / 2, HUD_TOP_H / 2, text, {
         fontFamily: FONT_BODY,
-        fontSize: "26px",
+        fontSize: "28px",
         color: "#ffffff",
         align: "center",
         wordWrap: { width: width * 0.6 },
         stroke: "#000000",
-        strokeThickness: 5,
-        backgroundColor: "#00000066",
-        padding: { left: 16, right: 16, top: 10, bottom: 10 },
+        strokeThickness: 4,
+        padding: { left: 12, right: 12, top: 4, bottom: 4 },
       })
-      .setOrigin(0.5, 0)
+      .setOrigin(0.5, 0.5)
       .setDepth(201);
     this.cameras.main.ignore(label);
     this.tutorialLabel = label;
@@ -2430,7 +2448,7 @@ export class ShepherdScene extends Phaser.Scene {
     const isLast = step === steps.length - 1;
     if (!isLast) {
       const nextBtn = this.add
-        .text(width / 2, labelY + label.height + 12, "Next →", {
+        .text(width / 2, HUD_TOP_H + 12, "Next →", {
           fontFamily: FONT_BODY,
           fontSize: "22px",
           color: "#ffffff",
