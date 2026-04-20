@@ -89,7 +89,11 @@ export class Preloader extends Scene {
   }
 
   create() {
-    this.scene.start(import.meta.env.DEV ? "Shepherd" : "MainMenu");
+    const next = import.meta.env.DEV ? "Shepherd" : "MainMenu";
+    Promise.all([
+      document.fonts.load("400 1em Fredoka"),
+      document.fonts.load("700 1em Fredoka"),
+    ]).then(() => this.scene.start(next));
   }
 
   dumpState(): PreloaderState {
