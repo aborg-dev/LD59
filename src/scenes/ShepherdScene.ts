@@ -1927,16 +1927,16 @@ export class ShepherdScene extends Phaser.Scene {
       {
         worldRects: [
           {
-            cx: SHEAR_CX - d,
-            cy: SHEAR_CY - 100,
+            cx: SHEAR_CX,
+            cy: SHEAR_CY - 50,
             w: SHEAR_W_PX + 100 + 2 * d,
-            h: SHEAR_H_PX + 100 + 2 * d,
+            h: SHEAR_H_PX + 250 + 2 * d,
           },
           {
-            cx: MARKET_CX - d,
-            cy: MARKET_CY - d,
-            w: MARKET_W_PX + 100 + 2 * d,
-            h: MARKET_H_PX + 100 + 2 * d,
+            cx: MARKET_CX,
+            cy: MARKET_CY - 50 - d,
+            w: MARKET_W_PX + 150 + 2 * d,
+            h: MARKET_H_PX + 250 + 2 * d,
           },
         ],
         hudRects: [],
@@ -1991,22 +1991,37 @@ export class ShepherdScene extends Phaser.Scene {
       highlights.push({ x: r.cx - r.w / 2, y: r.cy - r.h / 2, w: r.w, h: r.h });
     }
 
-    // Dark overlay: fill screen except the bounding box of highlighted areas
+    // Dark overlay: fill every screen region that isn't inside a highlight rect.
+    // Use a grid decomposition so each highlight is individually lit with no
+    // overlap between dark cells (important when highlights are far apart).
     const gfx = this.add.graphics().setDepth(200);
     this.cameras.main.ignore(gfx);
     gfx.fillStyle(0x000000, 0.8);
     if (highlights.length === 0) {
       gfx.fillRect(0, 0, width, height);
     } else {
-      const hx0 = Math.min(...highlights.map((h) => h.x));
-      const hy0 = Math.min(...highlights.map((h) => h.y));
-      const hx1 = Math.max(...highlights.map((h) => h.x + h.w));
-      const hy1 = Math.max(...highlights.map((h) => h.y + h.h));
-      // Four dark rectangles surrounding the lit bounding box
-      gfx.fillRect(0, 0, width, hy0); // top
-      gfx.fillRect(0, hy1, width, height - hy1); // bottom
-      gfx.fillRect(0, hy0, hx0, hy1 - hy0); // left
-      gfx.fillRect(hx1, hy0, width - hx1, hy1 - hy0); // right
+      const xs = [
+        0,
+        width,
+        ...highlights.flatMap((h) => [h.x, h.x + h.w]),
+      ].sort((a, b) => a - b);
+      const ys = [
+        0,
+        height,
+        ...highlights.flatMap((h) => [h.y, h.y + h.h]),
+      ].sort((a, b) => a - b);
+      for (let xi = 0; xi + 1 < xs.length; xi++) {
+        for (let yi = 0; yi + 1 < ys.length; yi++) {
+          const cx = (xs[xi] + xs[xi + 1]) / 2;
+          const cy = (ys[yi] + ys[yi + 1]) / 2;
+          const isLit = highlights.some(
+            (h) => cx >= h.x && cx <= h.x + h.w && cy >= h.y && cy <= h.y + h.h,
+          );
+          if (!isLit) {
+            gfx.fillRect(xs[xi], ys[yi], xs[xi + 1] - xs[xi], ys[yi + 1] - ys[yi]);
+          }
+        }
+      }
     }
     this.tutorialOverlay = gfx;
 
