@@ -368,6 +368,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.sheepLostToWolves = 0;
     this.riflePurchased = false;
     this.rifleCooldownMs = 0;
+    this.wolfGameElapsedMs = 0;
 
     this.hudCamera = this.cameras.add(0, 0, width, height);
 
@@ -1020,6 +1021,7 @@ export class ShepherdScene extends Phaser.Scene {
         totalEarned: this.totalEarned,
         sheepBought: this.sheepBought,
         sheepLostToWolves: this.sheepLostToWolves,
+        runMs: this.wolfGameElapsedMs,
       });
     });
   }

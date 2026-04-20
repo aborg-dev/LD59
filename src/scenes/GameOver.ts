@@ -12,6 +12,14 @@ interface GameOverData {
   totalEarned?: number;
   sheepBought?: number;
   sheepLostToWolves?: number;
+  runMs?: number;
+}
+
+function fmtRunTime(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 export class GameOver extends Scene {
@@ -28,6 +36,7 @@ export class GameOver extends Scene {
     const totalEarned = data.totalEarned ?? 0;
     const sheepBought = data.sheepBought ?? 0;
     const sheepLostToWolves = data.sheepLostToWolves ?? 0;
+    const runMs = data.runMs ?? 0;
     const { width, height } = this.scale;
 
     this.cameras.main.setBackgroundColor(0x1a1a2e);
@@ -56,6 +65,7 @@ export class GameOver extends Scene {
       .setOrigin(0.5);
 
     const stats: [string, string][] = [
+      ["Run time", fmtRunTime(runMs)],
       ["Money earned", `$${totalEarned}`],
       ["Sheep bought", String(sheepBought)],
       ["Sheep lost to wolves", String(sheepLostToWolves)],
