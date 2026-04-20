@@ -27,6 +27,7 @@ const GUARD_BUY_BASE_COST = 30;
 const GROW_SEC = 12;
 const SPEED_UPGRADE_STEP = 60;
 const UPGRADE_MAX_LEVEL = 4;
+const CAPACITY_MAX_LEVEL = 6;
 
 // Market — adults are sold here for coins
 const MARKET_CX = 876;
@@ -34,7 +35,7 @@ const MARKET_CY = 840;
 const SALE_INTERVAL_MIN_MS = 5000;
 const SALE_INTERVAL_MAX_MS = 10000;
 const MARKET_WANDER_SPEED = 40;
-const SALE_PRICE_MIN = 5;
+const SALE_PRICE_MIN = 6;
 const SALE_PRICE_MAX = 10;
 
 // Shear shed — pay $SHEAR_VALUE to shear an adult back into a baby
@@ -282,7 +283,7 @@ export class ShepherdScene extends Phaser.Scene {
   private speedUpgradeLevel = 0;
   private capacityUpgradeLevel = 0;
   private speedUpgradeCost = 10;
-  private capacityUpgradeCost = 20;
+  private capacityUpgradeCost = 10;
   private wolfGameElapsedMs = 0;
   private wolfSpawnTimer: Phaser.Time.TimerEvent | null = null;
   private dogBuyBtn!: Phaser.GameObjects.Text;
@@ -1100,13 +1101,13 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   buyCapacityUpgrade(): void {
-    if (this.capacityUpgradeLevel >= UPGRADE_MAX_LEVEL) return;
+    if (this.capacityUpgradeLevel >= CAPACITY_MAX_LEVEL) return;
     if (this.coins < this.capacityUpgradeCost) return;
     this.coins -= this.capacityUpgradeCost;
     this.capacityUpgradeLevel++;
     this.fieldCapacity =
       FIELD_CAPACITY_BASE + this.capacityUpgradeLevel * CAPACITY_UPGRADE_STEP;
-    this.capacityUpgradeCost = Math.ceil(this.capacityUpgradeCost * 2);
+    this.capacityUpgradeCost += 5;
     this.playBuildSound();
     this.updateCoinText();
   }
@@ -1204,7 +1205,7 @@ export class ShepherdScene extends Phaser.Scene {
       speedMaxed || speedAffordable,
     );
 
-    const capMaxed = this.capacityUpgradeLevel >= UPGRADE_MAX_LEVEL;
+    const capMaxed = this.capacityUpgradeLevel >= CAPACITY_MAX_LEVEL;
     const capAffordable = !capMaxed && this.coins >= this.capacityUpgradeCost;
     this.capacityBuyBtn.setText("Capacity");
     if (capMaxed) this.capacityCostText.setText("MAX");
@@ -1247,7 +1248,7 @@ export class ShepherdScene extends Phaser.Scene {
   private buyDog(): void {
     if (this.coins < this.dogBuyCost) return;
     this.coins -= this.dogBuyCost;
-    this.dogBuyCost = Math.ceil(this.dogBuyCost * 1.6);
+    this.dogBuyCost += 5;
     const a = Math.random() * Math.PI * 2;
     this.spawnDog(
       this.alphaDog.sprite.x + Math.cos(a) * 80,
@@ -1385,7 +1386,7 @@ export class ShepherdScene extends Phaser.Scene {
       g.on("pointerout", () => drawMarker(false));
       g.on("pointerdown", () => {
         this.coins -= this.guardBuyCost;
-        this.guardBuyCost = Math.ceil(this.guardBuyCost * 1.6);
+        this.guardBuyCost += 15;
         this.spawnGuardDog(post.x, post.y);
         this.playBarkSound();
         this.updateCoinText();
@@ -2909,6 +2910,14 @@ export class ShepherdScene extends Phaser.Scene {
         }
       }
       this.moveDog(dog, desiredVx, desiredVy, dt);
+      // Idle look-around: slowly scan when at post with no wolf
+      if (!nearest && Math.hypot(dog.sprite.x - post.x, dog.sprite.y - post.y) < 10) {
+        const t = this.time.now / 1000;
+        dog.angle =
+          Math.sin(t * 0.45 + dog.seed) * Math.PI +
+          Math.sin(t * 0.8 + dog.seed * 1.6) * 0.4;
+        dog.sprite.rotation = dog.angle + Math.PI / 2;
+      }
     }
 
     // --- Wolf AI ---
