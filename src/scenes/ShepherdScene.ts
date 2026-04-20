@@ -284,7 +284,6 @@ export class ShepherdScene extends Phaser.Scene {
   private guardCostText!: Phaser.GameObjects.Text;
   private retireCostText!: Phaser.GameObjects.Text;
   private fieldCountText!: Phaser.GameObjects.Text;
-  private marketCountText!: Phaser.GameObjects.Text;
   private fieldRect!: Phaser.GameObjects.Image;
   private fieldBorderGfx!: Phaser.GameObjects.Graphics;
 
@@ -437,18 +436,6 @@ export class ShepherdScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2);
     this.hudCamera.ignore(marketPriceLabel);
-    this.marketCountText = this.add
-      .text(MARKET_CX, MARKET_CY - MARKET_H_PX / 2 - 70, "Waiting: 0", {
-        fontFamily: FONT_UI,
-        fontSize: 44,
-        color: "#e3bd7e",
-        stroke: "#000000",
-        strokeThickness: 6,
-        resolution: TEXT_RESOLUTION,
-      })
-      .setOrigin(0.5)
-      .setDepth(2);
-    this.hudCamera.ignore(this.marketCountText);
 
     // Shear shed — adults can be shorn here for a smaller, repeatable payout
     const shearImg = this.add
@@ -962,6 +949,46 @@ export class ShepherdScene extends Phaser.Scene {
     });
   }
 
+  private showCoinGainPopup(amount: number, x: number, y: number): void {
+    const label = this.add
+      .text(x, y, `+$${amount}`, {
+        fontFamily: FONT_UI,
+        fontSize: 44,
+        color: "#ffd700",
+        stroke: "#000000",
+        strokeThickness: 5,
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(12)
+      .setScale(0);
+    this.hudCamera.ignore(label);
+
+    this.tweens.add({
+      targets: label,
+      scale: 1.15,
+      duration: 160,
+      ease: "Back.easeOut",
+      onComplete: () => {
+        this.tweens.add({
+          targets: label,
+          scale: 1,
+          duration: 120,
+          ease: "Quad.easeOut",
+        });
+        this.tweens.add({
+          targets: label,
+          y: y - 100,
+          alpha: 0,
+          duration: 1100,
+          delay: 250,
+          ease: "Quad.easeOut",
+          onComplete: () => label.destroy(),
+        });
+      },
+    });
+  }
+
   private drawWoodStrip(
     g: Phaser.GameObjects.Graphics,
     x: number,
@@ -1005,11 +1032,6 @@ export class ShepherdScene extends Phaser.Scene {
     this.updateCoinText();
   }
 
-  private updateMarketCountText(): void {
-    const n = this.sheep.filter((s) => s.waiting && !s.sold).length;
-    this.marketCountText.setText(`Waiting: ${n}`);
-  }
-
   private scheduleSheepSale(s: Sheep): void {
     const delay =
       SALE_INTERVAL_MIN_MS +
@@ -1022,28 +1044,7 @@ export class ShepherdScene extends Phaser.Scene {
       this.updateCoinText();
       this.sound.play("money");
       this.playSaleFx(s);
-      this.updateMarketCountText();
-      // Floating price label
-      const priceLabel = this.add
-        .text(s.sprite.x, s.sprite.y - 36, `+$${s.salePrice}`, {
-          fontFamily: FONT_UI,
-          fontSize: 44,
-          color: "#ffd700",
-          stroke: "#000000",
-          strokeThickness: 5,
-          resolution: TEXT_RESOLUTION,
-        })
-        .setOrigin(0.5, 1)
-        .setDepth(12);
-      this.hudCamera.ignore(priceLabel);
-      this.tweens.add({
-        targets: priceLabel,
-        y: priceLabel.y - 60,
-        alpha: 0,
-        duration: 900,
-        ease: "Quad.easeOut",
-        onComplete: () => priceLabel.destroy(),
-      });
+      this.showCoinGainPopup(s.salePrice, s.sprite.x, s.sprite.y - 36);
       this.time.delayedCall(400, () => {
         if (s.sprite.active) {
           this.tweens.add({
@@ -3262,12 +3263,14 @@ export class ShepherdScene extends Phaser.Scene {
           ADULT_SHEEP_SCALE - (ADULT_SHEEP_SCALE - BABY_SHEEP_SCALE) * t;
         s.sprite.setScale(scale);
         if (s.shearT >= SHEAR_SEC) {
-          this.coins += s.golden
+          const shearGain = s.golden
             ? SHEAR_VALUE * GOLDEN_VALUE_MULT
             : SHEAR_VALUE;
+          this.coins += shearGain;
           this.updateCoinText();
           this.sound.play("pop");
           this.playShearFx(s);
+          this.showCoinGainPopup(shearGain, s.sprite.x, s.sprite.y - 36);
           s.stage = "baby";
           s.growthT = 0;
           s.shearT = 0;
@@ -3304,7 +3307,6 @@ export class ShepherdScene extends Phaser.Scene {
           });
           s.readyIcon = undefined;
         }
-        this.updateMarketCountText();
         this.scheduleSheepSale(s);
       }
 
@@ -3395,6 +3397,8 @@ export class ShepherdScene extends Phaser.Scene {
         }
       }
       if (collected) {
+        const cx = this.mapCoin.x;
+        const cy = this.mapCoin.y;
         this.mapCoinTween?.stop();
         this.mapCoinTween = null;
         this.mapCoin.destroy();
@@ -3402,6 +3406,7 @@ export class ShepherdScene extends Phaser.Scene {
         this.coins += MAP_COIN_VALUE;
         this.updateCoinText();
         this.sound.play("money");
+        this.showCoinGainPopup(MAP_COIN_VALUE, cx, cy - 20);
         this.updateShopButtons();
       }
       return;
