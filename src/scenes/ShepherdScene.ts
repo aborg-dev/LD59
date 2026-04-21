@@ -310,6 +310,7 @@ export class ShepherdScene extends Phaser.Scene {
   private fieldBorderGfx!: Phaser.GameObjects.Graphics;
 
   private tutorialStep = -1;
+  private tutorialOnComplete: (() => void) | null = null;
   private tutorialOverlay?: Phaser.GameObjects.Graphics;
   private tutorialLabel?: Phaser.GameObjects.Text;
   private tutorialNextBtn?: Phaser.GameObjects.Text;
@@ -326,6 +327,7 @@ export class ShepherdScene extends Phaser.Scene {
   private grassMode: 0 | 1 | 2 = 2; // 0=original, 1=random, 2=noise
 
   // Debug/editor state
+  private tutorialBtn!: Phaser.GameObjects.Text;
   private debugPanel: HTMLDivElement | null = null;
   private editorActive = false;
   private dogVisuals = false;
@@ -435,6 +437,7 @@ export class ShepherdScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     marketImg.on("pointerdown", () => {
       this.adultTarget = "market";
+      localStorage.setItem("shepherd_adult_target", "market");
       this.drawBuildingTarget();
     });
     this.hudCamera.ignore(marketImg);
@@ -475,6 +478,7 @@ export class ShepherdScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     shearImg.on("pointerdown", () => {
       this.adultTarget = "shear";
+      localStorage.setItem("shepherd_adult_target", "shear");
       this.drawBuildingTarget();
     });
     this.hudCamera.ignore(shearImg);
@@ -753,7 +757,18 @@ export class ShepherdScene extends Phaser.Scene {
     muteBtn.setText(savedMute ? "UNMUTE" : "MUTE");
     this.cameras.main.ignore(muteBtn);
 
-    const topBtnSlotW = Math.max(pauseMaxW, menuMaxW, muteMaxW);
+    const hintsBtn = this.add
+      .text(0, topBtnY, "TUTORIAL", { ...topBtnStyle })
+      .setOrigin(0.5, 0.5)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true });
+    hintsBtn.on("pointerdown", () => {
+      if (this.hasTutorialToShow()) this.replayTutorial();
+    });
+    this.cameras.main.ignore(hintsBtn);
+    this.tutorialBtn = hintsBtn;
+
+    const topBtnSlotW = Math.max(pauseMaxW, menuMaxW, muteMaxW, hintsBtn.width);
     const rightPad = 22;
     const rightGap = 30;
     const layoutRightButtons = () => {
@@ -763,6 +778,8 @@ export class ShepherdScene extends Phaser.Scene {
       menuBtn.setX(slotRight - topBtnSlotW / 2);
       slotRight -= topBtnSlotW + rightGap;
       pauseBtn.setX(slotRight - topBtnSlotW / 2);
+      slotRight -= topBtnSlotW + rightGap;
+      hintsBtn.setX(slotRight - topBtnSlotW / 2);
     };
     layoutRightButtons();
 
@@ -942,10 +959,24 @@ export class ShepherdScene extends Phaser.Scene {
     // Set camera zoomed out to fit entire world
     this.updateCamera();
 
-    this.tutorialStep = 0;
-    this.paused = true;
-    if (this.wolfSpawnTimer) this.wolfSpawnTimer.paused = true;
-    this.showTutorialStep(0);
+    const tutorialDone = localStorage.getItem("shepherd_tutorial_done") === "1";
+    this.dogTutorialShown = localStorage.getItem("shepherd_dog_hint_done") === "1";
+    this.wolfTutorialShown = localStorage.getItem("shepherd_wolf_hint_done") === "1";
+    this.updateTutorialBtn();
+    const savedTarget = localStorage.getItem("shepherd_adult_target");
+    if (savedTarget === "market" || savedTarget === "shear") {
+      this.adultTarget = savedTarget;
+      this.buildingTargetVisible = true;
+      this.drawBuildingTarget();
+    }
+    if (tutorialDone) {
+      this.tutorialStep = -1;
+    } else {
+      this.tutorialStep = 0;
+      this.paused = true;
+      if (this.wolfSpawnTimer) this.wolfSpawnTimer.paused = true;
+      this.showTutorialStep(0);
+    }
   }
 
   private spawnDog(x: number, y: number): void {
@@ -1172,6 +1203,7 @@ export class ShepherdScene extends Phaser.Scene {
   }
 
   private updateShopButtons(): void {
+    this.updateTutorialBtn();
     const dogMaxed = this.dogs.length >= 5;
     const dogAffordable = !dogMaxed && this.coins >= this.dogBuyCost;
     this.dogBuyBtn.setText("Dog");
@@ -1262,6 +1294,7 @@ export class ShepherdScene extends Phaser.Scene {
     this.updateCoinText();
     if (!this.dogTutorialShown) {
       this.dogTutorialShown = true;
+      localStorage.setItem("shepherd_dog_hint_done", "1");
       this.buildingTargetVisible = true;
       this.drawBuildingTarget();
       this.showHint(
@@ -2344,8 +2377,16 @@ export class ShepherdScene extends Phaser.Scene {
 
     if (step >= steps.length) {
       this.tutorialStep = -1;
-      this.paused = false;
-      if (this.wolfSpawnTimer) this.wolfSpawnTimer.paused = false;
+      localStorage.setItem("shepherd_tutorial_done", "1");
+      this.updateTutorialBtn();
+      const next = this.tutorialOnComplete;
+      this.tutorialOnComplete = null;
+      if (next) {
+        next();
+      } else {
+        this.paused = false;
+        if (this.wolfSpawnTimer) this.wolfSpawnTimer.paused = false;
+      }
       return;
     }
 
@@ -2426,9 +2467,10 @@ export class ShepherdScene extends Phaser.Scene {
     this.tutorialLabel = label;
 
     const isLast = step === steps.length - 1;
-    if (!isLast) {
+    {
+      const label2 = isLast ? "Got it!" : "Next →";
       const nextBtn = this.add
-        .text(width / 2, HUD_TOP_H + 12, "Next →", {
+        .text(width / 2, HUD_TOP_H + 12, label2, {
           fontFamily: FONT_BODY,
           fontSize: "22px",
           color: "#ffffff",
@@ -2551,7 +2593,10 @@ export class ShepherdScene extends Phaser.Scene {
       this.tutorialOverlay = undefined;
       this.tutorialLabel = undefined;
       this.tutorialNextBtn = undefined;
-      this.paused = false;
+      if (!onDismiss) {
+        this.paused = false;
+        if (this.wolfSpawnTimer) this.wolfSpawnTimer.paused = false;
+      }
       onDismiss?.();
     });
     this.cameras.main.ignore(btn);
@@ -2952,6 +2997,7 @@ export class ShepherdScene extends Phaser.Scene {
           sp.y < this.fieldBottom - margin
         ) {
           this.wolfTutorialShown = true;
+          localStorage.setItem("shepherd_wolf_hint_done", "1");
           this.showHint(
             "A wolf is nearby!\nBark (click or F) near it to scare it off.\nYour herding dogs will also intercept wolves near their sheep.",
           );
@@ -3720,6 +3766,64 @@ export class ShepherdScene extends Phaser.Scene {
         );
       }
     }
+  }
+
+  private hasTutorialToShow(): boolean {
+    return (
+      localStorage.getItem("shepherd_tutorial_done") === "1" ||
+      this.dogTutorialShown ||
+      this.wolfTutorialShown
+    );
+  }
+
+  private updateTutorialBtn(): void {
+    const active = this.hasTutorialToShow();
+    this.tutorialBtn.setColor(active ? "#ffffff" : "#888899");
+  }
+
+  private replayTutorial(): void {
+    const hadDog = this.dogTutorialShown;
+    const hadWolf = this.wolfTutorialShown;
+
+    // Build chain tail-first
+    let next: (() => void) | null = null;
+
+    if (hadWolf) {
+      const wolfStep = next;
+      next = () =>
+        this.showHint(
+          "A wolf is nearby!\nBark (click or F) near it to scare it off.\nYour herding dogs will also intercept wolves near their sheep.",
+          wolfStep ?? undefined,
+        );
+    }
+
+    if (hadDog) {
+      const dogDest = next;
+      const dogHerd = () =>
+        this.showHint(
+          "Move your dog near a sheep and BARK (click or F)\nto signal the herding dog to follow that sheep.",
+          () =>
+            this.showHint(
+              "Click the Market or Shear building\nto choose where dogs bring adult sheep.\nShear is selected by default.",
+              dogDest ?? undefined,
+              [
+                { cx: SHEAR_CX, cy: SHEAR_CY - 50, w: SHEAR_W_PX + 120, h: SHEAR_H_PX + 260 },
+                { cx: MARKET_CX, cy: MARKET_CY - 50, w: MARKET_W_PX + 160, h: MARKET_H_PX + 260 },
+              ],
+            ),
+        );
+      next = dogHerd;
+    }
+
+    // Reset flags so dog/wolf hints re-trigger naturally during this replay
+    this.dogTutorialShown = false;
+    this.wolfTutorialShown = false;
+
+    this.tutorialOnComplete = next;
+    this.tutorialStep = 0;
+    this.paused = true;
+    if (this.wolfSpawnTimer) this.wolfSpawnTimer.paused = true;
+    this.showTutorialStep(0);
   }
 
   // --- Debug panel ---
