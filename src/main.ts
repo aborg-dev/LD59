@@ -76,6 +76,33 @@ window.dumpState = () => ({
   GameOver: tryDump(game.scene.getScene("GameOver") as GameOver),
 });
 
+// Fullscreen button (shown on touch devices or when fullscreen API is available)
+if (document.documentElement.requestFullscreen) {
+  const fsBtn = document.createElement("button");
+  fsBtn.textContent = "⛶";
+  fsBtn.title = "Fullscreen";
+  fsBtn.style.cssText =
+    "position:fixed;top:8px;right:10px;z-index:9999;padding:4px 10px;" +
+    "background:rgba(0,0,0,0.5);color:#fff;border:1px solid rgba(255,255,255,0.4);" +
+    "font:bold 18px sans-serif;cursor:pointer;border-radius:4px;line-height:1;" +
+    "touch-action:manipulation;";
+  document.body.appendChild(fsBtn);
+
+  const updateIcon = () => {
+    fsBtn.textContent = document.fullscreenElement ? "✕" : "⛶";
+    fsBtn.title = document.fullscreenElement ? "Exit fullscreen" : "Fullscreen";
+  };
+  document.addEventListener("fullscreenchange", updateIcon);
+
+  fsBtn.addEventListener("click", () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      document.documentElement.requestFullscreen({ navigationUI: "hide" });
+    }
+  });
+}
+
 // Debug overlay
 const debugBtn = document.createElement("button");
 debugBtn.textContent = "DBG";
